@@ -14,6 +14,11 @@ import {
   resolveDeployDir,
   shouldSkipDeploy,
 } from "./load-env.mjs";
+import {
+  describeApiTarget,
+  formatApiModeLabel,
+  resolveApiMode,
+} from "./resolve-api-mode.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const mode = process.argv[2];
@@ -23,9 +28,24 @@ if (!mode) {
   process.exit(1);
 }
 
-const env = loadEnvForMode(mode);
+const fileEnv = loadEnvForMode(mode);
+const shellEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => key.startsWith("VITE_")),
+);
+const env = { ...fileEnv, ...shellEnv };
+const { apiMode, shellOnly, explicit } = resolveApiMode(env, { isDev: false });
+const apiLabel = formatApiModeLabel({
+  isDev: false,
+  apiMode,
+  shellOnly,
+  explicit,
+});
+const apiTarget = describeApiTarget(env, apiMode);
+const appName = env.VITE_APP_NAME || mode;
 
-console.log(`[build-app] mode=${mode}`);
+console.log(
+  `[build-app] mode=${mode} · app=${appName} · API=${apiLabel} · ${apiTarget}`,
+);
 
 execSync(`vite build --mode ${mode}`, {
   cwd: frontendRoot,

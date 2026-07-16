@@ -13,8 +13,6 @@
     "build-eddeli": "node scripts/build-app.mjs eddeli",
     "build-store": "node scripts/build-app.mjs store",
     "build-raptor": "node scripts/build-app.mjs raptor",
-    "build-eddeli-production": "VITE_API_MODE=production VITE_API_ORIGIN=https://aplicaciones.marianosamaniego.edu.ec node scripts/build-app.mjs eddeli",
-    "build-store-production": "VITE_API_MODE=production VITE_API_ORIGIN=https://aplicaciones.marianosamaniego.edu.ec node scripts/build-app.mjs store",
     "build:eddeli": "npm run build-eddeli",
     "build:store": "npm run build-store",
     "build:raptor": "npm run build-raptor",

@@ -1,5 +1,10 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import {
+  describeApiTarget,
+  formatApiModeLabel,
+  resolveApiMode,
+} from "./scripts/resolve-api-mode.mjs";
 
 const muiDedupe = [
   "react",
@@ -17,9 +22,10 @@ function normalizeBase(path) {
   return raw.endsWith("/") ? raw : `${raw}/`;
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
+  const isDev = command === "serve";
   const env = loadEnv(mode, process.cwd(), "");
-  const shellOnly = env.VITE_SHELL_ONLY === "true" || env.VITE_API_MODE === "none";
+  const { apiMode, shellOnly, explicit } = resolveApiMode(env, { isDev });
   const base = normalizeBase(env.VITE_BASE_PATH || (shellOnly ? "/raptor/" : "/eddeli/"));
   const apiPrefix = String(env.VITE_API_PREFIX || "eddeliapi").replace(
     /^\/+|\/+$/g,
@@ -30,11 +36,11 @@ export default defineConfig(({ mode }) => {
   const defaultPort = mode === "store" ? 5174 : mode === "raptor" ? 5175 : 5173;
   const devPort = Number(env.VITE_DEV_PORT || defaultPort);
   const appName = env.VITE_APP_NAME || mode;
+  const apiLabel = formatApiModeLabel({ isDev, apiMode, shellOnly, explicit });
+  const apiTargetLabel = describeApiTarget(env, apiMode);
 
   console.log(
-    shellOnly
-      ? `[vite] mode=${mode} app=${appName} base=${base} · SHELL (sin backend) :${devPort}`
-      : `[vite] mode=${mode} app=${appName} base=${base} → /${apiPrefix} @ ${apiTarget} :${devPort}`,
+    `[vite] ${isDev ? "serve" : "build"} · mode=${mode} · app=${appName} · API=${apiLabel} · ${apiTargetLabel} · base=${base}${isDev ? ` :${devPort}` : ""}`,
   );
 
   return {

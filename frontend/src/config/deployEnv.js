@@ -13,7 +13,10 @@ export const API_ORIGIN = String(
   import.meta.env.VITE_API_ORIGIN || "https://aplicaciones.marianosamaniego.edu.ec",
 ).replace(/\/$/, "");
 
-/** local = proxy Vite | server = IP:puerto | production = dominio | none = sin API */
+/**
+ * local = proxy Vite | server = IP:puerto | production = dominio | none = sin API
+ * Sin VITE_API_MODE en .env.[mode]: dev → local, build → production.
+ */
 export const API_MODE =
   import.meta.env.VITE_API_MODE || (import.meta.env.DEV ? "local" : "production");
 
