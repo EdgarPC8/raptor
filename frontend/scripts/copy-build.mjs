@@ -1,7 +1,12 @@
 /**
  * Copia frontend/dist/ al destino de despliegue según --mode.
  * Destino por defecto: ../../{mode} (hermana de raptor/, ej. projects/eddeli).
- * Genera .htaccess desde VITE_BASE_PATH del .env.[mode].
+ * Override: VITE_DEPLOY_DIR en .env.[mode]. Genera .htaccess desde VITE_BASE_PATH.
+ *
+ * Desde raptor/frontend:
+ *   npm run build-raptor   → dist-raptor/ (sin copiar)
+ *   npm run build-eddeli   → dist/ + copia al destino de deploy
+ *   npm run build-store    → dist/ + copia al destino de deploy
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { join, resolve, dirname } from "path";
@@ -16,7 +21,9 @@ import { generateHtaccess } from "./generate-htaccess.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = resolve(__dirname, "../dist");
-const mode = process.argv[2] || process.env.VITE_COPY_MODE || "eddeli";
+const mode = String(process.argv[2] || process.env.VITE_COPY_MODE || "eddeli")
+  .trim()
+  .toLowerCase();
 const env = loadEnvForMode(mode);
 
 if (shouldSkipDeploy(mode, env)) {

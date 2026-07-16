@@ -81,7 +81,7 @@ export default defineConfig(({ mode }) => {
       strictPort: false,
     },
     build: {
-      outDir: "dist",
+      outDir: mode === "raptor" ? "dist-raptor" : "dist",
       emptyOutDir: true,
       rollupOptions: {
         output: {
