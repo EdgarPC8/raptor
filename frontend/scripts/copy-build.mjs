@@ -1,7 +1,15 @@
 /**
- * Copia frontend/dist/ al destino de despliegue según modo Vite.
- * - eddeli → AppsWeb/eddeli/  (Apache /eddeli/)
- * - store  → AppsWeb/store/   (Apache /store/)
+ * Copia frontend/dist/ al destino de despliegue.
+ *
+ * Desde raptor/frontend:
+ *   npm run build          → solo dist/
+ *   npm run build-raptor   → dist-raptor/ (aquí mismo, sin copiar)
+ *   npm run build-eddeli   → dist/ + copia a AppsWeb/eddeli/
+ *   npm run build-store    → dist/ + copia a AppsWeb/store/
+ *
+ * Rutas (desde scripts/ = frontend/scripts):
+ *   ../../.. = AppsWeb
+ *   ../../../eddeli | ../../../store
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "fs";
 import { join, resolve, dirname } from "path";
@@ -9,14 +17,23 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = resolve(__dirname, "../dist");
-const mode = process.env.VITE_COPY_MODE || process.argv[2] || "eddeli";
+const mode = String(process.argv[2] || process.env.VITE_COPY_MODE || "eddeli")
+  .trim()
+  .toLowerCase();
 
+const appsWebRoot = resolve(__dirname, "../../..");
 const deployByMode = {
-  eddeli: resolve(__dirname, "../../../eddeli"),
-  store: resolve(__dirname, "../../../store"),
+  eddeli: join(appsWebRoot, "eddeli"),
+  store: join(appsWebRoot, "store"),
 };
 
-const deployDir = deployByMode[mode] || deployByMode.eddeli;
+const deployDir = deployByMode[mode];
+if (!deployDir) {
+  console.error(
+    `Modo desconocido: "${mode}". Usá: node scripts/copy-build.mjs eddeli|store`,
+  );
+  process.exit(1);
+}
 
 if (!existsSync(distDir)) {
   console.error("No existe frontend/dist. Ejecuta vite build primero.");
