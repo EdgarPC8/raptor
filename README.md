@@ -18,5 +18,5 @@ npm run store
 
 En modo invitado recorrés módulos/secciones (ficha demo). El tutorial spotlight viene después.
 
-Envs: `.env.raptor`, `.env.eddeli`, `.env.store`.
+Envs: `.env.raptor`, `.env.eddeli`, `.env.store`. App nueva: copiá `.env.example` → `.env.<mode>` y `npm run build:app -- <mode>`.
 # raptor
