@@ -66,13 +66,12 @@ export function listMaintenanceSectionsFromSubscription(modules = []) {
     status === "maintenance" || status === "development";
 
   for (const mod of modules) {
-    const moduleMaint = isMaint(mod.status);
     for (const section of mod.sections || []) {
-      const sectionMaint = isMaint(section.status);
-      if (!moduleMaint && !sectionMaint) continue;
+      if (!isMaint(section.status)) continue;
       push(section.key, section.name, mod.name, "");
     }
     const aliasKey = mod.key || "";
+    const moduleMaint = isMaint(mod.status);
     if (moduleMaint && MAINTENANCE_PATH_ALIASES[aliasKey]) {
       for (const alias of MAINTENANCE_PATH_ALIASES[aliasKey]) {
         push(alias.path, alias.name, mod.name, "");
@@ -83,8 +82,8 @@ export function listMaintenanceSectionsFromSubscription(modules = []) {
 }
 
 /**
- * Rutas (y meta) en mantenimiento: sección con status maintenance
- * o todas las secciones de un módulo marcado en mantenimiento.
+ * Rutas (y meta) en mantenimiento: solo secciones con status maintenance.
+ * El status del módulo no bloquea todas las secciones (control granular por sección).
  */
 export function listMaintenanceSections() {
   const out = [];
@@ -103,11 +102,8 @@ export function listMaintenanceSections() {
   };
 
   for (const group of APP_MODULE_GROUPS) {
-    const groupMaint =
-      group.status === "maintenance" || group.status === "development";
     for (const section of group.sections || []) {
-      const sectionMaint = resolveModuleStatus(section) === "maintenance";
-      if (!groupMaint && !sectionMaint) continue;
+      if (resolveModuleStatus(section) !== "maintenance") continue;
       push(
         section.path,
         section.name,
@@ -115,6 +111,8 @@ export function listMaintenanceSections() {
         section.description || group.summary,
       );
     }
+    const groupMaint =
+      group.status === "maintenance" || group.status === "development";
     if (groupMaint && MAINTENANCE_PATH_ALIASES[group.id]) {
       for (const alias of MAINTENANCE_PATH_ALIASES[group.id]) {
         push(alias.path, alias.name, group.label, group.summary);
@@ -127,6 +125,25 @@ export function listMaintenanceSections() {
 function buildMaintenanceIndex(list) {
   const paths = list.map((s) => s.path).sort((a, b) => b.length - a.length);
   return { list, paths };
+}
+
+function findSectionByPath(pathname, subscriptionModules, list, paths) {
+  const p = normalizePath(pathname);
+  const granular =
+    Array.isArray(subscriptionModules) && subscriptionModules.length > 0;
+  // Con entitlement del gestor: match exacto por sección (sin propagar a subrutas).
+  const match = granular
+    ? paths.find((mp) => p === mp)
+    : paths.find((mp) => p === mp || p.startsWith(`${mp}/`));
+  if (!match) return null;
+  return (
+    list.find((s) => s.path === match) || {
+      path: match,
+      name: "Esta sección",
+      moduleLabel: "",
+      description: "",
+    }
+  );
 }
 
 let cachedLocal = null;
@@ -151,18 +168,8 @@ export function findMaintenanceSectionForPath(
   pathname,
   subscriptionModules,
 ) {
-  const p = normalizePath(pathname);
   const { list, paths } = getMaintenanceIndex(subscriptionModules);
-  const match = paths.find((mp) => p === mp || p.startsWith(`${mp}/`));
-  if (!match) return null;
-  return (
-    list.find((s) => s.path === match) || {
-      path: match,
-      name: "Esta sección",
-      moduleLabel: "",
-      description: "",
-    }
-  );
+  return findSectionByPath(pathname, subscriptionModules, list, paths);
 }
 
 export function isPathInMaintenance(pathname, subscriptionModules) {
@@ -222,9 +229,8 @@ export function listPlannedSectionsFromSubscription(modules = []) {
   };
 
   for (const mod of modules) {
-    const modulePlanned = mod.status === "planned";
     for (const section of mod.sections || []) {
-      if (!modulePlanned && section.status !== "planned") continue;
+      if (section.status !== "planned") continue;
       push(section.key, section.name, mod.name, "");
     }
   }
@@ -248,10 +254,8 @@ export function listPlannedSections() {
   };
 
   for (const group of APP_MODULE_GROUPS) {
-    const groupPlanned = group.status === "planned";
     for (const section of group.sections || []) {
-      const sectionPlanned = resolveModuleStatus(section) === "planned";
-      if (!groupPlanned && !sectionPlanned) continue;
+      if (resolveModuleStatus(section) !== "planned") continue;
       push(
         section.path,
         section.name,
@@ -273,18 +277,8 @@ function getPlannedIndex(subscriptionModules) {
 }
 
 export function findPlannedSectionForPath(pathname, subscriptionModules) {
-  const p = normalizePath(pathname);
   const { list, paths } = getPlannedIndex(subscriptionModules);
-  const match = paths.find((mp) => p === mp || p.startsWith(`${mp}/`));
-  if (!match) return null;
-  return (
-    list.find((s) => s.path === match) || {
-      path: match,
-      name: "Esta sección",
-      moduleLabel: "",
-      description: "",
-    }
-  );
+  return findSectionByPath(pathname, subscriptionModules, list, paths);
 }
 
 export function isPathPlanned(pathname, subscriptionModules) {

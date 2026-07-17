@@ -32,35 +32,24 @@ npm run dev
 
 ## Builds
 
+Sin `VITE_API_MODE` en `.env.eddeli` / `.env.store`, el build usa
+`production` automáticamente y apunta a `VITE_API_ORIGIN` (p. ej.
+`https://aplicaciones.marianosamaniego.edu.ec/eddeliapi`). No hace falta un
+comando de build aparte.
+
 ```bash
-# Build local de EdDeli; genera frontend/dist/ y copia al destino de deploy
+# Build EdDeli → frontend/dist/ + copia al destino de deploy
 npm run build
+# alias: npm run build-eddeli / npm run build:eddeli
 
 # Build genérico por modo (ej. scheduly con .env.scheduly)
 npm run build:app -- <mode>
 
-# Build EdDeli y copia el resultado al destino de deploy
-npm run build-eddeli
-
-# Build Store y copia el resultado al destino de deploy
+# Build Store y copia al destino de deploy
 npm run build-store
 
-# Build Raptor; genera frontend/dist-raptor/ (sin copiar)
+# Build Raptor; genera frontend/dist-raptor/ (sin copiar, modo invitado)
 npm run build-raptor
-```
-
-## Builds de producción
-
-Estos comandos apuntan a
-`https://aplicaciones.marianosamaniego.edu.ec` y copian el resultado a la
-carpeta de cada despliegue:
-
-```bash
-# API: https://aplicaciones.marianosamaniego.edu.ec/eddeliapi
-npm run build-eddeli-production
-
-# API: https://aplicaciones.marianosamaniego.edu.ec/storeapi
-npm run build-store-production
 ```
 
 Las variables `VITE_*` se integran en el bundle durante la compilación. El

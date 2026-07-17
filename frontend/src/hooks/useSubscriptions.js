@@ -28,7 +28,7 @@ const BYPASS_SUBSCRIPTION = {
   maintenance: false,
 };
 
-const CACHE_KEY = "eddeli_entitlement_cache_v1";
+const CACHE_KEY = "eddeli_entitlement_cache_v2";
 
 function readCachedEntitlement() {
   try {
