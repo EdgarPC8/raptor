@@ -32,6 +32,7 @@ export const getCatalogEntries = (params = {}) => {
         onlyValidNow: true,
         ...params, // storeId, q, etc.
       },
+      headers: { Authorization: jwt() },
     });
   };
 
