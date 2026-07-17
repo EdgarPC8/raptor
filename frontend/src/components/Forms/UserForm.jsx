@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Grid,
   TextField,
@@ -9,9 +9,13 @@ import {
   Select,
   Chip,
   Box,
+  FormHelperText,
 } from "@mui/material";
 
 import { useRoles } from "../../hooks/useRoles";
+import { useAuth } from "../../context/AuthContext.jsx";
+
+const INTERNAL_ROLE = "Programador";
 
 const EMPTY_FORM = {
   email: "",
@@ -24,8 +28,27 @@ const EMPTY_FORM = {
 };
 
 export default function UsersForm({ onSubmit, initialData }) {
+  const { user } = useAuth();
   const { roles, isLoading: isLoadingRoles } = useRoles();
   const [form, setForm] = useState(EMPTY_FORM);
+
+  const canManageProgramador = user?.loginRol === INTERNAL_ROLE;
+  const programadorRoleId = useMemo(
+    () => roles?.find((r) => r.name === INTERNAL_ROLE)?.id ?? null,
+    [roles],
+  );
+  const lockedProgramador =
+    !canManageProgramador &&
+    programadorRoleId != null &&
+    (initialData?.roles || []).includes(programadorRoleId);
+
+  const visibleRoles = useMemo(() => {
+    const list = roles || [];
+    if (canManageProgramador) return list;
+    return list.filter(
+      (r) => r.name !== INTERNAL_ROLE || (lockedProgramador && r.id === programadorRoleId),
+    );
+  }, [canManageProgramador, roles, lockedProgramador, programadorRoleId]);
 
   useEffect(() => {
     if (initialData) {
@@ -48,9 +71,29 @@ export default function UsersForm({ onSubmit, initialData }) {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleRolesChange = (e) => {
+    let next = e.target.value;
+    if (
+      lockedProgramador &&
+      programadorRoleId != null &&
+      !next.includes(programadorRoleId)
+    ) {
+      next = [...next, programadorRoleId];
+    }
+    setForm((prev) => ({ ...prev, roles: next }));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(form);
+    let payload = form;
+    if (
+      lockedProgramador &&
+      programadorRoleId != null &&
+      !form.roles.includes(programadorRoleId)
+    ) {
+      payload = { ...form, roles: [...form.roles, programadorRoleId] };
+    }
+    onSubmit(payload);
   };
 
   return (
@@ -120,23 +163,46 @@ export default function UsersForm({ onSubmit, initialData }) {
               name="roles"
               required
               value={form.roles}
-              onChange={handleChange}
+              onChange={handleRolesChange}
               label="Roles"
               renderValue={(selected) => (
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
                   {selected.map((id) => {
                     const role = roles?.find((r) => r.id === id);
-                    return <Chip key={id} label={role?.name} />;
+                    return (
+                      <Chip
+                        key={id}
+                        label={role?.name || id}
+                        size="small"
+                        color={
+                          lockedProgramador && id === programadorRoleId
+                            ? "default"
+                            : undefined
+                        }
+                      />
+                    );
                   })}
                 </Box>
               )}
             >
-              {roles?.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
+              {visibleRoles?.map((c) => (
+                <MenuItem
+                  key={c.id}
+                  value={c.id}
+                  disabled={lockedProgramador && c.id === programadorRoleId}
+                >
                   {c.name}
+                  {lockedProgramador && c.id === programadorRoleId
+                    ? " (solo Programador puede quitarlo)"
+                    : ""}
                 </MenuItem>
               ))}
             </Select>
+            {lockedProgramador ? (
+              <FormHelperText>
+                Como Administrador no puedes quitar el rol Programador de este usuario.
+              </FormHelperText>
+            ) : null}
           </FormControl>
         </Grid>
         <Grid item xs={12}>
