@@ -80,6 +80,9 @@ function ModuleCard({ module }) {
     isTrial,
     endTrial,
     imageUrl,
+    isMaintainer,
+    limitDaysTrial,
+    subSectionsByKey,
   } = module;
 
   const bannerBg = imageUrl
