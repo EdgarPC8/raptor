@@ -18,32 +18,39 @@ export default function UsersPage() {
   const [form, setForm] = useState(null);
   const [userId, setUserId] = useState(null);
 
+  const closeModal = () => {
+    setIsOpen(false);
+    setIsEditing(false);
+    setForm(null);
+    setUserId(null);
+  };
+
   const onSubmit = async (data) => {
     try {
       if (isEditing) {
-        const res = await updateUser(data, userId);
-
+        await updateUser(data, userId);
         enqueueSnackbar("Usuario actualizado exitosamente", {
           variant: "success",
         });
         fetchUsers();
-
-        setForm(null);
-        setIsEditing(false);
-        setUserId(null);
+        closeModal();
         return;
       }
 
       const res = await addUser(data);
       if (res.data.success) {
-        enqueueSnackbar("Usuario Agregado exitosamente", {
+        enqueueSnackbar("Usuario agregado exitosamente", {
           variant: "success",
         });
       }
       fetchUsers();
+      closeModal();
     } catch (error) {
       console.error(error);
-      enqueueSnackbar(error.data.message, { variant: "error" });
+      enqueueSnackbar(
+        error?.response?.data?.message || error?.data?.message || "Error al guardar usuario",
+        { variant: "error" },
+      );
     }
   };
 
@@ -53,6 +60,9 @@ export default function UsersPage() {
         <Button
           variant="contained"
           onClick={() => {
+            setIsEditing(false);
+            setForm(null);
+            setUserId(null);
             setIsOpen(true);
           }}
         >
@@ -61,11 +71,7 @@ export default function UsersPage() {
       </Paper>
       <SimpleDialog
         open={isOpen}
-        onClose={() => {
-          setIsOpen(false);
-          setIsEditing(false);
-          setForm(null);
-        }}
+        onClose={closeModal}
         title={isEditing ? "Editar usuario" : "Nuevo usuario"}
         fullWidth
         maxWidth="md"
@@ -113,6 +119,7 @@ export default function UsersPage() {
                   setIsEditing(true);
                   setUserId(r.id);
                   setForm({
+                    email: r.email || r.account?.email || "",
                     firstName: r.firstName,
                     firstLastName: r.firstLastName,
                     username: r.account?.username || "",

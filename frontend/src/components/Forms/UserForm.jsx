@@ -13,17 +13,19 @@ import {
 
 import { useRoles } from "../../hooks/useRoles";
 
+const EMPTY_FORM = {
+  email: "",
+  username: "",
+  ci: "",
+  firstName: "",
+  firstLastName: "",
+  password: "",
+  roles: [],
+};
+
 export default function UsersForm({ onSubmit, initialData }) {
   const { roles, isLoading: isLoadingRoles } = useRoles();
-  const [form, setForm] = useState({
-    email: "",
-    username: "",
-    ci: "",
-    firstName: "",
-    firstLastName: "",
-    password: "",
-    roles: [],
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
 
   useEffect(() => {
     if (initialData) {
@@ -36,6 +38,8 @@ export default function UsersForm({ onSubmit, initialData }) {
         password: initialData.password || "",
         roles: initialData.roles || [],
       });
+    } else {
+      setForm(EMPTY_FORM);
     }
   }, [initialData]);
 

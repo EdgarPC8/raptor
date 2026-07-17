@@ -45,6 +45,7 @@ function resolveSocketOrigin() {
 }
 
 const baseURL = resolveApiBase();
+
 const socketOrigin = resolveSocketOrigin();
 
 const instance = axios.create({
