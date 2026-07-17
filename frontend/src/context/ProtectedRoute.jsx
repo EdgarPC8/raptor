@@ -17,6 +17,7 @@ import {
 } from "../config/sectionMaintenanceAccess.js";
 import SectionMaintenanceBlocked from "../pages/SectionMaintenanceBlocked.jsx";
 import SectionPlannedBlocked from "../pages/SectionPlannedBlocked.jsx";
+import { APP_ID } from "../config/appInfo.js";
 
 /** Rutas base / sistema: accesibles con sesión aunque no haya plan activo. */
 const SUBSCRIPTION_FREE_EXACT = new Set([
@@ -130,7 +131,9 @@ export default function ProtectedRoute({ requiredRol }) {
   if (!hasActiveSubscription(subscription, expired)) {
     // Sin plan: home con menú (para ir a Configuración / Módulos), no bloquear la base.
     if (path === "/" || path === "") {
-      return <Navigate to="/inicio" replace />;
+      return (
+        <Navigate to={APP_ID === "store" ? "/home" : "/inicio"} replace />
+      );
     }
     return <Navigate to="/subscription-expired" replace />;
   }

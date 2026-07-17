@@ -93,6 +93,7 @@ import { PageSkeleton } from "./ContentSkeleton.jsx";
 import { getUnreadCount } from "../api/notificationsRequest.js";
 import { useNotificationSocket } from "../hooks/useNotificationSocket.js";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
+import { APP_ID } from "../config/appInfo.js";
 import {
   isMenuLinkInMaintenance,
   isMenuLinkPlanned,
@@ -695,7 +696,11 @@ export default function NavBar() {
       fetchUnreadCount();
     },
   );
-  const homePath = showUserActions ? "/inicio" : "/home";
+  const homePath = showUserActions
+    ? APP_ID === "store"
+      ? "/"
+      : "/inicio"
+    : "/home";
 
   const drawerContent = (
     <>

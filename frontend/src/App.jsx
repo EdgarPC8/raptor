@@ -7,6 +7,7 @@ import PublicOnlyRoute from "./context/PublicOnlyRoute.jsx";
 import GuestExploreRoute from "./context/GuestExploreRoute.jsx";
 import NavBar from "./components/NavBar.jsx";
 import { SHELL_ONLY } from "./config/deployEnv.js";
+import { APP_ID } from "./config/appInfo.js";
 // Licencia: GET /subscription en backend (push del gestor). Sin Subify.
 // Modo `npm run raptor`: invitado sin backend + exploración de módulos.
 
@@ -173,6 +174,18 @@ function RoleHomeRedirect() {
   return <DashBoardPage />;
 }
 
+/** Store: /inicio público; si hay sesión → panel (dashboard/caja). */
+function StoreInicioRoute() {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <PageFallback />;
+  if (isAuthenticated) return <Navigate to="/" replace />;
+  return (
+    <LazyPage>
+      <HomeLogout />
+    </LazyPage>
+  );
+}
+
 /** Lazy fuera del layout: no desmontar NavBar al cargar chunks. */
 function LazyPage({ children }) {
   return <Suspense fallback={<PageFallback />}>{children}</Suspense>;
@@ -279,6 +292,9 @@ export default function App() {
         <Route element={<NavBar />}>
           {/* Base pública: siempre, con o sin suscripción */}
           <Route path="/home" element={<HomeLogout />} />
+          {APP_ID === "store" ? (
+            <Route path="/inicio" element={<StoreInicioRoute />} />
+          ) : null}
           <Route
             path="/subscription-expired"
             element={<SubscriptionExpiredPage />}
@@ -290,7 +306,9 @@ export default function App() {
 
           <Route element={<ProtectedRoute requiredRol={AUTH_ROLES} />}>
             <Route path="/" element={<RoleHomeRedirect />} />
-            <Route path="/inicio" element={<HomeLogout />} />
+            {APP_ID !== "store" ? (
+              <Route path="/inicio" element={<HomeLogout />} />
+            ) : null}
             <Route path="/perfil" element={<ProfilePage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/info" element={<InfoPage />} />
