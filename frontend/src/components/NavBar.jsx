@@ -94,6 +94,7 @@ import { getUnreadCount } from "../api/notificationsRequest.js";
 import { useNotificationSocket } from "../hooks/useNotificationSocket.js";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
 import { APP_ID } from "../config/appInfo.js";
+import { APP_ROUTES } from "../config/appRoutes.js";
 import {
   isMenuLinkInMaintenance,
   isMenuLinkPlanned,
@@ -105,13 +106,13 @@ const DRAWER_W = 260;
 const MENU_ITEMS = [
   {
     name: "Dashboard",
-    link: "/",
+    link: APP_ROUTES.dashboard,
     icon: <DashboardIcon />,
     roles: ["Programador", "Administrador"],
   },
   {
     name: "Notificaciones",
-    link: "/notifications",
+    link: APP_ROUTES.system.notifications,
     icon: <NotificationsIcon />,
     roles: ["Programador", "Administrador", "Empleado"],
   },
@@ -125,31 +126,31 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Caja",
-        link: "/caja",
+        link: APP_ROUTES.operation.cash,
         icon: <PointOfSaleIcon />,
         roles: ["Programador", "Administrador", "Empleado"],
       },
       {
         name: "Turno",
-        link: "/turno",
+        link: APP_ROUTES.operation.shifts,
         icon: <ScheduleIcon />,
         roles: ["Programador", "Administrador", "Empleado"],
       },
       {
         name: "Tareas",
-        link: "/tareas",
+        link: APP_ROUTES.operation.tasks,
         icon: <AssignmentTurnedInIcon />,
         roles: ["Programador", "Administrador", "Empleado"],
       },
       {
         name: "Comprobantes POS",
-        link: "/facturacion",
+        link: APP_ROUTES.operation.posReceipts,
         icon: <ReceiptIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Supervisión caja",
-        link: "/turno/supervision",
+        link: APP_ROUTES.operation.shiftSupervision,
         icon: <AssessmentIcon />,
         roles: ["Programador", "Administrador"],
       },
@@ -161,49 +162,49 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Inicio SRI",
-        link: "/comprobantes-electronicos",
+        link: APP_ROUTES.electronicDocs.hub,
         icon: <FactCheckIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Facturas",
-        link: "/comprobantes-electronicos/facturas",
+        link: APP_ROUTES.electronicDocs.invoices,
         icon: <ReceiptLongIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Notas de venta",
-        link: "/comprobantes-electronicos/notas-venta",
+        link: APP_ROUTES.electronicDocs.salesNotes,
         icon: <ReceiptIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Notas de crédito",
-        link: "/comprobantes-electronicos/notas-credito",
+        link: APP_ROUTES.electronicDocs.creditNotes,
         icon: <ReceiptLongIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Retenciones",
-        link: "/comprobantes-electronicos/retenciones",
+        link: APP_ROUTES.electronicDocs.withholdings,
         icon: <AccountBalanceWalletIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Guías de remisión",
-        link: "/comprobantes-electronicos/guias-remision",
+        link: APP_ROUTES.electronicDocs.deliveryGuides,
         icon: <LocalShippingIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Documentos emitidos",
-        link: "/comprobantes-electronicos/emitidos",
+        link: APP_ROUTES.electronicDocs.issued,
         icon: <Inventory2Icon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Configuración SRI",
-        link: "/sistema/configuracion?tab=sri",
+        link: APP_ROUTES.electronicDocs.sriSettings,
         icon: <SettingsApplicationsIcon />,
         roles: ["Programador", "Administrador"],
       },
@@ -215,13 +216,13 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Pedidos",
-        link: "/inventory/orders",
+        link: APP_ROUTES.sales.orders,
         icon: <AssignmentIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Clientes",
-        link: "/inventory/customers",
+        link: APP_ROUTES.sales.customers,
         icon: <PeopleIcon />,
         roles: ["Programador", "Administrador"],
       },
@@ -233,25 +234,25 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Finanzas",
-        link: "/inventory/finance",
+        link: APP_ROUTES.finance.transactions,
         icon: <MonetizationOnIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Cobranzas",
-        link: "/inventory/collections",
+        link: APP_ROUTES.finance.collections,
         icon: <RequestQuoteIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Préstamos y deudas",
-        link: "/inventory/prestamos-deudas",
+        link: APP_ROUTES.finance.loansDebts,
         icon: <AccountBalanceWalletIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Gastos recurrentes",
-        link: "/inventory/gastos-recurrentes",
+        link: APP_ROUTES.finance.recurringExpenses,
         icon: <HomeWorkIcon />,
         roles: ["Programador", "Administrador"],
       },
@@ -263,31 +264,31 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Productos",
-        link: "/inventory/products",
+        link: APP_ROUTES.inventory.products,
         icon: <Inventory2Icon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Movimientos",
-        link: "/inventory/movement",
+        link: APP_ROUTES.inventory.movement,
         icon: <CompareArrowsIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Categorías",
-        link: "/inventory/categories",
+        link: APP_ROUTES.inventory.categories,
         icon: <CategoryIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Tramos",
-        link: "/inventory/tramos",
+        link: APP_ROUTES.inventory.tierGroups,
         icon: <ViewModuleIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Unidades",
-        link: "/inventory/units",
+        link: APP_ROUTES.inventory.units,
         icon: <StraightenIcon />,
         roles: ["Programador", "Administrador"],
       },
@@ -299,25 +300,25 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Insumos y marcas",
-        link: "/inventory/insumos",
+        link: APP_ROUTES.production.ingredients,
         icon: <ScienceIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Recetas",
-        link: "/inventory/recipes",
+        link: APP_ROUTES.production.recipes,
         icon: <ReceiptLongIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Producción",
-        link: "/inventory/production",
+        link: APP_ROUTES.production.manufacturing,
         icon: <FactoryIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Proveedores",
-        link: "/inventory/suppliers",
+        link: APP_ROUTES.production.suppliers,
         icon: <LocalShippingIcon />,
         roles: ["Programador", "Administrador"],
       },
@@ -329,25 +330,25 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Catálogo config",
-        link: "/catalog_manager",
+        link: APP_ROUTES.channel.catalog,
         icon: <ViewModuleIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Sucursales / locales",
-        link: "/inventory/puntos-venta",
+        link: APP_ROUTES.channel.stores,
         icon: <StorefrontRoundedIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Productos destacados",
-        link: "/inventory/productos-destacados",
+        link: APP_ROUTES.channel.featuredProducts,
         icon: <StarRoundedIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Grupos comparativos",
-        link: "/compare_groups",
+        link: APP_ROUTES.channel.compareGroups,
         icon: <CompareArrowsIcon />,
         roles: ["Programador", "Administrador"],
       },
@@ -359,19 +360,19 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Campañas",
-        link: "/publicidad",
+        link: APP_ROUTES.advertising.campaigns,
         icon: <TvIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Dispositivos TV",
-        link: "/publicidad/dispositivos",
+        link: APP_ROUTES.advertising.devices,
         icon: <TvIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Reproductor",
-        link: "/publicidad/reproductor",
+        link: APP_ROUTES.advertising.player,
         icon: <PlayCircleOutlineIcon />,
         roles: ["Programador", "Administrador"],
       },
@@ -383,19 +384,19 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Editor de diseño",
-        link: "/diseno-promocional/editor",
+        link: APP_ROUTES.promoDesign.editor,
         icon: <EditNoteIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Vista con productos",
-        link: "/diseno-promocional/vista",
+        link: APP_ROUTES.promoDesign.preview,
         icon: <VolumeUpIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Plantillas",
-        link: "/diseno-promocional/plantillas",
+        link: APP_ROUTES.promoDesign.templates,
         icon: <CollectionsBookmarkIcon />,
         roles: ["Programador", "Administrador"],
       },
@@ -407,25 +408,25 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Usuarios",
-        link: "/users",
+        link: APP_ROUTES.admin.users,
         icon: <GroupIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Cuentas",
-        link: "/cuentas",
+        link: APP_ROUTES.admin.accounts,
         icon: <ManageAccountsIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Roles",
-        link: "/roles",
+        link: APP_ROUTES.admin.roles,
         icon: <SettingsApplicationsIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Panel de control",
-        link: "/panel_control",
+        link: APP_ROUTES.admin.controlPanel,
         icon: <DnsIcon />,
         roles: ["Programador", "Administrador"],
       },
@@ -437,31 +438,31 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Configuración",
-        link: "/sistema/configuracion",
+        link: APP_ROUTES.system.settings,
         icon: <SettingsApplicationsIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Planes",
-        link: "/sistema/planes",
+        link: APP_ROUTES.system.plans,
         icon: <WorkspacePremiumIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Módulos",
-        link: "/sistema/modulos",
+        link: APP_ROUTES.system.modules,
         icon: <ExtensionIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
         name: "Perfil",
-        link: "/perfil",
+        link: APP_ROUTES.system.profile,
         icon: <PersonOutlineIcon />,
         roles: ["Programador", "Administrador", "Empleado"],
       },
       {
         name: "Donaciones",
-        link: "/donaciones",
+        link: APP_ROUTES.system.donations,
         icon: <CardGiftcardIcon />,
         roles: ["Programador", "Administrador", "Empleado"],
       },
@@ -473,31 +474,31 @@ const MENU_GROUPS = [
     items: [
       {
         name: "Imágenes",
-        link: "/img",
+        link: APP_ROUTES.developer.images,
         icon: <ImageIcon />,
         roles: ["Programador"],
       },
       {
         name: "Archivos",
-        link: "/file",
+        link: APP_ROUTES.developer.files,
         icon: <InsertDriveFileIcon />,
         roles: ["Programador"],
       },
       {
         name: "Logs",
-        link: "/logs",
+        link: APP_ROUTES.developer.logs,
         icon: <HistoryIcon />,
         roles: ["Programador"],
       },
       {
         name: "Backups JSON",
-        link: "/backups",
+        link: APP_ROUTES.developer.backups,
         icon: <BackupIcon />,
         roles: ["Programador"],
       },
       {
         name: "Comandos",
-        link: "/comandos",
+        link: APP_ROUTES.developer.commands,
         icon: <TerminalIcon />,
         roles: ["Programador"],
       },
@@ -508,12 +509,12 @@ const MENU_GROUPS = [
 const PUBLIC_NAV = [
   {
     label: "Catálogo",
-    to: "/catalogo",
+    to: APP_ROUTES.public.catalog,
     icon: <BakeryDiningIcon fontSize="small" />,
   },
   {
     label: "Locales",
-    to: "/punto_venta",
+    to: APP_ROUTES.public.stores,
     icon: <StoreMallDirectoryRoundedIcon fontSize="small" />,
   },
 ];
@@ -550,8 +551,8 @@ export default function NavBar() {
 
   const publicNavItems = useMemo(() => {
     return PUBLIC_NAV.filter((item) => {
-      if (item.to === "/catalogo") return activeApp?.showPublicCatalog !== false;
-      if (item.to === "/punto_venta") {
+      if (item.to === APP_ROUTES.public.catalog) return activeApp?.showPublicCatalog !== false;
+      if (item.to === APP_ROUTES.public.stores) {
         return (
           activeApp?.showPublicStoresPropia !== false ||
           activeApp?.showPublicStoresVitrina !== false
@@ -912,7 +913,7 @@ export default function NavBar() {
               <IconButton
                 color="inherit"
                 onClick={(e) => setNotifAnchor(e.currentTarget)}
-                disabled={location.pathname === "/notifications"}
+                disabled={location.pathname === APP_ROUTES.system.notifications}
               >
                 <Badge badgeContent={unreadCount} color="error">
                   <NotificationsIcon />
@@ -989,7 +990,7 @@ export default function NavBar() {
                 <MenuItem
                   onClick={() => {
                     closeUserMenu();
-                    navigate("/perfil");
+                    navigate(APP_ROUTES.system.profile);
                   }}
                 >
                   <ListItemIcon>
@@ -1001,7 +1002,7 @@ export default function NavBar() {
                   <MenuItem
                     onClick={() => {
                       closeUserMenu();
-                      navigate("/sistema/configuracion");
+                      navigate(APP_ROUTES.system.settings);
                     }}
                   >
                     <ListItemIcon>
@@ -1014,7 +1015,7 @@ export default function NavBar() {
                   <MenuItem
                     onClick={() => {
                       closeUserMenu();
-                      navigate("/sistema/modulos");
+                      navigate(APP_ROUTES.system.modules);
                     }}
                   >
                     <ListItemIcon>
@@ -1037,7 +1038,7 @@ export default function NavBar() {
                 <MenuItem
                   onClick={() => {
                     closeUserMenu();
-                    navigate("/donaciones");
+                    navigate(APP_ROUTES.system.donations);
                   }}
                 >
                   <ListItemIcon>

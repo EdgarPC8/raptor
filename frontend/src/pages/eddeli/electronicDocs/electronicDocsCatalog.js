@@ -12,10 +12,12 @@ import InventoryIcon from "@mui/icons-material/Inventory";
 import SettingsIcon from "@mui/icons-material/Settings";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 
+import { APP_ROUTES } from "../../../config/appRoutes.js";
+
 export const ELECTRONIC_DOC_SECTIONS = [
   {
     id: "hub",
-    path: "/comprobantes-electronicos",
+    path: APP_ROUTES.electronicDocs.hub,
     name: "Inicio",
     short: "Panel",
     description: "Resumen del módulo y acceso rápido a cada tipo de comprobante.",
@@ -25,7 +27,7 @@ export const ELECTRONIC_DOC_SECTIONS = [
   },
   {
     id: "facturas",
-    path: "/comprobantes-electronicos/facturas",
+    path: APP_ROUTES.electronicDocs.invoices,
     name: "Facturas",
     short: "Facturas",
     description:
@@ -36,7 +38,7 @@ export const ELECTRONIC_DOC_SECTIONS = [
   },
   {
     id: "notas-venta",
-    path: "/comprobantes-electronicos/notas-venta",
+    path: APP_ROUTES.electronicDocs.salesNotes,
     name: "Notas de venta",
     short: "Notas venta",
     description:
@@ -47,7 +49,7 @@ export const ELECTRONIC_DOC_SECTIONS = [
   },
   {
     id: "notas-credito",
-    path: "/comprobantes-electronicos/notas-credito",
+    path: APP_ROUTES.electronicDocs.creditNotes,
     name: "Notas de crédito",
     short: "N. crédito",
     description: "Nota de crédito (04). Devoluciones, descuentos o anulaciones parciales de facturas.",
@@ -57,7 +59,7 @@ export const ELECTRONIC_DOC_SECTIONS = [
   },
   {
     id: "notas-debito",
-    path: "/comprobantes-electronicos/notas-debito",
+    path: APP_ROUTES.electronicDocs.debitNotes,
     name: "Notas de débito",
     short: "N. débito",
     description: "Nota de débito (05). Cargos adicionales vinculados a una factura.",
@@ -67,7 +69,7 @@ export const ELECTRONIC_DOC_SECTIONS = [
   },
   {
     id: "retenciones",
-    path: "/comprobantes-electronicos/retenciones",
+    path: APP_ROUTES.electronicDocs.withholdings,
     name: "Retenciones",
     short: "Retenciones",
     description: "Comprobante de retención (07). Retención en la fuente de renta e IVA.",
@@ -77,7 +79,7 @@ export const ELECTRONIC_DOC_SECTIONS = [
   },
   {
     id: "guias-remision",
-    path: "/comprobantes-electronicos/guias-remision",
+    path: APP_ROUTES.electronicDocs.deliveryGuides,
     name: "Guías de remisión",
     short: "Guías",
     description: "Guía de remisión (06). Traslado de mercadería entre locales o hacia clientes.",
@@ -87,7 +89,7 @@ export const ELECTRONIC_DOC_SECTIONS = [
   },
   {
     id: "liquidacion-compras",
-    path: "/comprobantes-electronicos/liquidacion-compras",
+    path: APP_ROUTES.electronicDocs.purchaseSettlement,
     name: "Liquidación de compras",
     short: "Liq. compras",
     description:
@@ -98,7 +100,7 @@ export const ELECTRONIC_DOC_SECTIONS = [
   },
   {
     id: "emitidos",
-    path: "/comprobantes-electronicos/emitidos",
+    path: APP_ROUTES.electronicDocs.issued,
     name: "Documentos emitidos",
     short: "Emitidos",
     description:
@@ -109,7 +111,7 @@ export const ELECTRONIC_DOC_SECTIONS = [
   },
   {
     id: "configuracion",
-    path: "/sistema/configuracion?tab=sri",
+    path: APP_ROUTES.electronicDocs.sriSettings,
     name: "Configuración SRI",
     short: "Config",
     description: "RUC, firma .p12, ambiente pruebas/producción, establecimiento y punto de emisión.",

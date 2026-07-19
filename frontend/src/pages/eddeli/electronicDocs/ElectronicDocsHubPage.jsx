@@ -2,6 +2,7 @@
  * Panel inicial del módulo: tarjetas a cada tipo de comprobante.
  */
 import { Link as RouterLink } from "react-router-dom";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
 import {
   Alert,
   Box,
@@ -87,13 +88,13 @@ export default function ElectronicDocsHubPage() {
       </Grid>
 
       <Stack direction="row" spacing={1} sx={{ mt: 2 }} flexWrap="wrap" useFlexGap>
-        <Button component={RouterLink} to="/sistema/configuracion?tab=sri" variant="contained">
+        <Button component={RouterLink} to={APP_ROUTES.electronicDocs.sriSettings} variant="contained">
           Ir a configuración SRI
         </Button>
-        <Button component={RouterLink} to="/facturacion" variant="outlined">
+        <Button component={RouterLink} to={APP_ROUTES.operation.posReceipts} variant="outlined">
           Comprobantes POS (caja)
         </Button>
-        <Button component={RouterLink} to="/inventory/puntos-venta" variant="outlined">
+        <Button component={RouterLink} to={APP_ROUTES.channel.stores} variant="outlined">
           Sucursales / locales
         </Button>
       </Stack>

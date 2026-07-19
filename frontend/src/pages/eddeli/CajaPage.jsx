@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
+import { APP_ROUTES } from "../../config/appRoutes.js";
 import {
   Alert,
   Box,
@@ -1218,7 +1219,7 @@ export default function CajaPage() {
               icon={<FactCheckIcon />}
               label="Facturación electrónica activa"
               component={RouterLink}
-              to="/sistema/configuracion?tab=sri"
+              to={APP_ROUTES.electronicDocs.sriSettings}
               clickable
             />
           ) : (
@@ -1229,7 +1230,7 @@ export default function CajaPage() {
               icon={<FactCheckIcon />}
               label="SRI no listo"
               component={RouterLink}
-              to="/sistema/configuracion?tab=sri"
+              to={APP_ROUTES.electronicDocs.sriSettings}
               clickable
             />
           )}
@@ -1267,7 +1268,7 @@ export default function CajaPage() {
       {activeShift === undefined ? null : !activeShift ? (
         <Alert severity="warning" sx={{ mb: 1 }}>
           No hay turno abierto.{" "}
-          <Button component={RouterLink} to="/turno" size="small" sx={{ ml: 0.5 }}>
+          <Button component={RouterLink} to={APP_ROUTES.operation.shifts} size="small" sx={{ ml: 0.5 }}>
             Abrir turno
           </Button>{" "}
           para registrar ventas en caja.

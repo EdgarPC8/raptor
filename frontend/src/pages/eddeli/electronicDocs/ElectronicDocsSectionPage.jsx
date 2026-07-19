@@ -2,6 +2,7 @@
  * Página de sección del módulo (factura, retención, etc.).
  */
 import { Link as RouterLink, useParams } from "react-router-dom";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
 import {
   Alert,
   Box,
@@ -31,7 +32,7 @@ export default function ElectronicDocsSectionPage() {
     return (
       <Alert severity="warning">
         Sección no encontrada.{" "}
-        <Button component={RouterLink} to="/comprobantes-electronicos" size="small">
+        <Button component={RouterLink} to={APP_ROUTES.electronicDocs.hub} size="small">
           Volver al inicio
         </Button>
       </Alert>
@@ -82,7 +83,7 @@ export default function ElectronicDocsSectionPage() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 420, mx: "auto" }}>
             Usa Facturas u otro comprobante electrónico SRI (03–07) para enviar al servicio de rentas.
           </Typography>
-          <Button component={RouterLink} to="/comprobantes-electronicos/facturas" variant="contained">
+          <Button component={RouterLink} to={APP_ROUTES.electronicDocs.invoices} variant="contained">
             Ir a Facturas
           </Button>
         </Paper>

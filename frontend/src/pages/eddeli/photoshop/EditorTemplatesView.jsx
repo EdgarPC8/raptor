@@ -14,6 +14,7 @@ import {
   MenuItem,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
 
 import {
   getEditorTemplates,
@@ -26,7 +27,7 @@ import {
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 
 export default function EditorTemplatesView({
-  editorBasePath = "/diseno-promocional/editor", // ruta canónica del editor
+  editorBasePath = APP_ROUTES.promoDesign.editor,
   defaultApp = "EdDeli",
   defaultFormat = "16:9",
 } = {}) {

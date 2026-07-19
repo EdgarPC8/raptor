@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
 import {
   Box,
   Button,
@@ -246,7 +247,7 @@ export default function PublicidadDevicesPage() {
   return (
     <Box>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/publicidad")}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(APP_ROUTES.advertising.campaigns)}>
           Campañas
         </Button>
         <DevicesIcon color="primary" />

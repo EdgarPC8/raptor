@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
+import { APP_ROUTES } from "../../../../config/appRoutes.js";
 import {
   Box,
   Card,
@@ -77,7 +78,7 @@ export default function ExpectedCollectionsPanel({
           </Box>
           <Button
             component={RouterLink}
-            to="/inventory/collections"
+            to={APP_ROUTES.finance.collections}
             variant="contained"
             endIcon={<OpenInNewIcon />}
             sx={{ alignSelf: { xs: "stretch", md: "flex-start" }, whiteSpace: "nowrap" }}

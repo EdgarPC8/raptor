@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
 import {
   Box,
   Button,
@@ -170,14 +171,14 @@ export default function PublicidadCampaignsPage() {
           <Button
             variant="outlined"
             startIcon={<DevicesIcon />}
-            onClick={() => navigate("/publicidad/dispositivos")}
+            onClick={() => navigate(APP_ROUTES.advertising.devices)}
           >
             Dispositivos TV
           </Button>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => navigate("/publicidad/campanas/nueva")}
+            onClick={() => navigate(APP_ROUTES.advertising.campaignNew)}
           >
             Nueva campaña
           </Button>

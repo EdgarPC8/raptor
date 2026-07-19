@@ -8,6 +8,7 @@ import GuestExploreRoute from "./context/GuestExploreRoute.jsx";
 import NavBar from "./components/NavBar.jsx";
 import { SHELL_ONLY } from "./config/deployEnv.js";
 import { APP_ID } from "./config/appInfo.js";
+import { APP_ROUTES, LEGACY_ROUTE_REDIRECTS } from "./config/appRoutes.js";
 // Licencia: GET /subscription en backend (push del gestor). Sin Subify.
 // Modo `npm run raptor`: invitado sin backend + exploración de módulos.
 
@@ -170,7 +171,9 @@ function PageFallback() {
 /** Empleado → caja; Admin/Programador → dashboard. */
 function RoleHomeRedirect() {
   const { user } = useAuth();
-  if (user?.loginRol === "Empleado") return <Navigate to="/caja" replace />;
+  if (user?.loginRol === "Empleado") {
+    return <Navigate to={APP_ROUTES.operation.cash} replace />;
+  }
   return <DashBoardPage />;
 }
 
@@ -215,38 +218,45 @@ export default function App() {
             />
             <Route element={<GuestExploreRoute />}>
               {/* Activos con guestData */}
-              <Route path="/" element={<LazyPage><DashBoardPage /></LazyPage>} />
-              <Route path="/notifications" element={<LazyPage><NotificationsPage /></LazyPage>} />
-              <Route path="/caja" element={<LazyPage><CajaPage /></LazyPage>} />
-              <Route path="/turno" element={<LazyPage><TurnoPage /></LazyPage>} />
-              <Route path="/tareas" element={<LazyPage><TareasPage /></LazyPage>} />
-              <Route path="/facturacion" element={<LazyPage><FacturacionPage /></LazyPage>} />
-              <Route path="/turno/supervision" element={<LazyPage><TurnoSupervisionPage /></LazyPage>} />
-              <Route path="/inventory/orders" element={<LazyPage><OrderPage /></LazyPage>} />
-              <Route path="/inventory/customers" element={<LazyPage><CustomerPage /></LazyPage>} />
-              <Route path="/inventory/finance" element={<LazyPage><FinancePage /></LazyPage>} />
-              <Route path="/inventory/collections" element={<LazyPage><CollectionsPage /></LazyPage>} />
-              <Route path="/inventory/prestamos-deudas" element={<LazyPage><LoansDebtsPage /></LazyPage>} />
-              <Route path="/inventory/products" element={<LazyPage><ProductsPage /></LazyPage>} />
-              <Route path="/inventory/movement" element={<LazyPage><MovementPage /></LazyPage>} />
-              <Route path="/inventory/categories" element={<LazyPage><CategoryPage /></LazyPage>} />
-              <Route path="/inventory/tramos" element={<LazyPage><TramosPage /></LazyPage>} />
-              <Route path="/inventory/units" element={<LazyPage><UnitPage /></LazyPage>} />
-              <Route path="/inventory/insumos" element={<LazyPage><GenericIngredientsPage /></LazyPage>} />
-              <Route path="/inventory/recipes" element={<LazyPage><RecipePage /></LazyPage>} />
-              <Route path="/inventory/production" element={<LazyPage><ProductionManagerPage /></LazyPage>} />
-              <Route path="/inventory/suppliers" element={<LazyPage><SupplierPage /></LazyPage>} />
-              <Route path="/catalog_manager" element={<LazyPage><CatalogManagerPage /></LazyPage>} />
-              <Route path="/inventory/puntos-venta" element={<LazyPage><StoresManagerPage /></LazyPage>} />
-              <Route path="/users" element={<LazyPage><UsersPage /></LazyPage>} />
-              <Route path="/cuentas" element={<LazyPage><CuentasPage /></LazyPage>} />
-              <Route path="/roles" element={<LazyPage><RolesPage /></LazyPage>} />
-              <Route path="/panel_control" element={<LazyPage><PanelControlPage /></LazyPage>} />
-              <Route path="/sistema/configuracion" element={<LazyPage><AppSettingsPage /></LazyPage>} />
-              <Route path="/sistema/planes" element={<LazyPage><SystemPlansPage /></LazyPage>} />
-              <Route path="/sistema/modulos" element={<LazyPage><SystemModulesPage /></LazyPage>} />
-              <Route path="/perfil" element={<LazyPage><ProfilePage /></LazyPage>} />
-              <Route path="/donaciones" element={<LazyPage><DonacionesPage /></LazyPage>} />
+              <Route path={APP_ROUTES.dashboard} element={<LazyPage><DashBoardPage /></LazyPage>} />
+              {LEGACY_ROUTE_REDIRECTS.map(([from, to]) => (
+                <Route
+                  key={`legacy-${from}`}
+                  path={from}
+                  element={<Navigate to={to} replace />}
+                />
+              ))}
+              <Route path={APP_ROUTES.system.notifications} element={<LazyPage><NotificationsPage /></LazyPage>} />
+              <Route path={APP_ROUTES.operation.cash} element={<LazyPage><CajaPage /></LazyPage>} />
+              <Route path={APP_ROUTES.operation.shifts} element={<LazyPage><TurnoPage /></LazyPage>} />
+              <Route path={APP_ROUTES.operation.tasks} element={<LazyPage><TareasPage /></LazyPage>} />
+              <Route path={APP_ROUTES.operation.posReceipts} element={<LazyPage><FacturacionPage /></LazyPage>} />
+              <Route path={APP_ROUTES.operation.shiftSupervision} element={<LazyPage><TurnoSupervisionPage /></LazyPage>} />
+              <Route path={APP_ROUTES.sales.orders} element={<LazyPage><OrderPage /></LazyPage>} />
+              <Route path={APP_ROUTES.sales.customers} element={<LazyPage><CustomerPage /></LazyPage>} />
+              <Route path={APP_ROUTES.finance.transactions} element={<LazyPage><FinancePage /></LazyPage>} />
+              <Route path={APP_ROUTES.finance.collections} element={<LazyPage><CollectionsPage /></LazyPage>} />
+              <Route path={APP_ROUTES.finance.loansDebts} element={<LazyPage><LoansDebtsPage /></LazyPage>} />
+              <Route path={APP_ROUTES.inventory.products} element={<LazyPage><ProductsPage /></LazyPage>} />
+              <Route path={APP_ROUTES.inventory.movement} element={<LazyPage><MovementPage /></LazyPage>} />
+              <Route path={APP_ROUTES.inventory.categories} element={<LazyPage><CategoryPage /></LazyPage>} />
+              <Route path={APP_ROUTES.inventory.tierGroups} element={<LazyPage><TramosPage /></LazyPage>} />
+              <Route path={APP_ROUTES.inventory.units} element={<LazyPage><UnitPage /></LazyPage>} />
+              <Route path={APP_ROUTES.production.ingredients} element={<LazyPage><GenericIngredientsPage /></LazyPage>} />
+              <Route path={APP_ROUTES.production.recipes} element={<LazyPage><RecipePage /></LazyPage>} />
+              <Route path={APP_ROUTES.production.manufacturing} element={<LazyPage><ProductionManagerPage /></LazyPage>} />
+              <Route path={APP_ROUTES.production.suppliers} element={<LazyPage><SupplierPage /></LazyPage>} />
+              <Route path={APP_ROUTES.channel.catalog} element={<LazyPage><CatalogManagerPage /></LazyPage>} />
+              <Route path={APP_ROUTES.channel.stores} element={<LazyPage><StoresManagerPage /></LazyPage>} />
+              <Route path={APP_ROUTES.admin.users} element={<LazyPage><UsersPage /></LazyPage>} />
+              <Route path={APP_ROUTES.admin.accounts} element={<LazyPage><CuentasPage /></LazyPage>} />
+              <Route path={APP_ROUTES.admin.roles} element={<LazyPage><RolesPage /></LazyPage>} />
+              <Route path={APP_ROUTES.admin.controlPanel} element={<LazyPage><PanelControlPage /></LazyPage>} />
+              <Route path={APP_ROUTES.system.settings} element={<LazyPage><AppSettingsPage /></LazyPage>} />
+              <Route path={APP_ROUTES.system.plans} element={<LazyPage><SystemPlansPage /></LazyPage>} />
+              <Route path={APP_ROUTES.system.modules} element={<LazyPage><SystemModulesPage /></LazyPage>} />
+              <Route path={APP_ROUTES.system.profile} element={<LazyPage><ProfilePage /></LazyPage>} />
+              <Route path={APP_ROUTES.system.donations} element={<LazyPage><DonacionesPage /></LazyPage>} />
               {/* Mantenimiento / próximamente → ficha GuestExplore */}
               <Route path="/inicio" element={<LazyPage><GuestExplorePage /></LazyPage>} />
               <Route path="*" element={<LazyPage><GuestExplorePage /></LazyPage>} />
@@ -290,6 +300,13 @@ export default function App() {
         />
 
         <Route element={<NavBar />}>
+          {LEGACY_ROUTE_REDIRECTS.map(([from, to]) => (
+            <Route
+              key={`legacy-${from}`}
+              path={from}
+              element={<Navigate to={to} replace />}
+            />
+          ))}
           {/* Base pública: siempre, con o sin suscripción */}
           <Route path="/home" element={<HomeLogout />} />
           {APP_ID === "store" ? (
@@ -301,26 +318,29 @@ export default function App() {
           />
           <Route path="/no-subscription" element={<NoSubscriptionPage />} />
           <Route path="/mantenimiento" element={<MaintenancePage />} />
-          <Route path="/catalogo" element={<CatalogoPage />} />
-          <Route path="/punto_venta" element={<StoresPublicPage />} />
+          <Route path={APP_ROUTES.public.catalog} element={<CatalogoPage />} />
+          <Route path={APP_ROUTES.public.stores} element={<StoresPublicPage />} />
+          <Route path="/catalogo" element={<Navigate to={APP_ROUTES.public.catalog} replace />} />
+          <Route path="/punto_venta" element={<Navigate to={APP_ROUTES.public.stores} replace />} />
+          <Route path="/backery" element={<Navigate to={APP_ROUTES.public.catalog} replace />} />
 
           <Route element={<ProtectedRoute requiredRol={AUTH_ROLES} />}>
-            <Route path="/" element={<RoleHomeRedirect />} />
+            <Route path={APP_ROUTES.dashboard} element={<RoleHomeRedirect />} />
             {APP_ID !== "store" ? (
               <Route path="/inicio" element={<HomeLogout />} />
             ) : null}
-            <Route path="/perfil" element={<ProfilePage />} />
-            <Route path="/notifications" element={<NotificationsPage />} />
-            <Route path="/info" element={<InfoPage />} />
-            <Route path="/donaciones" element={<DonacionesPage />} />
+            <Route path={APP_ROUTES.system.profile} element={<ProfilePage />} />
+            <Route path={APP_ROUTES.system.notifications} element={<NotificationsPage />} />
+            <Route path={APP_ROUTES.info} element={<InfoPage />} />
+            <Route path={APP_ROUTES.system.donations} element={<DonacionesPage />} />
           </Route>
 
           <Route element={<ProtectedRoute requiredRol={["Programador"]} />}>
-            <Route path="/comandos" element={<ComandosPage />} />
-            <Route path="/backups" element={<BackupsPage />} />
-            <Route path="/logs" element={<LogsPage />} />
-            <Route path="/img" element={<ImgManagerPage />} />
-            <Route path="/file" element={<FileManagerPage />} />
+            <Route path={APP_ROUTES.developer.commands} element={<ComandosPage />} />
+            <Route path={APP_ROUTES.developer.backups} element={<BackupsPage />} />
+            <Route path={APP_ROUTES.developer.logs} element={<LogsPage />} />
+            <Route path={APP_ROUTES.developer.images} element={<ImgManagerPage />} />
+            <Route path={APP_ROUTES.developer.files} element={<FileManagerPage />} />
           </Route>
 
           <Route
@@ -330,23 +350,19 @@ export default function App() {
               />
             }
           >
-            <Route path="/caja" element={<CajaPage />} />
-            <Route path="/turno" element={<TurnoPage />} />
-            <Route path="/tareas" element={<TareasPage />} />
+            <Route path={APP_ROUTES.operation.cash} element={<CajaPage />} />
+            <Route path={APP_ROUTES.operation.shifts} element={<TurnoPage />} />
+            <Route path={APP_ROUTES.operation.tasks} element={<TareasPage />} />
           </Route>
 
           <Route
             element={
               <ProtectedRoute requiredRol={["Administrador", "Programador"]} />
             }
-          >
-            <Route path="/facturacion" element={<FacturacionPage />} />
+            >
+            <Route path={APP_ROUTES.operation.posReceipts} element={<FacturacionPage />} />
             <Route
-              path="/comprobantes"
-              element={<Navigate to="/facturacion" replace />}
-            />
-            <Route
-              path="/comprobantes-electronicos"
+              path={APP_ROUTES.electronicDocs.hub}
               element={<ElectronicDocsLayout />}
             >
               <Route index element={<ElectronicDocsHubPage />} />
@@ -356,78 +372,45 @@ export default function App() {
               />
             </Route>
             <Route
-              path="/turno/supervision"
+              path={APP_ROUTES.operation.shiftSupervision}
               element={<TurnoSupervisionPage />}
             />
-            <Route path="/panel_control" element={<PanelControlPage />} />
+            <Route path={APP_ROUTES.admin.controlPanel} element={<PanelControlPage />} />
+            <Route path={APP_ROUTES.system.settings} element={<AppSettingsPage />} />
+            <Route path={APP_ROUTES.system.plans} element={<SystemPlansPage />} />
+            <Route path={APP_ROUTES.system.modules} element={<SystemModulesPage />} />
             <Route
-              path="/sistema/configuracion"
-              element={<AppSettingsPage />}
-            />
-            <Route path="/sistema/planes" element={<SystemPlansPage />} />
-            <Route path="/sistema/modulos" element={<SystemModulesPage />} />
-            <Route
-              path="/sistema/facturacion-electronica"
-              element={<Navigate to="/sistema/configuracion?tab=sri" replace />}
-            />
-            <Route
-              path="/app-settings"
-              element={<Navigate to="/sistema/configuracion" replace />}
-            />
-            <Route
-              path="/facturacion/sri"
-              element={<Navigate to="/sistema/configuracion?tab=sri" replace />}
-            />
-            <Route
-              path="/notification-programs"
+              path={APP_ROUTES.admin.notificationPrograms}
               element={<NotificationProgramsPage />}
             />
-            <Route path="/users" element={<UsersPage />} />
-            <Route path="/cuentas" element={<CuentasPage />} />
-            <Route path="/roles" element={<RolesPage />} />
-            <Route path="/backery" element={<CatalogoPage />} />
-            <Route path="/catalog_manager" element={<CatalogManagerPage />} />
+            <Route path={APP_ROUTES.admin.users} element={<UsersPage />} />
+            <Route path={APP_ROUTES.admin.accounts} element={<CuentasPage />} />
+            <Route path={APP_ROUTES.admin.roles} element={<RolesPage />} />
+            <Route path={APP_ROUTES.channel.catalog} element={<CatalogManagerPage />} />
             <Route
-              path="/compare_groups"
+              path={APP_ROUTES.channel.compareGroups}
               element={<ProductCompareGroupsPage />}
             />
 
-            <Route path="/diseno-promocional/editor" element={<EditorPage />} />
+            <Route path={APP_ROUTES.promoDesign.editor} element={<EditorPage />} />
+            <Route path={`${APP_ROUTES.promoDesign.editor}/:id`} element={<EditorPage />} />
+            <Route path="/editor/:id" element={<EditorPage />} />
             <Route
-              path="/diseno-promocional/editor/:id"
-              element={<EditorPage />}
-            />
-            <Route
-              path="/diseno-promocional/vista"
+              path={APP_ROUTES.promoDesign.preview}
               element={<ProductTemplateStudio />}
             />
             <Route
-              path="/diseno-promocional/plantillas"
+              path={APP_ROUTES.promoDesign.templates}
               element={<EditorTemplatesView />}
             />
-            {/* Alias legacy → mismo editor (sin AdTemplateEditor) */}
-            <Route path="/editor" element={<EditorPage />} />
-            <Route path="/editor/:id" element={<EditorPage />} />
-            <Route
-              path="/publicity_edit"
-              element={<Navigate to="/diseno-promocional/editor" replace />}
-            />
-            <Route
-              path="/editorDefault"
-              element={<Navigate to="/diseno-promocional/editor" replace />}
-            />
-            <Route
-              path="/templates"
-              element={<Navigate to="/diseno-promocional/plantillas" replace />}
-            />
 
-            <Route path="/publicidad" element={<PublicidadCampaignsPage />} />
+            <Route path={APP_ROUTES.advertising.campaigns} element={<PublicidadCampaignsPage />} />
             <Route
-              path="/publicidad/dispositivos"
+              path={APP_ROUTES.advertising.devices}
               element={<PublicidadDevicesPage />}
             />
             <Route
-              path="/publicidad/campanas/nueva"
+              path={APP_ROUTES.advertising.campaignNew}
               element={<PublicidadCampaignEditorPage />}
             />
             <Route
@@ -435,46 +418,46 @@ export default function App() {
               element={<PublicidadCampaignEditorPage />}
             />
             <Route
-              path="/publicidad/reproductor/:campaignId?"
+              path={`${APP_ROUTES.advertising.player}/:campaignId?`}
               element={<PublicidadPlayerPage />}
             />
 
-            <Route path="/inventory/products" element={<ProductsPage />} />
-            <Route path="/inventory/categories" element={<CategoryPage />} />
-            <Route path="/inventory/tramos" element={<TramosPage />} />
-            <Route path="/inventory/units" element={<UnitPage />} />
-            <Route path="/inventory/movement" element={<MovementPage />} />
-            <Route path="/inventory/recipes" element={<RecipePage />} />
+            <Route path={APP_ROUTES.inventory.products} element={<ProductsPage />} />
+            <Route path={APP_ROUTES.inventory.categories} element={<CategoryPage />} />
+            <Route path={APP_ROUTES.inventory.tierGroups} element={<TramosPage />} />
+            <Route path={APP_ROUTES.inventory.units} element={<UnitPage />} />
+            <Route path={APP_ROUTES.inventory.movement} element={<MovementPage />} />
+            <Route path={APP_ROUTES.production.recipes} element={<RecipePage />} />
             <Route
-              path="/inventory/insumos"
+              path={APP_ROUTES.production.ingredients}
               element={<GenericIngredientsPage />}
             />
-            <Route path="/inventory/orders" element={<OrderPage />} />
-            <Route path="/inventory/customers" element={<CustomerPage />} />
-            <Route path="/inventory/suppliers" element={<SupplierPage />} />
-            <Route path="/inventory/finance" element={<FinancePage />} />
+            <Route path={APP_ROUTES.sales.orders} element={<OrderPage />} />
+            <Route path={APP_ROUTES.sales.customers} element={<CustomerPage />} />
+            <Route path={APP_ROUTES.production.suppliers} element={<SupplierPage />} />
+            <Route path={APP_ROUTES.finance.transactions} element={<FinancePage />} />
             <Route
-              path="/inventory/collections"
+              path={APP_ROUTES.finance.collections}
               element={<CollectionsPage />}
             />
             <Route
-              path="/inventory/prestamos-deudas"
+              path={APP_ROUTES.finance.loansDebts}
               element={<LoansDebtsPage />}
             />
             <Route
-              path="/inventory/gastos-recurrentes"
+              path={APP_ROUTES.finance.recurringExpenses}
               element={<RecurringExpensesPage />}
             />
             <Route
-              path="/inventory/production"
+              path={APP_ROUTES.production.manufacturing}
               element={<ProductionManagerPage />}
             />
             <Route
-              path="/inventory/productos-destacados"
+              path={APP_ROUTES.channel.featuredProducts}
               element={<HomeProductPage />}
             />
             <Route
-              path="/inventory/puntos-venta"
+              path={APP_ROUTES.channel.stores}
               element={<StoresManagerPage />}
             />
           </Route>

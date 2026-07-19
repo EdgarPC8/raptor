@@ -4,6 +4,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink, useSearchParams } from "react-router-dom";
+import { APP_ROUTES } from "../config/appRoutes.js";
 import {
   Box,
   Typography,
@@ -266,7 +267,7 @@ function AppInfoTab({ activeApp, plan, canSeePlans, showInternalRoles = false })
             {canSeePlans ? (
               <Button
                 component={RouterLink}
-                to="/sistema/planes"
+                to={APP_ROUTES.system.plans}
                 size="small"
                 sx={{ mt: 1.5, textTransform: "none", fontWeight: 700 }}
               >

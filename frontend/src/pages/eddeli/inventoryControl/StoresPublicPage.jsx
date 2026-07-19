@@ -11,7 +11,7 @@ import { useAppSettings } from "../../../context/AppSettingsContext.jsx";
 
 /**
  * Vista pública de locales (/punto_venta): misma idea que la sección del home sin sesión;
- * tarjetas, detalle y productos por local. La administración va en /inventory/puntos-venta.
+ * tarjetas, detalle y productos por local. La administración va en /canal/locales.
  */
 export default function StoresPublicPage() {
   const { activeApp } = useAppSettings();

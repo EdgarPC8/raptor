@@ -38,6 +38,7 @@ import {
 import { getRolRequest } from "../api/accountRequest.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { Navigate } from "react-router-dom";
+import { APP_ROUTES } from "../config/appRoutes.js";
 import { PageSkeleton } from "../components/ContentSkeleton.jsx";
 import TablePro from "../components/Tables/TablePro.jsx";
 
@@ -303,7 +304,7 @@ export default function NotificationProgramsPage() {
   );
 
   if (!ALLOWED.has(user?.loginRol)) {
-    return <Navigate to="/notifications" replace />;
+    return <Navigate to={APP_ROUTES.system.notifications} replace />;
   }
 
   if (!BACKEND_ENABLED) {

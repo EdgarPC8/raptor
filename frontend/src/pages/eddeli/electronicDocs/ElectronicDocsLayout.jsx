@@ -2,6 +2,7 @@
  * Layout del módulo Comprobantes electrónicos: menú lateral + contenido.
  */
 import { Outlet, NavLink, useLocation } from "react-router-dom";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
 import {
   Box,
   Chip,
@@ -53,9 +54,9 @@ export default function ElectronicDocsLayout() {
           <List dense disablePadding>
             <ListItemButton
               component={NavLink}
-              to="/comprobantes-electronicos"
+              to={APP_ROUTES.electronicDocs.hub}
               end
-              selected={location.pathname === "/comprobantes-electronicos"}
+              selected={location.pathname === APP_ROUTES.electronicDocs.hub}
               sx={{ py: 1.1 }}
             >
               <ListItemText

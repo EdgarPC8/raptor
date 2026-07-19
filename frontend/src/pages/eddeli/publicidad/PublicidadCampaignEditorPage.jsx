@@ -3,6 +3,7 @@
  */
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
 import {
   Box,
   Button,
@@ -97,7 +98,7 @@ export default function PublicidadCampaignEditorPage() {
         applyCampaignToForm(c);
       } catch {
         toast?.({ message: "Campaña no encontrada", variant: "error" });
-        navigate("/publicidad", { replace: true });
+        navigate(APP_ROUTES.advertising.campaigns, { replace: true });
       } finally {
         if (alive) setLoading(false);
       }
@@ -164,7 +165,7 @@ export default function PublicidadCampaignEditorPage() {
   return (
     <Box>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/publicidad")}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(APP_ROUTES.advertising.campaigns)}>
           Volver
         </Button>
         <Typography variant="h5" fontWeight={700} sx={{ flex: 1 }}>
@@ -175,7 +176,7 @@ export default function PublicidadCampaignEditorPage() {
           startIcon={<PlayCircleOutlineIcon />}
           disabled={!form.playlist.length}
           onClick={() =>
-            navigate(isNew ? "/publicidad/reproductor" : `/publicidad/reproductor/${id}`)
+            navigate(isNew ? APP_ROUTES.advertising.player : `${APP_ROUTES.advertising.player}/${id}`)
           }
         >
           Reproductor
@@ -242,7 +243,7 @@ export default function PublicidadCampaignEditorPage() {
                       <Button
                         size="small"
                         sx={{ p: 0, minWidth: 0, verticalAlign: "baseline", textTransform: "none" }}
-                        onClick={() => navigate("/publicidad/dispositivos")}
+                        onClick={() => navigate(APP_ROUTES.advertising.devices)}
                       >
                         Dispositivos TV
                       </Button>

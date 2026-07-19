@@ -18,27 +18,26 @@ import {
 import SectionMaintenanceBlocked from "../pages/SectionMaintenanceBlocked.jsx";
 import SectionPlannedBlocked from "../pages/SectionPlannedBlocked.jsx";
 import { APP_ID } from "../config/appInfo.js";
+import { APP_ROUTES } from "../config/appRoutes.js";
 
 /** Rutas base / sistema: accesibles con sesión aunque no haya plan activo. */
 const SUBSCRIPTION_FREE_EXACT = new Set([
   "/inicio",
   "/home",
-  "/info",
-  "/donaciones",
-  "/perfil",
-  "/sistema/configuracion",
-  "/sistema/modulos",
-  "/sistema/planes",
-  "/app-settings",
+  APP_ROUTES.info,
+  APP_ROUTES.system.donations,
+  APP_ROUTES.system.profile,
+  APP_ROUTES.system.settings,
+  APP_ROUTES.system.modules,
+  APP_ROUTES.system.plans,
 ]);
 
 function isSubscriptionFreePath(pathname) {
   const path = String(pathname || "").split("?")[0];
   if (SUBSCRIPTION_FREE_EXACT.has(path)) return true;
-  if (path.startsWith("/sistema/configuracion")) return true;
-  if (path.startsWith("/sistema/modulos")) return true;
-  if (path.startsWith("/sistema/planes")) return true;
-  if (path.startsWith("/sistema/facturacion-electronica")) return true;
+  if (path.startsWith(APP_ROUTES.system.settings)) return true;
+  if (path.startsWith(APP_ROUTES.system.modules)) return true;
+  if (path.startsWith(APP_ROUTES.system.plans)) return true;
   return false;
 }
 

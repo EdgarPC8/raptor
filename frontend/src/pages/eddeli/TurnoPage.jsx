@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
+import { APP_ROUTES } from "../../config/appRoutes.js";
 import {
   Autocomplete,
   Box,
@@ -597,7 +598,7 @@ export default function TurnoPage() {
           />
         )}
         {isAdmin && (
-          <Button component={RouterLink} to="/turno/supervision" size="small" variant="outlined" sx={{ ml: "auto" }}>
+          <Button component={RouterLink} to={APP_ROUTES.operation.shiftSupervision} size="small" variant="outlined" sx={{ ml: "auto" }}>
             Supervisión por fecha
           </Button>
         )}

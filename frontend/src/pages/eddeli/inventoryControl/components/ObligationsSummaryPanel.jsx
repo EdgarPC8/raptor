@@ -10,6 +10,7 @@ import {
   Divider,
 } from "@mui/material";
 import { Link as RouterLink } from "react-router-dom";
+import { APP_ROUTES } from "../../../../config/appRoutes.js";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
@@ -96,7 +97,7 @@ export default function ObligationsSummaryPanel({ obligations }) {
         <ChartBlockHeader title="Préstamos y deudas" sx={{ mb: 0, flex: 1, minWidth: 0 }} />
         <Button
           component={RouterLink}
-          to="/inventory/prestamos-deudas"
+          to={APP_ROUTES.finance.loansDebts}
           variant="outlined"
           size="small"
           endIcon={<OpenInNewIcon sx={{ fontSize: "0.95rem !important" }} />}

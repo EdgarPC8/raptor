@@ -11,6 +11,7 @@ import {
   Alert,
 } from "@mui/material";
 import { Link as RouterLink } from "react-router-dom";
+import { APP_ROUTES } from "../../../../config/appRoutes.js";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import EventIcon from "@mui/icons-material/Event";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -114,7 +115,7 @@ export default function RecurringExpensesSummaryPanel({ recurring }) {
         <ChartBlockHeader title="Gastos fijos del local" sx={{ mb: 0, flex: 1, minWidth: 0 }} />
         <Button
           component={RouterLink}
-          to="/inventory/gastos-recurrentes"
+          to={APP_ROUTES.finance.recurringExpenses}
           variant="outlined"
           size="small"
           endIcon={<OpenInNewIcon sx={{ fontSize: "0.95rem !important" }} />}

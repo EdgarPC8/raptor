@@ -12,6 +12,7 @@ import {
 import PrintIcon from "@mui/icons-material/Print";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import { Link as RouterLink } from "react-router-dom";
+import { APP_ROUTES } from "../../config/appRoutes.js";
 import TablePro from "../../components/Tables/TablePro.jsx";
 import PrintFormatDialog from "../../components/saleReceipt/PrintFormatDialog.jsx";
 import { getPosSalesRequest } from "../../api/ordersRequest.js";
@@ -90,11 +91,11 @@ export default function FacturacionPage() {
         <Typography variant="body2" color="text.secondary">
           Reimpresión de ventas de caja. Si en Caja eliges <strong>Factura</strong> y el SRI está listo, también
           se emite la factura electrónica (cliente con cédula/RUC o consumidor final). Detalle SRI en{" "}
-          <Link component={RouterLink} to="/comprobantes-electronicos/emitidos" underline="hover">
+          <Link component={RouterLink} to={APP_ROUTES.electronicDocs.issued} underline="hover">
             Documentos emitidos
           </Link>
           {" · "}
-          <Link component={RouterLink} to="/sistema/configuracion?tab=sri" underline="hover">
+          <Link component={RouterLink} to={APP_ROUTES.electronicDocs.sriSettings} underline="hover">
             Configurar SRI
           </Link>
         </Typography>

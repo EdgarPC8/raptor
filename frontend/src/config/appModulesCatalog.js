@@ -11,6 +11,8 @@
  * Los datos salen de este archivo; el PDF debe reflejar la misma estructura.
  */
 
+import { APP_ROUTES } from "./appRoutes.js";
+
 export const APP_ROLES_LEGEND = [
   {
     name: "Programador",
@@ -36,7 +38,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Dashboard",
-        path: "/",
+        path: APP_ROUTES.dashboard,
         roles: ["Programador", "Administrador"],
         description: "Resumen del negocio: calendario financiero, clientes, ingresos por producto y gráficos. El rol Empleado no usa esta vista; se redirige a Caja.",
         functions: [
@@ -56,7 +58,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Notificaciones",
-        path: "/notifications",
+        path: APP_ROUTES.system.notifications,
         roles: ["Programador", "Administrador", "Empleado"],
         description: "Avisos del sistema y mensajes para el equipo.",
         functions: [
@@ -80,7 +82,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Caja",
-        path: "/caja",
+        path: APP_ROUTES.operation.cash,
         roles: ["Programador", "Administrador", "Empleado"],
         description: "Ventas en mostrador, carrito, cobro en efectivo/transferencia y comprobantes. Pantalla de inicio del rol Empleado.",
         functions: [
@@ -100,7 +102,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Turno",
-        path: "/turno",
+        path: APP_ROUTES.operation.shifts,
         roles: ["Programador", "Administrador", "Empleado"],
         description: "Apertura y cierre de turno, capital en caja y movimientos de efectivo.",
         functions: [
@@ -116,7 +118,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Tareas",
-        path: "/tareas",
+        path: APP_ROUTES.operation.tasks,
         roles: ["Programador", "Administrador", "Empleado"],
         description: "Planes de trabajo para el personal: crear, editar borradores, publicar y checklist del empleado.",
         functions: [
@@ -134,7 +136,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Comprobantes POS",
-        path: "/facturacion",
+        path: APP_ROUTES.operation.posReceipts,
         roles: ["Programador", "Administrador"],
         description: "Antes llamada «Facturación». Reimpresión de ventas de caja (factura, nota de venta, comprobante). No es facturación electrónica SRI. La config SRI está en Sistema → Configuración → Facturación electrónica.",
         functions: [
@@ -146,7 +148,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Supervisión caja",
-        path: "/turno/supervision",
+        path: APP_ROUTES.operation.shiftSupervision,
         roles: ["Programador", "Administrador"],
         description: "Revisión de turnos cerrados, diferencias y movimientos por fecha.",
         functions: [
@@ -160,7 +162,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Apertura multi-caja por local",
-        path: "/turno/multi-caja",
+        path: APP_ROUTES.operation.multiCash,
         roles: ["Programador", "Administrador", "Empleado"],
         status: "planned",
         description:
@@ -182,7 +184,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Inicio SRI",
-        path: "/comprobantes-electronicos",
+        path: APP_ROUTES.electronicDocs.hub,
         roles: ["Programador", "Administrador"],
         description:
           "Módulo de comprobantes electrónicos. Emisión al SRI en desarrollo; estructura de secciones lista.",
@@ -194,21 +196,21 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Facturas",
-        path: "/comprobantes-electronicos/facturas",
+        path: APP_ROUTES.electronicDocs.invoices,
         roles: ["Programador", "Administrador"],
         description: "Factura electrónica (código SRI 01).",
         functions: [{ name: "Bandeja (próx.)", description: "Emitir, autorizar y consultar facturas." }],
       },
       {
         name: "Notas de venta",
-        path: "/comprobantes-electronicos/notas-venta",
+        path: APP_ROUTES.electronicDocs.salesNotes,
         roles: ["Programador", "Administrador"],
         description: "Notas de venta operativas / electrónicas según flujo del negocio.",
         functions: [{ name: "Bandeja (próx.)", description: "Listado y emisión." }],
       },
       {
         name: "Notas de crédito / débito",
-        path: "/comprobantes-electronicos/notas-credito",
+        path: APP_ROUTES.electronicDocs.creditNotes,
         roles: ["Programador", "Administrador"],
         description: "NC (04) y ND (05) vinculadas a facturas.",
         functions: [
@@ -218,28 +220,28 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Retenciones",
-        path: "/comprobantes-electronicos/retenciones",
+        path: APP_ROUTES.electronicDocs.withholdings,
         roles: ["Programador", "Administrador"],
         description: "Comprobante de retención (07).",
         functions: [{ name: "Bandeja (próx.)", description: "Emitir y autorizar retenciones." }],
       },
       {
         name: "Guías de remisión",
-        path: "/comprobantes-electronicos/guias-remision",
+        path: APP_ROUTES.electronicDocs.deliveryGuides,
         roles: ["Programador", "Administrador"],
         description: "Guía de remisión (06) para traslados.",
         functions: [{ name: "Bandeja (próx.)", description: "Emitir guías." }],
       },
       {
         name: "Liquidación de compras",
-        path: "/comprobantes-electronicos/liquidacion-compras",
+        path: APP_ROUTES.electronicDocs.purchaseSettlement,
         roles: ["Programador", "Administrador"],
         description: "Liquidación de compra (03).",
         functions: [{ name: "Bandeja (próx.)", description: "Emitir liquidaciones." }],
       },
       {
         name: "Documentos emitidos",
-        path: "/comprobantes-electronicos/emitidos",
+        path: APP_ROUTES.electronicDocs.issued,
         roles: ["Programador", "Administrador"],
         description: "Bandeja unificada: autorizados, rechazados, XML y RIDE.",
         functions: [{ name: "Bandeja (próx.)", description: "Consulta por estado y tipo." }],
@@ -253,7 +255,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Pedidos",
-        path: "/inventory/orders",
+        path: APP_ROUTES.sales.orders,
         roles: ["Programador", "Administrador"],
         description: "Creación y seguimiento de pedidos: entrega, pago por ítem y estados.",
         functions: [
@@ -270,7 +272,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Clientes",
-        path: "/inventory/customers",
+        path: APP_ROUTES.sales.customers,
         roles: ["Programador", "Administrador"],
         description: "Directorio de clientes con datos de contacto y facturación.",
         functions: [
@@ -282,7 +284,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Clientes con cuenta",
-        path: "/inventory/customers/cuentas",
+        path: APP_ROUTES.sales.customerAccounts,
         roles: ["Programador", "Administrador"],
         status: "planned",
         description:
@@ -302,7 +304,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Finanzas",
-        path: "/inventory/finance",
+        path: APP_ROUTES.finance.transactions,
         roles: ["Programador", "Administrador"],
         description: "Registro de ingresos y gastos, resumen y movimientos contables.",
         functions: [
@@ -316,7 +318,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Cobranzas",
-        path: "/inventory/collections",
+        path: APP_ROUTES.finance.collections,
         roles: ["Programador", "Administrador"],
         description:
           "Cobros a clientes y pagos a proveedores: abonos parciales vinculados a pedidos.",
@@ -331,7 +333,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Préstamos y deudas",
-        path: "/inventory/prestamos-deudas",
+        path: APP_ROUTES.finance.loansDebts,
         roles: ["Programador", "Administrador"],
         description: "Préstamos, deudas y pagos sin pedido asociado.",
         functions: [
@@ -344,7 +346,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Gastos recurrentes",
-        path: "/inventory/gastos-recurrentes",
+        path: APP_ROUTES.finance.recurringExpenses,
         roles: ["Programador", "Administrador"],
         status: "maintenance",
         description: "Plantillas de arriendo, servicios y cuotas periódicas.",
@@ -359,7 +361,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Cuentas por pagar a proveedores",
-        path: "/inventory/collections",
+        path: APP_ROUTES.finance.collections,
         roles: ["Programador", "Administrador"],
         description:
           "Integrado en Cobranzas → Proveedores: deudas por pedido, abonos parciales y saldos.",
@@ -378,7 +380,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Productos",
-        path: "/inventory/products",
+        path: APP_ROUTES.inventory.products,
         roles: ["Programador", "Administrador"],
         description: "Productos finales, precios, stock, códigos de barras e imágenes.",
         functions: [
@@ -391,7 +393,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Movimientos",
-        path: "/inventory/movement",
+        path: APP_ROUTES.inventory.movement,
         roles: ["Programador", "Administrador"],
         description: "Entradas, salidas, ajustes y auditoría de inventario.",
         functions: [
@@ -405,7 +407,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Categorías",
-        path: "/inventory/categories",
+        path: APP_ROUTES.inventory.categories,
         roles: ["Programador", "Administrador"],
         description: "Jerarquía de categorías y reglas de surtido o tramos en caja.",
         functions: [
@@ -417,7 +419,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Tramos",
-        path: "/inventory/tramos",
+        path: APP_ROUTES.inventory.tierGroups,
         roles: ["Programador", "Administrador"],
         description: "Grupos de precio por cantidad (ej. paquetes de panes).",
         functions: [
@@ -429,7 +431,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Unidades",
-        path: "/inventory/units",
+        path: APP_ROUTES.inventory.units,
         roles: ["Programador", "Administrador"],
         description: "Unidades de medida: unidad, kg, quintal, etc.",
         functions: [
@@ -439,7 +441,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Bodegas",
-        path: "/inventory/bodegas",
+        path: APP_ROUTES.inventory.warehouses,
         roles: ["Programador", "Administrador"],
         status: "planned",
         description:
@@ -453,7 +455,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Lotes y vencimientos",
-        path: "/inventory/lotes",
+        path: APP_ROUTES.inventory.batches,
         roles: ["Programador", "Administrador"],
         status: "planned",
         description:
@@ -474,7 +476,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Insumos y marcas",
-        path: "/inventory/insumos",
+        path: APP_ROUTES.production.ingredients,
         roles: ["Programador", "Administrador"],
         description: "Materias primas, presentaciones y marcas de compra.",
         functions: [
@@ -487,7 +489,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Recetas",
-        path: "/inventory/recipes",
+        path: APP_ROUTES.production.recipes,
         roles: ["Programador", "Administrador"],
         description: "Composición de productos finales a partir de insumos.",
         functions: [
@@ -501,7 +503,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Producción",
-        path: "/inventory/production",
+        path: APP_ROUTES.production.manufacturing,
         roles: ["Programador", "Administrador"],
         description: "Órdenes de producción y consumo de insumos.",
         functions: [
@@ -513,7 +515,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Proveedores",
-        path: "/inventory/suppliers",
+        path: APP_ROUTES.production.suppliers,
         roles: ["Programador", "Administrador"],
         description: "Proveedores y pedidos de compra.",
         functions: [
@@ -523,7 +525,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Proveedores con cuenta",
-        path: "/inventory/suppliers/cuentas",
+        path: APP_ROUTES.production.supplierAccounts,
         roles: ["Programador", "Administrador"],
         status: "planned",
         description:
@@ -543,7 +545,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Catálogo config",
-        path: "/catalog_manager",
+        path: APP_ROUTES.channel.catalog,
         roles: ["Programador", "Administrador"],
         description: "Configuración del catálogo público y orden de productos.",
         functions: [
@@ -555,7 +557,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Puntos de venta",
-        path: "/inventory/puntos-venta",
+        path: APP_ROUTES.channel.stores,
         roles: ["Programador", "Administrador"],
         description:
           "Sucursales propias (caja + SRI) y vitrinas (entrega para que vendan). Filtro por tipo y mapa.",
@@ -570,7 +572,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Productos destacados",
-        path: "/inventory/productos-destacados",
+        path: APP_ROUTES.channel.featuredProducts,
         roles: ["Programador", "Administrador"],
         status: "maintenance",
         description: "Productos en portada y carrusel del sitio.",
@@ -582,7 +584,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Grupos comparativos",
-        path: "/compare_groups",
+        path: APP_ROUTES.channel.compareGroups,
         roles: ["Programador", "Administrador"],
         status: "maintenance",
         description: "Comparación de productos para la vitrina.",
@@ -773,7 +775,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Campañas",
-        path: "/publicidad",
+        path: APP_ROUTES.advertising.campaigns,
         roles: ["Programador", "Administrador"],
         description: "Listado y edición de campañas publicitarias.",
         functions: [
@@ -785,7 +787,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Dispositivos TV",
-        path: "/publicidad/dispositivos",
+        path: APP_ROUTES.advertising.devices,
         roles: ["Programador", "Administrador"],
         description: "Registro de pantallas o boxes conectados.",
         functions: [
@@ -797,7 +799,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Reproductor",
-        path: "/publicidad/reproductor",
+        path: APP_ROUTES.advertising.player,
         roles: ["Programador", "Administrador"],
         description: "Vista previa y control del reproductor de campañas.",
         functions: [
@@ -818,7 +820,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Editor de diseño",
-        path: "/diseno-promocional/editor",
+        path: APP_ROUTES.promoDesign.editor,
         roles: ["Programador", "Administrador"],
         description: "Compositor visual para piezas promocionales. Es el único editor activo; rutas legacy (/publicity_edit, /editorDefault) redirigen aquí.",
         functions: [
@@ -832,7 +834,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Vista con productos",
-        path: "/diseno-promocional/vista",
+        path: APP_ROUTES.promoDesign.preview,
         roles: ["Programador", "Administrador"],
         description: "Previsualización de diseños con datos de productos.",
         functions: [
@@ -843,7 +845,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Plantillas",
-        path: "/diseno-promocional/plantillas",
+        path: APP_ROUTES.promoDesign.templates,
         roles: ["Programador", "Administrador"],
         description: "Plantillas reutilizables del editor.",
         functions: [
@@ -863,7 +865,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Usuarios",
-        path: "/users",
+        path: APP_ROUTES.admin.users,
         roles: ["Programador", "Administrador"],
         description: "Datos personales de las personas del negocio.",
         functions: [
@@ -874,7 +876,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Cuentas",
-        path: "/cuentas",
+        path: APP_ROUTES.admin.accounts,
         roles: ["Programador", "Administrador"],
         description: "Usuarios de acceso (login) y asignación de roles.",
         functions: [
@@ -886,7 +888,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Roles",
-        path: "/roles",
+        path: APP_ROUTES.admin.roles,
         roles: ["Programador", "Administrador"],
         description: "Catálogo de roles del sistema.",
         functions: [
@@ -897,7 +899,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Panel de control",
-        path: "/panel_control",
+        path: APP_ROUTES.admin.controlPanel,
         roles: ["Programador", "Administrador"],
         description: "Estadísticas generales y copias de seguridad JSON.",
         functions: [
@@ -908,7 +910,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Programas de notificación",
-        path: "/notification-programs",
+        path: APP_ROUTES.admin.notificationPrograms,
         roles: ["Programador", "Administrador"],
         description: "Envíos programados de avisos por rol o audiencia.",
         functions: [
@@ -920,7 +922,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Asistencia / horarios del personal",
-        path: "/admin/asistencia",
+        path: "/administracion/asistencia",
         roles: ["Programador", "Administrador"],
         status: "planned",
         description:
@@ -942,7 +944,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Configuración",
-        path: "/sistema/configuracion",
+        path: APP_ROUTES.system.settings,
         roles: ["Programador", "Administrador"],
         description:
           "Negocio/app (logo, icono, zona horaria, operación) y preparación de facturación electrónica SRI (RUC, firma .p12). También accesible desde el menú del avatar.",
@@ -957,7 +959,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Planes",
-        path: "/sistema/planes",
+        path: APP_ROUTES.system.plans,
         roles: ["Programador", "Administrador"],
         description:
           "Planes comerciales: Prueba, Básico, Medio, Pro, Socios y Empresarial.",
@@ -974,7 +976,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Módulos",
-        path: "/sistema/modulos",
+        path: APP_ROUTES.system.modules,
         roles: ["Programador", "Administrador"],
         description:
           "Catálogo de módulos del menú (no secciones): en uso, en desarrollo, mantenimiento o solo desarrollador.",
@@ -987,7 +989,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Perfil",
-        path: "/perfil",
+        path: APP_ROUTES.system.profile,
         roles: ["Programador", "Administrador", "Empleado"],
         description: "Datos y foto del usuario conectado. También en el menú del avatar.",
         functions: [
@@ -997,7 +999,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Donaciones",
-        path: "/donaciones",
+        path: APP_ROUTES.system.donations,
         roles: ["Programador", "Administrador", "Empleado"],
         description: "Información de apoyo al proyecto Raptor. También en el menú del avatar.",
         functions: [
@@ -1006,7 +1008,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Facturación electrónica",
-        path: "/sistema/configuracion?tab=sri",
+        path: APP_ROUTES.electronicDocs.sriSettings,
         roles: ["Programador", "Administrador"],
         description:
           "Atajo a la pestaña SRI dentro de Configuración. No emite facturas aún; el POS sigue con consumidor final / comprobantes.",
@@ -1028,7 +1030,7 @@ export const APP_MODULE_GROUPS = [
     sections: [
       {
         name: "Imágenes",
-        path: "/img",
+        path: APP_ROUTES.developer.images,
         roles: ["Programador"],
         description: "Gestor de archivos de imagen del servidor.",
         functions: [
@@ -1039,7 +1041,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Archivos",
-        path: "/file",
+        path: APP_ROUTES.developer.files,
         roles: ["Programador"],
         description: "Explorador de archivos subidos.",
         functions: [
@@ -1051,7 +1053,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Logs",
-        path: "/logs",
+        path: APP_ROUTES.developer.logs,
         roles: ["Programador"],
         description: "Registro de actividad y errores.",
         functions: [
@@ -1065,7 +1067,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Backups JSON",
-        path: "/backups",
+        path: APP_ROUTES.developer.backups,
         roles: ["Programador"],
         description: "Copias de seguridad y restauración de datos.",
         functions: [
@@ -1077,7 +1079,7 @@ export const APP_MODULE_GROUPS = [
       },
       {
         name: "Comandos",
-        path: "/comandos",
+        path: APP_ROUTES.developer.commands,
         roles: ["Programador"],
         description: "Comandos de mantenimiento y sincronización.",
         functions: [
@@ -1094,7 +1096,7 @@ export const APP_MODULE_GROUPS = [
 export const APP_ACCOUNT_SECTIONS = [
   {
     name: "Perfil",
-    path: "/perfil",
+    path: APP_ROUTES.system.profile,
     roles: ["Programador", "Administrador", "Empleado"],
     description: "Datos y foto del usuario conectado.",
     functions: [
@@ -1104,7 +1106,7 @@ export const APP_ACCOUNT_SECTIONS = [
   },
   {
     name: "Información",
-    path: "/info",
+    path: APP_ROUTES.info,
     roles: ["Programador", "Administrador", "Empleado"],
     description: "Versión de la app, plan en uso y mapa de módulos por sección (esta página). El PDF exporta el mismo catálogo.",
     functions: [
@@ -1116,7 +1118,7 @@ export const APP_ACCOUNT_SECTIONS = [
   },
   {
     name: "Donaciones",
-    path: "/donaciones",
+    path: APP_ROUTES.system.donations,
     roles: ["Programador", "Administrador", "Empleado"],
     description: "Información de apoyo al proyecto Raptor.",
     functions: [
@@ -1128,7 +1130,7 @@ export const APP_ACCOUNT_SECTIONS = [
 export const APP_PUBLIC_SECTIONS = [
   {
     name: "Catálogo público",
-    path: "/catalogo",
+    path: APP_ROUTES.public.catalog,
     roles: ["Público"],
     description: "Vitrina de productos sin iniciar sesión.",
     functions: [
@@ -1140,7 +1142,7 @@ export const APP_PUBLIC_SECTIONS = [
   },
   {
     name: "Puntos de venta",
-    path: "/punto_venta",
+    path: APP_ROUTES.public.stores,
     roles: ["Público"],
     description: "Ubicación de locales en mapa: puntos de venta propios y vitrinas.",
     functions: [

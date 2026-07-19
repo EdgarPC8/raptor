@@ -22,6 +22,7 @@ import StarIcon from "@mui/icons-material/Star";
 import SaveIcon from "@mui/icons-material/Save";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { Navigate, Link as RouterLink } from "react-router-dom";
+import { APP_ROUTES } from "../config/appRoutes.js";
 import { formatDateTime } from "../helpers/functions.js";
 import TablePro from "../components/Tables/TablePro";
 import SimpleDialog from "../components/Dialogs/SimpleDialog";
@@ -351,7 +352,7 @@ export default function BackupsPage() {
 
       <Alert severity="info" sx={{ mb: 2 }}>
         Subir o cambiar <strong>backup.json</strong> no modifica la base de datos hasta que uses{" "}
-        <Button component={RouterLink} to="/comandos" size="small" sx={{ verticalAlign: "baseline" }}>
+        <Button component={RouterLink} to={APP_ROUTES.developer.commands} size="small" sx={{ verticalAlign: "baseline" }}>
           Comandos → Recargar BD
         </Button>
         .

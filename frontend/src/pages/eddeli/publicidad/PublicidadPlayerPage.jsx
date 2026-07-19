@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
 import {
   Box,
   Chip,
@@ -122,7 +123,7 @@ export default function PublicidadPlayerPage() {
         spacing={1}
         sx={{ px: 2, py: 1, borderBottom: "1px solid rgba(255,255,255,0.1)" }}
       >
-        <IconButton color="inherit" onClick={() => navigate("/publicidad")} size="small">
+        <IconButton color="inherit" onClick={() => navigate(APP_ROUTES.advertising.campaigns)} size="small">
           <ArrowBackIcon />
         </IconButton>
         <Box sx={{ flex: 1, minWidth: 0 }}>

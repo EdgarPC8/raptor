@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
+import { APP_ROUTES } from "../config/appRoutes.js";
 import {
   Alert,
   Box,
@@ -287,7 +288,7 @@ export default function SriInvoiceEmitPanel({
             color={settings?.environment === "produccion" ? "warning" : "default"}
           />
           {docType ? <Chip size="small" variant="outlined" label={`Tipo ${docType}`} /> : null}
-          <Button component={RouterLink} to="/sistema/configuracion?tab=sri" size="small">
+          <Button component={RouterLink} to={APP_ROUTES.electronicDocs.sriSettings} size="small">
             Ir a configuración SRI
           </Button>
         </Stack>

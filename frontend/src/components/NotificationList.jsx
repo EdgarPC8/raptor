@@ -31,6 +31,7 @@ import StorefrontIcon from "@mui/icons-material/Storefront";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import { useNavigate } from "react-router-dom";
+import { APP_ROUTES } from "../config/appRoutes.js";
 import {
   getNotificationsByUser,
   markNotificationAsSeen,
@@ -652,7 +653,7 @@ export default function NotificationList({ setCount, compact = false, onClose })
               size="small"
               onClick={() => {
                 onClose?.();
-                navigate("/notifications");
+                navigate(APP_ROUTES.system.notifications);
               }}
               sx={{ textTransform: "none", fontWeight: 600 }}
             >

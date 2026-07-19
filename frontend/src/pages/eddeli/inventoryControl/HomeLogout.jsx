@@ -32,6 +32,7 @@ import { useAppSettings } from "../../../context/AppSettingsContext.jsx";
 import { useAuth } from "../../../context/AuthContext.jsx";
 import { listCatalogModuleGroupsWithStatus } from "../../../config/appModulesCatalog.js";
 import { SHELL_ONLY } from "../../../config/deployEnv.js";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
 import { raptorLogoUrl } from "../../../config/raptorBrand.js";
 import SchoolIcon from "@mui/icons-material/School";
 
@@ -382,7 +383,7 @@ export default function HomeLogout() {
         name: "Catálogo",
         description: "Vitrina pública",
         sections: ["Productos", "Ofertas", "Comparativas", "Categorías"],
-        to: "/catalogo",
+        to: APP_ROUTES.public.catalog,
       });
     }
     if (showStores) {
@@ -395,7 +396,7 @@ export default function HomeLogout() {
           : showPropia
             ? ["Sucursales", "Mapa", "Contacto"]
             : ["Vitrinas", "Mapa", "Contacto"],
-        to: "/punto_venta",
+        to: APP_ROUTES.public.stores,
       });
     }
     return [...extras, ...core];
@@ -667,7 +668,7 @@ export default function HomeLogout() {
               <Button
                 variant="outlined"
                 startIcon={<BakeryDiningIcon />}
-                onClick={() => navigate("/catalogo")}
+                onClick={() => navigate(APP_ROUTES.public.catalog)}
                 sx={{
                   borderColor: alpha(colors.teal || "#1ABC9C", 0.55),
                   color: colors.teal || "#1ABC9C",
@@ -684,7 +685,7 @@ export default function HomeLogout() {
               <Button
                 variant="outlined"
                 startIcon={<StoreMallDirectoryRoundedIcon />}
-                onClick={() => navigate("/punto_venta")}
+                onClick={() => navigate(APP_ROUTES.public.stores)}
                 sx={{
                   borderColor: alpha(colors.blue || "#3498DB", 0.55),
                   color: colors.blue || "#3498DB",
