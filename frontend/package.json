@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "npm run dev:eddeli",
     "dev:eddeli": "VITE_SUBSCRIPTIONS_ENABLED=false vite --mode eddeli --clearScreen false",
-    "eddeli": "vite --mode eddeli --clearScreen false",
-    "store": "vite --mode store --clearScreen false",
+    "eddeli": "VITE_SUBSCRIPTIONS_ENABLED=true vite --mode eddeli --clearScreen false",
+    "dev:store": "VITE_SUBSCRIPTIONS_ENABLED=false vite --mode store --clearScreen false",
+    "store": "VITE_SUBSCRIPTIONS_ENABLED=true vite --mode store --clearScreen false",
     "raptor": "vite --mode raptor --clearScreen false",
     "build": "npm run build-eddeli",
     "build:app": "node scripts/build-app.mjs",
