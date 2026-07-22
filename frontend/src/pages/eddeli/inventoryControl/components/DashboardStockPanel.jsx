@@ -399,19 +399,7 @@ export default function DashboardStockPanel({ productsStock, onStockUpdated }) {
     (productsStock?.agotados?.length ?? 0) + (productsStock?.porAgotarse?.length ?? 0) > 0;
 
   return (
-    <Paper
-      sx={{
-        p: { xs: 1.5, sm: 2 },
-        borderRadius: 2,
-        minWidth: 0,
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        border: "1px solid",
-        borderColor: alpha(theme.palette.divider, 0.6),
-        ...dashboardTwinPanelSx,
-      }}
-    >
+    <Paper variant="panel" sx={{ p: { xs: 1.25, sm: 1.5 }, borderRadius: 2, minWidth: 0, width: "100%", display: "flex", flexDirection: "column", ...dashboardTwinPanelSx }}>
       <Stack
         direction="row"
         alignItems="flex-start"

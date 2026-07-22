@@ -49,15 +49,13 @@ function SummaryCard({
 
   return (
     <Paper
+      variant="panel"
       elevation={0}
       sx={{
         p: 2,
         height: "100%",
         minHeight: fixedHeight ? CARD_MIN_HEIGHT : undefined,
         borderRadius: 2,
-        border: "1px solid",
-        borderColor: alpha(main, 0.25),
-        background: `linear-gradient(145deg, ${alpha(main, 0.1)} 0%, ${alpha(main, 0.03)} 100%)`,
         boxSizing: "border-box",
       }}
     >
@@ -120,10 +118,10 @@ function SummaryCard({
           sx={{
             width: 40,
             height: 40,
-            borderRadius: 2,
+            borderRadius: 1.5,
             display: "grid",
             placeItems: "center",
-            bgcolor: alpha(main, 0.15),
+            bgcolor: alpha(main, 0.1),
             color: main,
             flexShrink: 0,
           }}
@@ -151,13 +149,12 @@ function SummaryCardsSkeleton() {
       {Array.from({ length: 10 }).map((_, i) => (
         <Paper
           key={i}
+          variant="panel"
           elevation={0}
           sx={{
             p: 2,
             minHeight: CARD_MIN_HEIGHT,
             borderRadius: 2,
-            border: "1px solid",
-            borderColor: "divider",
           }}
         >
           <Stack direction="row" justifyContent="space-between" spacing={1}>
@@ -490,14 +487,12 @@ export default function FinanceSummaryCards({
       </Box>
 
       <Paper
+        variant="panel"
         elevation={0}
         sx={{
           mt: 2,
           p: { xs: 1.5, sm: 2 },
           borderRadius: 2,
-          border: "1px solid",
-          borderColor: "divider",
-          bgcolor: "background.paper",
           overflow: "hidden",
           minWidth: 0,
         }}

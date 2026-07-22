@@ -14,14 +14,10 @@ import { getProductSeriesChartsRequest } from '../../../../../api/financeRequest
 import ChartBlockHeader from '../../../../../components/Charts/ChartBlockHeader';
 import { ChartSkeleton } from '../../../../../components/ContentSkeleton.jsx';
 import ProductSeriesChart from './ProductSeriesChart';
+import { dashboardPanelSx } from '../dashboardPanelStyles.js';
 
 const paperSx = {
-  p: { xs: 1, sm: 1.5 },
-  borderRadius: 2,
-  height: '100%',
-  boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-  overflow: 'hidden',
-  minWidth: 0,
+  ...dashboardPanelSx,
 };
 
 const PERIOD_OPTIONS = [
@@ -85,7 +81,7 @@ export default function ProductChartsPanel() {
   const rankEnd = sales?.rankEnd ?? meta.rankEnd;
 
   return (
-    <Paper sx={{ ...paperSx, overflowX: 'auto' }}>
+    <Paper variant="panel" sx={{ ...paperSx, overflowX: 'auto' }}>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         alignItems={{ xs: 'flex-start', sm: 'flex-start' }}

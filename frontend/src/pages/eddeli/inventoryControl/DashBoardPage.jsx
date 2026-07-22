@@ -21,14 +21,11 @@ import RecurringExpensesSummaryPanel from "./components/RecurringExpensesSummary
 import YearFinanceOverviewChart from "./components/Charts/YearFinanceOverviewChart";
 import { buildPendingCollectionsBreakdown } from "./finance/pendingCollections.js";
 import GuestDemoBanner from "../../../components/GuestDemoBanner.jsx";
+import { dashboardPanelSx, dashboardPageSx } from "./components/dashboardPanelStyles.js";
 
 const paperSx = {
-  p: { xs: 1, sm: 1.5 },
-  borderRadius: 2,
-  height: "100%",
-  boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-  overflow: "hidden",
-  minWidth: 0,
+  ...dashboardPanelSx,
+  overflowX: "auto",
 };
 
 const defaultProductsStock = { agotados: [], porAgotarse: [] };
@@ -91,7 +88,6 @@ export const DashBoardPage = () => {
     [workbench],
   );
 
-  // Por cobrar: workbench si ya cargó; si no, futureIncome del summary (hero).
   const pendingTotal = loadingRest
     ? Number(summary?.futureIncome ?? 0)
     : pendingBreakdown.total;
@@ -103,7 +99,6 @@ export const DashBoardPage = () => {
       setLoadingHero(true);
       setLoadingRest(true);
 
-      // 1) Primero lo que se ve arriba (cards)
       try {
         const { data } = await getFinanceDashboardHeroRequest();
         if (cancelled) return;
@@ -115,7 +110,6 @@ export const DashBoardPage = () => {
         if (!cancelled) setLoadingHero(false);
       }
 
-      // 2) Luego el resto, sin bloquear las cards
       try {
         const { data } = await getFinanceDashboardRestRequest();
         if (cancelled) return;
@@ -143,17 +137,10 @@ export const DashBoardPage = () => {
   }, []);
 
   return (
-    <Box
-      sx={{
-        width: "100%",
-        maxWidth: "100%",
-        minWidth: 0,
-        boxSizing: "border-box",
-        overflowX: "hidden",
-      }}
-    >
+    <Box sx={dashboardPageSx}>
       <GuestDemoBanner />
-      <Box sx={{ mb: { xs: 2, md: 3 } }}>
+
+      <Box sx={{ mb: { xs: 2, md: 2.5 } }}>
         <FinanceSummaryCards
           summary={summary}
           pendingTotal={pendingTotal}
@@ -183,7 +170,7 @@ export const DashBoardPage = () => {
               )}
             </Grid>
             <Grid item xs={12} sx={{ minWidth: 0 }}>
-              <Paper sx={{ ...paperSx, overflowX: "auto" }}>
+              <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto" }}>
                 <YearFinanceOverviewChart onMonthSelect={handleYearMonthSelect} />
               </Paper>
             </Grid>
@@ -211,9 +198,8 @@ export const DashBoardPage = () => {
           </Stack>
         </Grid>
 
-        {/* Gráficos con su propia carga interna */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ ...paperSx, overflowX: "auto", height: "100%" }}>
+          <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto", height: "100%" }}>
             <CashFlowMirrorChart focus={mirrorFocus} onClearFocus={handleClearMirrorFocus} />
           </Paper>
         </Grid>
@@ -227,7 +213,7 @@ export const DashBoardPage = () => {
 
         <Grid item xs={12}>
           <Box ref={calendarSectionRef}>
-            <Paper sx={{ ...paperSx, overflowX: "auto" }}>
+            <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto" }}>
               <ChartCalendaryInfo navigateToMonth={calendarNavigate} />
             </Paper>
           </Box>
@@ -238,7 +224,7 @@ export const DashBoardPage = () => {
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Paper sx={{ ...paperSx, overflowX: "auto" }}>
+          <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto" }}>
             {loadingRest ? (
               <PanelSkeleton height={280} />
             ) : (
@@ -248,7 +234,7 @@ export const DashBoardPage = () => {
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Paper sx={{ ...paperSx, overflowX: "auto" }}>
+          <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto" }}>
             <ExpensePurchaseStats />
           </Paper>
         </Grid>

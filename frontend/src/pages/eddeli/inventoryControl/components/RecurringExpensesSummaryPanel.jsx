@@ -95,16 +95,7 @@ export default function RecurringExpensesSummaryPanel({ recurring }) {
   };
 
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        p: { xs: 1.5, sm: 2 },
-        borderRadius: 2,
-        border: "1px solid",
-        borderColor: "divider",
-        height: "100%",
-      }}
-    >
+    <Paper variant="panel" elevation={0} sx={{ p: { xs: 1.25, sm: 1.5 }, borderRadius: 2, height: "100%" }}>
       <Stack
         direction="row"
         alignItems="flex-start"

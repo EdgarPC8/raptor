@@ -11,17 +11,123 @@ function money(n) {
   return Number(Number(n || 0).toFixed(2));
 }
 
-function monthMetrics(scale = 1) {
+function emptyDayMetrics() {
   return {
-    ordersAmount: Number((4200 * scale).toFixed(2)),
-    ordersCount: Math.round(18 * scale),
-    posSalesAmount: Number((6800 * scale).toFixed(2)),
-    posSalesCount: Math.round(120 * scale),
-    posIncomeAmount: Number((6400 * scale).toFixed(2)),
-    posIncomeCount: Math.round(110 * scale),
-    collectedAmount: Number((2100 * scale).toFixed(2)),
-    expensesAmount: Number((3900 * scale).toFixed(2)),
+    ordersAmount: 0,
+    ordersCount: 0,
+    posSalesAmount: 0,
+    posSalesCount: 0,
+    posIncomeAmount: 0,
+    posIncomeCount: 0,
+    collectedAmount: 0,
+    expensesAmount: 0,
   };
+}
+
+function incomeSource(row) {
+  const cat = String(row.category || "").toLowerCase();
+  if (row.source === "caja" || row.source === "cobro") return row.source;
+  if (cat.includes("cobro")) return "cobro";
+  return "caja";
+}
+
+function addDayMetrics(day, patch) {
+  if (patch.ordersAmount) {
+    day.ordersAmount = money(day.ordersAmount + patch.ordersAmount);
+    day.ordersCount += patch.ordersCount || 0;
+  }
+  if (patch.posSalesAmount) {
+    day.posSalesAmount = money(day.posSalesAmount + patch.posSalesAmount);
+    day.posSalesCount += patch.posSalesCount || 0;
+  }
+  if (patch.posIncomeAmount) {
+    day.posIncomeAmount = money(day.posIncomeAmount + patch.posIncomeAmount);
+    day.posIncomeCount += patch.posIncomeCount || 0;
+  }
+  if (patch.collectedAmount) {
+    day.collectedAmount = money(day.collectedAmount + patch.collectedAmount);
+  }
+  if (patch.expensesAmount) {
+    day.expensesAmount = money(day.expensesAmount + patch.expensesAmount);
+  }
+}
+
+function rollupMonthFromDay(months, dateKey, day) {
+  const [yr, mo] = dateKey.split("-");
+  const mk = `${yr}-${mo}`;
+  if (!months[mk]) months[mk] = emptyDayMetrics();
+  addDayMetrics(months[mk], day);
+}
+
+function sumDayTotals(days) {
+  return Object.values(days).reduce(
+    (acc, day) => {
+      acc.orders += day.ordersAmount;
+      acc.posSales += day.posSalesAmount;
+      acc.posIncome += day.posIncomeAmount;
+      acc.collected += day.collectedAmount;
+      acc.expenses += day.expensesAmount;
+      return acc;
+    },
+    { orders: 0, posSales: 0, posIncome: 0, collected: 0, expenses: 0 },
+  );
+}
+
+/** Agrega calendario desde pedidos, POS, ingresos y gastos del seed demo. */
+function buildCalendarAggregates(ctx) {
+  const days = {};
+
+  const ensureDay = (key) => {
+    if (!days[key]) days[key] = emptyDayMetrics();
+    return days[key];
+  };
+
+  for (const o of (ctx.orders || []).map(normalizeOrder)) {
+    const d = parseGuestOrderDate(o);
+    if (!d) continue;
+    const key = isoDay(d);
+    const day = ensureDay(key);
+    const orderTotal = Number(o.total || 0);
+    day.ordersAmount = money(day.ordersAmount + orderTotal);
+    day.ordersCount += 1;
+  }
+
+  for (const p of ctx.posSales || []) {
+    const d = new Date(p.createdAt || p.date);
+    if (Number.isNaN(d.getTime())) continue;
+    const key = isoDay(d);
+    const day = ensureDay(key);
+    const saleTotal = Number(p.total || 0);
+    day.posSalesAmount = money(day.posSalesAmount + saleTotal);
+    day.posSalesCount += 1;
+  }
+
+  for (const inc of ctx.incomes || []) {
+    const key = String(inc.date || "").slice(0, 10);
+    if (!key) continue;
+    const day = ensureDay(key);
+    const amount = Number(inc.amount || 0);
+    if (incomeSource(inc) === "cobro") {
+      day.collectedAmount = money(day.collectedAmount + amount);
+    } else {
+      day.posIncomeAmount = money(day.posIncomeAmount + amount);
+      day.posIncomeCount += 1;
+    }
+  }
+
+  for (const e of ctx.expenses || []) {
+    const key = String(e.date || "").slice(0, 10);
+    if (!key) continue;
+    const day = ensureDay(key);
+    day.expensesAmount = money(day.expensesAmount + Number(e.amount || 0));
+  }
+
+  const months = {};
+  for (const [dateKey, day] of Object.entries(days)) {
+    rollupMonthFromDay(months, dateKey, day);
+  }
+
+  return { days, months };
 }
 
 function isoDay(d) {
@@ -241,6 +347,8 @@ function buildCalendarDayDetail(ctx, dateKey) {
       category: i.category,
       amount: i.amount,
       date: i.date,
+      counterparty: i.counterpartyName || i.counterparty,
+      source: incomeSource(i),
     }));
 
   const expenses = (ctx.expenses || [])
@@ -414,100 +522,42 @@ const guestData = {
         return this.expensesForChart;
       case "calendarYear": {
         const year = params.year ?? y;
+        const { months: allMonths } = buildCalendarAggregates(this);
         const months = {};
         for (let i = 1; i <= 12; i += 1) {
           const k = `${year}-${String(i).padStart(2, "0")}`;
-          months[k] = monthMetrics(0.55 + (i % 5) * 0.12);
+          months[k] = allMonths[k] ? { ...allMonths[k] } : emptyDayMetrics();
         }
-        return { year, months };
-      }
-      case "calendarMonth": {
-        const year = params.year ?? y;
-        const month = params.month ?? Number(m);
-        const days = {};
-        const dim = new Date(year, month, 0).getDate();
-        for (const o of (this.orders || []).map(normalizeOrder)) {
-          const d = parseGuestOrderDate(o);
-          if (!d || d.getFullYear() !== year || d.getMonth() + 1 !== month) continue;
-          const keyDate = isoDay(d);
-          days[keyDate] = days[keyDate] || {
-            ordersAmount: 0,
-            ordersCount: 0,
-            posSalesAmount: 0,
-            posSalesCount: 0,
-            posIncomeAmount: 0,
-            posIncomeCount: 0,
-            collectedAmount: 0,
-            expensesAmount: 0,
-          };
-          days[keyDate].ordersAmount += Number(o.total || 0);
-          days[keyDate].ordersCount += 1;
-          days[keyDate].collectedAmount += Number(o.paid || 0);
-        }
-        for (const p of this.posSales || []) {
-          const d = new Date(p.createdAt || p.date);
-          if (Number.isNaN(d.getTime())) continue;
-          if (d.getFullYear() !== year || d.getMonth() + 1 !== month) continue;
-          const keyDate = isoDay(d);
-          days[keyDate] = days[keyDate] || {
-            ordersAmount: 0,
-            ordersCount: 0,
-            posSalesAmount: 0,
-            posSalesCount: 0,
-            posIncomeAmount: 0,
-            posIncomeCount: 0,
-            collectedAmount: 0,
-            expensesAmount: 0,
-          };
-          days[keyDate].posSalesAmount += Number(p.total || 0);
-          days[keyDate].posSalesCount += 1;
-          days[keyDate].posIncomeAmount += Number(p.total || 0);
-          days[keyDate].posIncomeCount += 1;
-        }
-        for (const e of this.expenses || []) {
-          const d = new Date(`${e.date}T12:00:00`);
-          if (Number.isNaN(d.getTime())) continue;
-          if (d.getFullYear() !== year || d.getMonth() + 1 !== month) continue;
-          const keyDate = e.date;
-          days[keyDate] = days[keyDate] || {
-            ordersAmount: 0,
-            ordersCount: 0,
-            posSalesAmount: 0,
-            posSalesCount: 0,
-            posIncomeAmount: 0,
-            posIncomeCount: 0,
-            collectedAmount: 0,
-            expensesAmount: 0,
-          };
-          days[keyDate].expensesAmount += Number(e.amount || 0);
-        }
-        for (let d = 1; d <= dim; d += 1) {
-          if (d % 4 !== 0) continue;
-          const keyDate = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-          if (days[keyDate]) continue;
-          const loss = d % 8 === 0;
-          days[keyDate] = {
-            ordersAmount: 40 + (d % 5) * 10,
-            ordersCount: 1,
-            posSalesAmount: 80 + (d % 6) * 15,
-            posSalesCount: 2 + (d % 3),
-            posIncomeAmount: 80 + (d % 6) * 15,
-            posIncomeCount: 2 + (d % 3),
-            collectedAmount: 0,
-            expensesAmount: loss ? 160 + (d % 4) * 20 : 20 + (d % 4) * 8,
-          };
-        }
-        const totals = Object.values(days).reduce(
-          (acc, day) => {
-            acc.orders += day.ordersAmount;
-            acc.posSales += day.posSalesAmount;
-            acc.posIncome += day.posIncomeAmount;
-            acc.collected += day.collectedAmount;
-            acc.expenses += day.expensesAmount;
+        const monthValues = Object.values(months);
+        const totals = monthValues.reduce(
+          (acc, m) => {
+            acc.orders += m.ordersAmount;
+            acc.posSales += m.posSalesAmount;
+            acc.posIncome += m.posIncomeAmount;
+            acc.collected += m.collectedAmount;
+            acc.expenses += m.expensesAmount;
             return acc;
           },
           { orders: 0, posSales: 0, posIncome: 0, collected: 0, expenses: 0 },
         );
+        Object.keys(totals).forEach((k) => {
+          totals[k] = money(totals[k]);
+        });
+        return { year, months, totals };
+      }
+      case "calendarMonth": {
+        const year = params.year ?? y;
+        const month = params.month ?? Number(m);
+        const { days: allDays } = buildCalendarAggregates(this);
+        const prefix = `${year}-${String(month).padStart(2, "0")}-`;
+        const days = {};
+        for (const [key, metrics] of Object.entries(allDays)) {
+          if (key.startsWith(prefix)) days[key] = { ...metrics };
+        }
+        const totals = sumDayTotals(days);
+        Object.keys(totals).forEach((k) => {
+          totals[k] = money(totals[k]);
+        });
         return { days, totals };
       }
       case "calendarDay":

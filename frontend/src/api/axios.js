@@ -9,6 +9,7 @@ import {
   API_HOST,
   API_ORIGIN,
   API_MODE,
+  APP_BASE_PATH,
 } from "../config/deployEnv.js";
 
 function isTvPlayerRoute() {
@@ -56,11 +57,22 @@ const instance = axios.create({
 export const pathImg = `${baseURL.replace(/\/$/, "")}/img/`;
 export const pathFiles = `${baseURL.replace(/\/$/, "")}/files/`;
 
+/** URL de asset en public/ (respeta Vite base: /eddeli/, /raptor/, …). */
+export function publicAssetUrl(relativePath) {
+  const rel = String(relativePath || "").replace(/^\/+/, "");
+  if (!rel) return null;
+  const base = APP_BASE_PATH.endsWith("/") ? APP_BASE_PATH : `${APP_BASE_PATH}/`;
+  return `${base}${rel}`;
+}
+
 export const buildImageUrl = (imagePath) => {
   if (!imagePath) return null;
   if (/^(https?:|data:)/i.test(imagePath)) return imagePath;
-  const clean = imagePath.startsWith("/") ? imagePath.slice(1) : imagePath;
-  return `${pathImg}${clean}`;
+  // Assets estáticos del frontend (carpeta public/, p. ej. demo/productos/…)
+  if (imagePath.startsWith("/") || imagePath.startsWith("demo/")) {
+    return publicAssetUrl(imagePath);
+  }
+  return `${pathImg}${imagePath}`;
 };
 
 export const socket = io(socketOrigin, { withCredentials: true });

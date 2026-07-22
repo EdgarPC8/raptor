@@ -36,7 +36,7 @@ import {
   getCategories,
   getUnits,
 } from "../../../../api/inventoryControlRequest.js";
-import { pathImg } from "../../../../api/axios";
+import { pathImg, buildImageUrl } from "../../../../api/axios";
 import { useBarcodeScanner } from "../../../../hooks/useBarcodeScanner.js";
 import { normalizeProductBarcode, normalizePackageTiers } from "../../../../utils/productLookup.js";
 
@@ -319,7 +319,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
 
   const currentImage = useMemo(() => {
     if (previewUrl) return previewUrl;
-    if (datos?.primaryImageUrl) return `${pathImg}${datos.primaryImageUrl}`;
+    if (datos?.primaryImageUrl) return buildImageUrl(datos.primaryImageUrl);
     return null;
   }, [previewUrl, datos?.primaryImageUrl]);
 

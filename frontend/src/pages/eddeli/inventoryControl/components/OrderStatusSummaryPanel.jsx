@@ -20,21 +20,17 @@ function StatusCard({ tab, onClick }) {
 
   return (
     <Paper
-      elevation={0}
+      variant="outlined"
       onClick={onClick}
       sx={{
         p: 1,
         height: "100%",
         borderRadius: 1.5,
-        border: "1px solid",
-        borderColor: alpha(main, 0.28),
-        background: `linear-gradient(145deg, ${alpha(main, 0.12)} 0%, ${alpha(main, 0.03)} 100%)`,
-        transition: "transform 0.15s ease, box-shadow 0.15s ease",
         cursor: "pointer",
+        borderColor: alpha(main, 0.3),
         "&:hover": {
-          transform: "translateY(-1px)",
-          boxShadow: `0 4px 12px ${alpha(main, 0.16)}`,
           borderColor: main,
+          bgcolor: alpha(main, 0.04),
         },
       }}
     >
@@ -94,7 +90,7 @@ export default function OrderStatusSummaryPanel({ overView = [] }) {
 
   return (
     <>
-      <Paper sx={{ p: { xs: 1, sm: 1.25 }, borderRadius: 2, height: "100%", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
+      <Paper variant="panel" sx={{ p: { xs: 1.25, sm: 1.5 }, borderRadius: 2, height: "100%", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
         <Stack
           direction="row"
           justifyContent="space-between"

@@ -36,7 +36,7 @@ import {
   deleteProduct,
   getCategories,
 } from "../../../api/inventoryControlRequest";
-import { pathImg } from "../../../api/axios";
+import { buildImageUrl } from "../../../api/axios";
 import TablePro from "../../../components/Tables/TablePro";
 import GuestDemoBanner from "../../../components/GuestDemoBanner.jsx";
 import { useBarcodeScanner } from "../../../hooks/useBarcodeScanner.js";
@@ -154,8 +154,7 @@ function ProductsPage() {
       id: "primaryImageUrl",
       width: 90,
       render: (row) => {
-        const filename = row?.primaryImageUrl;
-        const src = filename ? `${pathImg}${filename}` : null;
+        const src = buildImageUrl(row?.primaryImageUrl);
         return src ? (
           <img
             src={src}

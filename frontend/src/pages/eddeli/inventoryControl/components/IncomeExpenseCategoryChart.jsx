@@ -114,20 +114,18 @@ export default function IncomeExpenseCategoryChart({ data }) {
   }, []);
 
   const paperSx = {
-    p: { xs: 1.5, sm: 2 },
+    p: { xs: 1.25, sm: 1.5 },
     borderRadius: 2,
     minWidth: 0,
     width: "100%",
     display: "flex",
     flexDirection: "column",
-    border: "1px solid",
-    borderColor: alpha(theme.palette.divider, 0.6),
     ...dashboardTwinPanelSx,
   };
 
   if (!platforms || !groups) {
     return (
-      <Paper sx={paperSx}>
+      <Paper variant="panel" sx={paperSx}>
         <ChartBlockHeader
           title="Ingresos y gastos por categoría"
           subtitle="Totales por fecha en Income y Expense (no por fecha de pedido)."
@@ -142,7 +140,7 @@ export default function IncomeExpenseCategoryChart({ data }) {
 
   return (
     <>
-      <Paper sx={paperSx}>
+      <Paper variant="panel" sx={paperSx}>
         <Stack
           direction="row"
           justifyContent="space-between"

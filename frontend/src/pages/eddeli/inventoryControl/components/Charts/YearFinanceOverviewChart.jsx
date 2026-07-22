@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Box,
-  Button,
   Typography,
   Grid,
   Paper,
@@ -10,9 +9,12 @@ import {
   LinearProgress,
   ToggleButton,
   ToggleButtonGroup,
+  IconButton,
 } from '@mui/material';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useTheme, alpha } from '@mui/material/styles';
 import {
   format,
@@ -68,28 +70,31 @@ function hasMonthData(m, isIncomeView) {
   );
 }
 
-function ValueStrip({ valueText, barPercent, accentBorder, accentValue, track, theme }) {
-  const fill = accentValue ?? accentBorder;
+const LEGEND_ALL = [
+  { key: 'orderMoney', label: 'Pedidos', colorKey: 'orderMoney' },
+  { key: 'posSales', label: 'Caja', colorKey: 'posSales' },
+  { key: 'collected', label: 'Ingresos', colorKey: 'collected' },
+  { key: 'expense', label: 'Gastos', colorKey: 'expense' },
+];
+
+const LEGEND_INCOME = [
+  { key: 'posSales', label: 'Caja', colorKey: 'posSales' },
+  { key: 'collected', label: 'Cobros', colorKey: 'collected' },
+];
+
+function ValueStrip({ valueText, barPercent, color, track }) {
   return (
-    <Box
-      sx={{
-        borderLeft: 3,
-        borderColor: accentBorder,
-        pl: 0.65,
-        pr: 0.35,
-        py: 0.35,
-        borderRadius: '0 8px 8px 0',
-        bgcolor: alpha(accentBorder, theme.palette.mode === 'dark' ? 0.12 : 0.07),
-      }}
-    >
+    <Box sx={{ mb: 0.45 }}>
       <Typography
-        variant="body2"
+        variant="caption"
         sx={{
-          fontWeight: 800,
-          fontSize: '0.68rem',
-          lineHeight: 1.15,
-          color: fill,
-          textAlign: 'center',
+          display: 'block',
+          fontWeight: 700,
+          fontSize: '0.7rem',
+          lineHeight: 1.2,
+          color,
+          textAlign: 'right',
+          mb: 0.25,
         }}
       >
         {valueText}
@@ -98,16 +103,51 @@ function ValueStrip({ valueText, barPercent, accentBorder, accentValue, track, t
         variant="determinate"
         value={barPercent}
         sx={{
-          mt: 0.35,
-          height: 3,
+          height: 4,
           borderRadius: 1,
           bgcolor: track,
           '& .MuiLinearProgress-bar': {
             borderRadius: 1,
-            bgcolor: fill,
+            bgcolor: color,
           },
         }}
       />
+    </Box>
+  );
+}
+
+function LegendRow({ items, chartColors }) {
+  return (
+    <Stack direction="row" flexWrap="wrap" useFlexGap spacing={1.25} sx={{ gap: 1.25 }}>
+      {items.map(({ key, label, colorKey }) => (
+        <Stack key={key} direction="row" alignItems="center" spacing={0.5}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: chartColors[colorKey],
+              flexShrink: 0,
+            }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+            {label}
+          </Typography>
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+function YearTotalItem({ label, value, color, moneyFmt }) {
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.3, mb: 0.25 }}>
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ fontWeight: 800, color, lineHeight: 1.2 }}>
+        {moneyFmt(value)}
+      </Typography>
     </Box>
   );
 }
@@ -249,93 +289,59 @@ export default function YearFinanceOverviewChart({
         sx={{ mb: 0.75 }}
       />
 
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          mb: 1,
-          gap: 1,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Button
-          size="small"
-          variant="outlined"
-          disabled={loading}
-          onClick={() => setYear((y) => y - 1)}
-        >
-          Año anterior
-        </Button>
-        <Typography variant="subtitle1" sx={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>
-          {year}
-        </Typography>
-        <Button
-          size="small"
-          variant="outlined"
-          disabled={loading}
-          onClick={() => setYear((y) => y + 1)}
-        >
-          Año siguiente
-        </Button>
-      </Box>
-
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
-        justifyContent="space-between"
         alignItems={{ xs: 'stretch', sm: 'center' }}
+        justifyContent="space-between"
         spacing={1}
-        sx={{ mb: 1 }}
+        sx={{ mb: 1.25 }}
       >
+        <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ flexShrink: 0 }}>
+          <IconButton size="small" disabled={loading} onClick={() => setYear((y) => y - 1)} aria-label="Año anterior">
+            <ChevronLeftIcon fontSize="small" />
+          </IconButton>
+          <Typography variant="subtitle1" sx={{ minWidth: 56, textAlign: 'center', fontWeight: 800 }}>
+            {year}
+          </Typography>
+          <IconButton size="small" disabled={loading} onClick={() => setYear((y) => y + 1)} aria-label="Año siguiente">
+            <ChevronRightIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+
         <ToggleButtonGroup
           exclusive
           size="small"
           value={viewMode}
           onChange={(_, v) => { if (v) setViewMode(v); }}
-          sx={{ flexWrap: 'wrap' }}
+          sx={{ alignSelf: { xs: 'stretch', sm: 'center' } }}
         >
-          <ToggleButton value={VIEW_ALL} sx={{ textTransform: 'none', gap: 0.75 }}>
+          <ToggleButton value={VIEW_ALL} sx={{ textTransform: 'none', gap: 0.75, flex: { xs: 1, sm: '0 0 auto' } }}>
             <ViewModuleIcon fontSize="small" />
             Todo
           </ToggleButton>
-          <ToggleButton value={VIEW_INCOME} sx={{ textTransform: 'none', gap: 0.75 }}>
+          <ToggleButton value={VIEW_INCOME} sx={{ textTransform: 'none', gap: 0.75, flex: { xs: 1, sm: '0 0 auto' } }}>
             <TrendingUpIcon fontSize="small" />
             Ingresos
           </ToggleButton>
         </ToggleButtonGroup>
-
-        <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
-          {!isIncomeView && (
-            <Chip size="small" label="$ pedido" sx={{ bgcolor: chartColors.orderMoney, color: theme.palette.getContrastText(chartColors.orderMoney) }} />
-          )}
-          {!isIncomeView && (
-            <Chip size="small" label="$ caja" sx={{ bgcolor: chartColors.posSales, color: theme.palette.getContrastText(chartColors.posSales) }} />
-          )}
-          {isIncomeView && (
-            <Chip size="small" label="$ caja" sx={{ bgcolor: chartColors.posSales, color: theme.palette.getContrastText(chartColors.posSales) }} />
-          )}
-          <Chip size="small" label={isIncomeView ? '$ cobros' : '$ ingresos'} sx={{ bgcolor: chartColors.collected, color: theme.palette.getContrastText(chartColors.collected) }} />
-          {!isIncomeView && (
-            <Chip size="small" label="$ gastos" sx={{ bgcolor: chartColors.expense, color: theme.palette.getContrastText(chartColors.expense) }} />
-          )}
-          {isIncomeView && (
-            <Chip
-              size="small"
-              icon={<TrendingUpIcon />}
-              label={`Total año: ${moneyFmt(yearIncomeTotal)}`}
-              sx={{
-                fontWeight: 700,
-                bgcolor: alpha(chartColors.incomeTotal, 0.12),
-                color: chartColors.incomeTotal,
-                border: '1px solid',
-                borderColor: alpha(chartColors.incomeTotal, 0.35),
-              }}
-            />
-          )}
-        </Stack>
       </Stack>
 
-      <Grid container spacing={1}>
+      <Box sx={{ mb: 1.25 }}>
+        <LegendRow
+          items={isIncomeView ? LEGEND_INCOME : LEGEND_ALL}
+          chartColors={chartColors}
+        />
+        {isIncomeView && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+            Total del año:{' '}
+            <Box component="span" sx={{ fontWeight: 800, color: chartColors.incomeTotal }}>
+              {moneyFmt(yearIncomeTotal)}
+            </Box>
+          </Typography>
+        )}
+      </Box>
+
+      <Grid container spacing={0.75}>
         {metricsList.map((m) => {
           const isCurrent = isSameMonth(m.date, now) && year === now.getFullYear();
           const data = hasMonthData(m, isIncomeView);
@@ -351,44 +357,34 @@ export default function YearFinanceOverviewChart({
               `Gastos (Expense): ${moneyFmt(m.expensesAmount)}`;
 
           return (
-            <Grid item xs={6} sm={4} md={2} key={m.key}>
+            <Grid item xs={6} sm={4} md={3} lg={2} key={m.key}>
               <Paper
-                elevation={data ? 1 : 0}
+                variant="outlined"
                 title={data ? `${tip}\n\nClic para ver en calendario` : tip}
                 onClick={!loading ? () => handleMonthClick(m.date) : undefined}
                 sx={{
-                  position: 'relative',
-                  p: 0.75,
-                  pt: 2.1,
-                  minHeight: 118,
-                  borderRadius: 2,
-                  bgcolor: 'background.paper',
-                  border: '1px solid',
+                  p: 1,
+                  minHeight: 112,
+                  borderRadius: 1.5,
                   borderColor: isCurrent ? 'primary.main' : 'divider',
+                  bgcolor: isCurrent ? alpha(theme.palette.primary.main, 0.04) : 'background.paper',
                   cursor: !loading ? 'pointer' : 'default',
-                  opacity: data ? 1 : 0.72,
-                  transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+                  opacity: data ? 1 : 0.55,
+                  transition: 'border-color 0.15s ease, background-color 0.15s ease',
                   ...(!loading && {
-                    '&:hover': { borderColor: 'primary.main', boxShadow: 1 },
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      bgcolor: alpha(theme.palette.primary.main, 0.05),
+                    },
                   }),
                 }}
               >
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 6,
-                    left: 8,
-                    right: 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.75 }}>
                   <Typography
                     variant="caption"
                     sx={{
-                      fontWeight: 800,
-                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      fontSize: '0.75rem',
                       textTransform: 'capitalize',
                       color: isCurrent ? 'primary.main' : 'text.primary',
                     }}
@@ -396,65 +392,59 @@ export default function YearFinanceOverviewChart({
                     {format(m.date, 'MMM', { locale: es })}
                   </Typography>
                   {isCurrent && (
-                    <Chip label="Actual" size="small" color="primary" sx={{ height: 18, fontSize: '0.62rem' }} />
+                    <Chip label="Actual" size="small" color="primary" variant="outlined" sx={{ height: 18, fontSize: '0.6rem' }} />
                   )}
-                </Box>
+                </Stack>
 
                 {data ? (
-                  <Stack spacing={0.4}>
+                  <Stack spacing={0.15}>
                     {!isIncomeView && m.ordersAmount > 0 && (
                       <ValueStrip
                         valueText={moneyFmtCompact(m.ordersAmount)}
                         barPercent={pct(m.ordersAmount, maxOA)}
-                        accentBorder={chartColors.orders}
-                        accentValue={chartColors.orderMoney}
+                        color={chartColors.orderMoney}
                         track={chartColors.track}
-                        theme={theme}
                       />
                     )}
                     {!isIncomeView && m.posSalesAmount > 0 && (
                       <ValueStrip
                         valueText={moneyFmtCompact(m.posSalesAmount)}
                         barPercent={pct(m.posSalesAmount, maxOpPos)}
-                        accentBorder={chartColors.posSales}
-                        accentValue={chartColors.posSales}
+                        color={chartColors.posSales}
                         track={chartColors.track}
-                        theme={theme}
                       />
                     )}
                     {isIncomeView && incomeCajaAmount(m) > 0 && (
                       <ValueStrip
                         valueText={moneyFmtCompact(incomeCajaAmount(m))}
                         barPercent={pct(incomeCajaAmount(m), maxCajaIncome)}
-                        accentBorder={chartColors.posSales}
-                        accentValue={chartColors.posSales}
+                        color={chartColors.posSales}
                         track={chartColors.track}
-                        theme={theme}
                       />
                     )}
                     {incomeCobrosAmount(m) > 0 && (
                       <ValueStrip
                         valueText={moneyFmtCompact(incomeCobrosAmount(m))}
                         barPercent={pct(incomeCobrosAmount(m), maxCA)}
-                        accentBorder={chartColors.collected}
-                        accentValue={chartColors.collected}
+                        color={chartColors.collected}
                         track={chartColors.track}
-                        theme={theme}
                       />
                     )}
                     {!isIncomeView && m.expensesAmount > 0 && (
                       <ValueStrip
                         valueText={moneyFmtCompact(m.expensesAmount)}
                         barPercent={pct(m.expensesAmount, maxEA)}
-                        accentBorder={chartColors.expense}
-                        accentValue={chartColors.expense}
+                        color={chartColors.expense}
                         track={chartColors.track}
-                        theme={theme}
                       />
                     )}
                   </Stack>
                 ) : (
-                  <Typography variant="caption" color="text.disabled" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.disabled"
+                    sx={{ display: 'block', textAlign: 'center', py: 1.5, fontSize: '0.68rem' }}
+                  >
                     Sin movimientos
                   </Typography>
                 )}
@@ -464,42 +454,46 @@ export default function YearFinanceOverviewChart({
         })}
       </Grid>
 
-      <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 1.25, flexWrap: 'wrap', gap: 1 }}>
-        {!isIncomeView && (
-          <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.orderMoney, 0.08), border: '1px solid', borderColor: alpha(chartColors.orderMoney, 0.35) }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Pedidos en el año</Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.orderMoney }}>{moneyFmt(totals.orders)}</Typography>
-          </Paper>
-        )}
-        {!isIncomeView && (
-        <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.posSales, 0.08), border: '1px solid', borderColor: alpha(chartColors.posSales, 0.35) }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Caja en el año (fecha pedido)</Typography>
-          <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.posSales }}>{moneyFmt(totals.posSales)}</Typography>
-        </Paper>
-        )}
-        {isIncomeView && (
-        <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.posSales, 0.08), border: '1px solid', borderColor: alpha(chartColors.posSales, 0.35) }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Caja en el año (entrada del dinero)</Typography>
-          <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.posSales }}>{moneyFmt(totals.posIncome)}</Typography>
-        </Paper>
-        )}
-        <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.collected, 0.08), border: '1px solid', borderColor: alpha(chartColors.collected, 0.35) }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{isIncomeView ? 'Cobros pedidos en el año' : 'Ingresos en el año (Income)'}</Typography>
-          <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.collected }}>{moneyFmt(totals.collected)}</Typography>
-        </Paper>
-        {isIncomeView && (
-          <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.incomeTotal, 0.08), border: '1px solid', borderColor: alpha(chartColors.incomeTotal, 0.35) }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Total ingresos del año</Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.incomeTotal }}>{moneyFmt(yearIncomeTotal)}</Typography>
-          </Paper>
-        )}
-        {!isIncomeView && (
-          <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.expense, 0.08), border: '1px solid', borderColor: alpha(chartColors.expense, 0.35) }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Gastos en el año</Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.expense }}>{moneyFmt(totals.expenses)}</Typography>
-          </Paper>
-        )}
-      </Stack>
+      <Paper variant="outlined" sx={{ mt: 1.5, p: { xs: 1.25, sm: 1.5 }, borderRadius: 2 }}>
+        <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" sx={{ mb: 1 }}>
+          Totales del año {year}
+        </Typography>
+        <Grid container spacing={2}>
+          {!isIncomeView && (
+            <Grid item xs={6} sm={4} md={3}>
+              <YearTotalItem label="Pedidos" value={totals.orders} color={chartColors.orderMoney} moneyFmt={moneyFmt} />
+            </Grid>
+          )}
+          {!isIncomeView && (
+            <Grid item xs={6} sm={4} md={3}>
+              <YearTotalItem label="Caja (fecha pedido)" value={totals.posSales} color={chartColors.posSales} moneyFmt={moneyFmt} />
+            </Grid>
+          )}
+          {isIncomeView && (
+            <Grid item xs={6} sm={4} md={3}>
+              <YearTotalItem label="Caja (entrada del dinero)" value={totals.posIncome} color={chartColors.posSales} moneyFmt={moneyFmt} />
+            </Grid>
+          )}
+          <Grid item xs={6} sm={4} md={3}>
+            <YearTotalItem
+              label={isIncomeView ? 'Cobros pedidos' : 'Ingresos (Income)'}
+              value={totals.collected}
+              color={chartColors.collected}
+              moneyFmt={moneyFmt}
+            />
+          </Grid>
+          {isIncomeView && (
+            <Grid item xs={6} sm={4} md={3}>
+              <YearTotalItem label="Total ingresos" value={yearIncomeTotal} color={chartColors.incomeTotal} moneyFmt={moneyFmt} />
+            </Grid>
+          )}
+          {!isIncomeView && (
+            <Grid item xs={6} sm={4} md={3}>
+              <YearTotalItem label="Gastos" value={totals.expenses} color={chartColors.expense} moneyFmt={moneyFmt} />
+            </Grid>
+          )}
+        </Grid>
+      </Paper>
     </Box>
   );
 }

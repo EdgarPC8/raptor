@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Box,
-  Button,
   Typography,
   Grid,
   Paper,
@@ -10,9 +9,12 @@ import {
   LinearProgress,
   ToggleButton,
   ToggleButtonGroup,
+  IconButton,
 } from '@mui/material';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useTheme, alpha } from '@mui/material/styles';
 import {
   format,
@@ -23,6 +25,7 @@ import {
   startOfWeek,
   endOfWeek,
   isSameMonth,
+  isSameDay,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import ChartBlockHeader from '../../../../../components/Charts/ChartBlockHeader';
@@ -55,21 +58,37 @@ const emptyMetrics = () => ({
 const VIEW_ALL = 'all';
 const VIEW_INCOME = 'income';
 
+const WEEKDAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+const calendarWeekGridSx = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(7, minmax(0, 1fr)) minmax(68px, 0.55fr)',
+};
+
+const LEGEND_ALL = [
+  { key: 'orderMoney', label: 'Pedidos', colorKey: 'orderMoney' },
+  { key: 'posSales', label: 'Caja', colorKey: 'posSales' },
+  { key: 'collected', label: 'Ingresos', colorKey: 'collected' },
+  { key: 'expense', label: 'Gastos', colorKey: 'expense' },
+];
+
+const LEGEND_INCOME = [
+  { key: 'posSales', label: 'Caja', colorKey: 'posSales' },
+  { key: 'collected', label: 'Cobros', colorKey: 'collected' },
+];
+
 function roundMoney(n) {
   return Number(Number(n ?? 0).toFixed(2));
 }
 
-/** Caja: Income de venta POS, por fecha de entrada del dinero. */
 function incomeCajaAmount(m) {
   return Number(m.posIncomeAmount ?? 0);
 }
 
-/** Cobros de pedidos y otros ingresos no-caja, por Income.date. */
 function incomeCobrosAmount(m) {
   return Number(m.collectedAmount ?? 0);
 }
 
-/** Ingresos en vista dedicada: caja + cobros (misma fecha Income). */
 function incomeViewTotal(m) {
   return roundMoney(incomeCajaAmount(m) + incomeCobrosAmount(m));
 }
@@ -79,35 +98,19 @@ function pct(value, max) {
   return Math.min(100, (Number(value) / max) * 100);
 }
 
-function DayValueStrip({
-  valueText,
-  barPercent,
-  accentBorder,
-  accentValue,
-  track,
-  theme,
-}) {
-  const fill = accentValue ?? accentBorder;
+function ValueStrip({ valueText, barPercent, color, track }) {
   return (
-    <Box
-      sx={{
-        borderLeft: 3,
-        borderColor: accentBorder,
-        pl: 0.65,
-        pr: 0.35,
-        py: 0.35,
-        borderRadius: '0 8px 8px 0',
-        bgcolor: alpha(accentBorder, theme.palette.mode === 'dark' ? 0.12 : 0.07),
-      }}
-    >
+    <Box sx={{ mb: 0.35 }}>
       <Typography
-        variant="body2"
+        variant="caption"
         sx={{
-          fontWeight: 800,
-          fontSize: '0.7rem',
+          display: 'block',
+          fontWeight: 700,
+          fontSize: '0.62rem',
           lineHeight: 1.15,
-          color: fill,
-          textAlign: 'center',
+          color,
+          textAlign: 'right',
+          mb: 0.2,
         }}
       >
         {valueText}
@@ -116,17 +119,70 @@ function DayValueStrip({
         variant="determinate"
         value={barPercent}
         sx={{
-          mt: 0.35,
           height: 3,
           borderRadius: 1,
           bgcolor: track,
           '& .MuiLinearProgress-bar': {
             borderRadius: 1,
-            bgcolor: fill,
+            bgcolor: color,
           },
         }}
       />
     </Box>
+  );
+}
+
+function LegendRow({ items, chartColors }) {
+  return (
+    <Stack direction="row" flexWrap="wrap" useFlexGap spacing={1.25} sx={{ gap: 1.25 }}>
+      {items.map(({ key, label, colorKey }) => (
+        <Stack key={key} direction="row" alignItems="center" spacing={0.5}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: chartColors[colorKey],
+              flexShrink: 0,
+            }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+            {label}
+          </Typography>
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+function MonthTotalItem({ label, value, color, moneyFmt }) {
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.3, mb: 0.25 }}>
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ fontWeight: 800, color, lineHeight: 1.2 }}>
+        {moneyFmt(value)}
+      </Typography>
+    </Box>
+  );
+}
+
+function WeekSummaryAmount({ value, color, moneyFmtCompact }) {
+  return (
+    <Typography
+      variant="caption"
+      sx={{
+        display: 'block',
+        fontWeight: 800,
+        fontSize: '0.58rem',
+        color,
+        lineHeight: 1.2,
+        textAlign: 'center',
+      }}
+    >
+      {moneyFmtCompact(value)}
+    </Typography>
   );
 }
 
@@ -179,6 +235,16 @@ export default function ChartCalendaryInfo({
         style: 'currency',
         currency: 'USD',
         maximumFractionDigits: 2,
+      }).format(v ?? 0),
+    []
+  );
+
+  const moneyFmtCompact = useCallback(
+    (v) =>
+      new Intl.NumberFormat('es-EC', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
       }).format(v ?? 0),
     []
   );
@@ -287,13 +353,11 @@ export default function ChartCalendaryInfo({
     [monthData.totals]
   );
 
-  const outsideMonthBg = alpha(
-    theme.palette.action.disabledBackground,
-    theme.palette.mode === 'dark' ? 0.35 : 0.5
-  );
+  const now = new Date();
+  const monthLabel = format(currentDate, 'MMMM yyyy', { locale: es });
 
   return (
-    <Box sx={{ p: 2, position: 'relative' }}>
+    <Box sx={{ p: { xs: 1.5, sm: 2 }, position: 'relative', minWidth: 0 }}>
       {monthLoading && (
         <Box
           sx={{
@@ -321,359 +385,384 @@ export default function ChartCalendaryInfo({
             ? 'Caja y cobros de pedidos por fecha en que entró el dinero (Income). Misma fecha; solo cambia el origen.'
             : 'Pedidos y caja por fecha del pedido; cobros y gastos por fecha en Income/Expense (igual que velas). Clic en un día para detalle.'
         }
-        sx={{ mb: 0.5 }}
+        sx={{ mb: 0.75 }}
       />
-
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          mb: 1,
-          gap: 1,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Button
-          size="small"
-          variant="outlined"
-          disabled={monthLoading}
-          onClick={() => setCurrentDate(addMonths(currentDate, -1))}
-        >
-          Mes Anterior
-        </Button>
-        <Typography variant="subtitle1" sx={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>
-          {format(currentDate, 'MMMM yyyy', { locale: es })}
-        </Typography>
-        <Button
-          size="small"
-          variant="outlined"
-          disabled={monthLoading}
-          onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-        >
-          Mes Siguiente
-        </Button>
-      </Box>
 
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
-        justifyContent="space-between"
         alignItems={{ xs: 'stretch', sm: 'center' }}
+        justifyContent="space-between"
         spacing={1}
-        sx={{ mb: 1 }}
+        sx={{ mb: 1.25 }}
       >
+        <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ flexShrink: 0 }}>
+          <IconButton
+            size="small"
+            disabled={monthLoading}
+            onClick={() => setCurrentDate(addMonths(currentDate, -1))}
+            aria-label="Mes anterior"
+          >
+            <ChevronLeftIcon fontSize="small" />
+          </IconButton>
+          <Typography
+            variant="subtitle1"
+            sx={{ minWidth: 140, textAlign: 'center', fontWeight: 800, textTransform: 'capitalize' }}
+          >
+            {monthLabel}
+          </Typography>
+          <IconButton
+            size="small"
+            disabled={monthLoading}
+            onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+            aria-label="Mes siguiente"
+          >
+            <ChevronRightIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+
         <ToggleButtonGroup
           exclusive
           size="small"
           value={viewMode}
           onChange={(_, v) => { if (v) setViewMode(v); }}
-          sx={{ flexWrap: 'wrap' }}
+          sx={{ alignSelf: { xs: 'stretch', sm: 'center' } }}
         >
-          <ToggleButton value={VIEW_ALL} sx={{ textTransform: 'none', gap: 0.75 }}>
+          <ToggleButton value={VIEW_ALL} sx={{ textTransform: 'none', gap: 0.75, flex: { xs: 1, sm: '0 0 auto' } }}>
             <ViewModuleIcon fontSize="small" />
             Todo
           </ToggleButton>
-          <ToggleButton value={VIEW_INCOME} sx={{ textTransform: 'none', gap: 0.75 }}>
+          <ToggleButton value={VIEW_INCOME} sx={{ textTransform: 'none', gap: 0.75, flex: { xs: 1, sm: '0 0 auto' } }}>
             <TrendingUpIcon fontSize="small" />
             Ingresos
           </ToggleButton>
         </ToggleButtonGroup>
-
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
-          {!isIncomeView && (
-            <Chip size="small" label="$ pedido" sx={{ bgcolor: chartColors.orderMoney, color: theme.palette.getContrastText(chartColors.orderMoney) }} />
-          )}
-          {!isIncomeView && (
-            <Chip size="small" label="$ caja" sx={{ bgcolor: chartColors.posSales, color: theme.palette.getContrastText(chartColors.posSales) }} />
-          )}
-          {isIncomeView && (
-            <Chip size="small" label="$ caja" sx={{ bgcolor: chartColors.posSales, color: theme.palette.getContrastText(chartColors.posSales) }} />
-          )}
-          <Chip size="small" label={isIncomeView ? '$ cobros' : '$ ingresos'} sx={{ bgcolor: chartColors.collected, color: theme.palette.getContrastText(chartColors.collected) }} />
-          {!isIncomeView && (
-            <Chip size="small" label="$ gastos" sx={{ bgcolor: chartColors.expense, color: theme.palette.getContrastText(chartColors.expense) }} />
-          )}
-          {isIncomeView && (
-            <Chip
-              size="small"
-              icon={<TrendingUpIcon />}
-              label={`Total mes: ${moneyFmt(monthIncomeTotal)}`}
-              sx={{
-                fontWeight: 700,
-                bgcolor: alpha(chartColors.incomeTotal, 0.12),
-                color: chartColors.incomeTotal,
-                border: '1px solid',
-                borderColor: alpha(chartColors.incomeTotal, 0.35),
-              }}
-            />
-          )}
-        </Stack>
       </Stack>
 
-      <Grid container spacing={0.5} columns={8} sx={{ mb: 0.5 }}>
-        {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => (
-          <Grid item xs={1} key={d}>
-            <Typography variant="caption" align="center" sx={{ display: 'block', color: 'text.secondary' }}>
+      <Box sx={{ mb: 1.25 }}>
+        <LegendRow
+          items={isIncomeView ? LEGEND_INCOME : LEGEND_ALL}
+          chartColors={chartColors}
+        />
+        {isIncomeView && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+            Total del mes:{' '}
+            <Box component="span" sx={{ fontWeight: 800, color: chartColors.incomeTotal }}>
+              {moneyFmt(monthIncomeTotal)}
+            </Box>
+          </Typography>
+        )}
+      </Box>
+
+      <Paper
+        variant="outlined"
+        sx={{
+          borderRadius: 2,
+          overflow: 'hidden',
+          mb: 1.5,
+          borderColor: alpha(theme.palette.divider, 0.9),
+        }}
+      >
+        <Box
+          sx={{
+            ...calendarWeekGridSx,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.06 : 0.03),
+          }}
+        >
+          {WEEKDAY_LABELS.map((d) => (
+            <Typography
+              key={d}
+              variant="caption"
+              align="center"
+              sx={{
+                py: 0.75,
+                fontWeight: 700,
+                color: 'primary.main',
+                fontSize: '0.72rem',
+                letterSpacing: 0.3,
+              }}
+            >
               {d}
             </Typography>
-          </Grid>
-        ))}
-        <Grid item xs={1}>
-          <Typography variant="caption" align="center" sx={{ display: 'block', color: 'text.secondary', fontWeight: 700 }}>
-            L–D
+          ))}
+          <Typography
+            variant="caption"
+            align="center"
+            sx={{
+              py: 0.75,
+              fontWeight: 700,
+              color: 'text.secondary',
+              fontSize: '0.68rem',
+              borderLeft: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            Sem
           </Typography>
-        </Grid>
-      </Grid>
+        </Box>
 
-      {weeks.map((week, idx) => {
-        const monthDays = week.filter((d) => isSameMonth(d, currentDate));
-        const metricsList = monthDays.map((date) => ({ date, ...getMetrics(date) }));
+        {weeks.map((week, weekIndex) => {
+          const monthDays = week.filter((d) => isSameMonth(d, currentDate));
+          const metricsList = monthDays.map((date) => ({ date, ...getMetrics(date) }));
 
-        const maxOA = isIncomeView ? 1 : Math.max(1, ...metricsList.map((m) => m.ordersAmount));
-        const maxOpPos = isIncomeView ? 1 : Math.max(1, ...metricsList.map((m) => m.posSalesAmount));
-        const maxCajaIncome = Math.max(1, ...metricsList.map((m) => incomeCajaAmount(m)));
-        const maxCA = Math.max(1, ...metricsList.map((m) => incomeCobrosAmount(m)));
-        const maxEA = isIncomeView ? 1 : Math.max(1, ...metricsList.map((m) => m.expensesAmount));
+          const maxOA = isIncomeView ? 1 : Math.max(1, ...metricsList.map((m) => m.ordersAmount));
+          const maxOpPos = isIncomeView ? 1 : Math.max(1, ...metricsList.map((m) => m.posSalesAmount));
+          const maxCajaIncome = Math.max(1, ...metricsList.map((m) => incomeCajaAmount(m)));
+          const maxCA = Math.max(1, ...metricsList.map((m) => incomeCobrosAmount(m)));
+          const maxEA = isIncomeView ? 1 : Math.max(1, ...metricsList.map((m) => m.expensesAmount));
 
-        let weekOrdersAmount = 0;
-        let weekPosSalesAmount = 0;
-        let weekPosIncomeAmount = 0;
-        let weekCollectedAmount = 0;
-        let weekExpensesAmount = 0;
+          let weekOrdersAmount = 0;
+          let weekPosSalesAmount = 0;
+          let weekPosIncomeAmount = 0;
+          let weekCollectedAmount = 0;
+          let weekExpensesAmount = 0;
 
-        return (
-          <Grid container spacing={0.5} columns={8} key={idx} alignItems="stretch">
-            {week.map((date) => {
-              const m = getMetrics(date);
-              const isCurrentMonth = isSameMonth(date, currentDate);
-              if (isCurrentMonth) {
-                weekOrdersAmount += m.ordersAmount;
-                weekPosSalesAmount += m.posSalesAmount;
-                weekPosIncomeAmount += incomeCajaAmount(m);
-                weekCollectedAmount += incomeCobrosAmount(m);
-                weekExpensesAmount += m.expensesAmount;
-              }
+          const weekCells = week.map((date) => {
+            const m = getMetrics(date);
+            const isCurrentMonth = isSameMonth(date, currentDate);
+            const isToday = isSameDay(date, now);
 
-              const hasData = isCurrentMonth && (
-                isIncomeView
-                  ? incomeCajaAmount(m) > 0 || incomeCobrosAmount(m) > 0
-                  : m.ordersCount > 0 ||
-                    m.posSalesCount > 0 ||
-                    incomeCobrosAmount(m) > 0 ||
-                    m.expensesAmount > 0
-              );
+            if (isCurrentMonth) {
+              weekOrdersAmount += m.ordersAmount;
+              weekPosSalesAmount += m.posSalesAmount;
+              weekPosIncomeAmount += incomeCajaAmount(m);
+              weekCollectedAmount += incomeCobrosAmount(m);
+              weekExpensesAmount += m.expensesAmount;
+            }
 
-              const tip = isIncomeView
-                ? `${format(date, 'dd/MM/yyyy')}\n` +
-                  `Caja (entrada del dinero): ${moneyFmt(incomeCajaAmount(m))}\n` +
-                  `Cobros pedidos: ${moneyFmt(incomeCobrosAmount(m))}\n` +
-                  `Total ingresos: ${moneyFmt(incomeViewTotal(m))}`
-                : `${format(date, 'dd/MM/yyyy')}\n` +
-                  `Pedidos (fecha pedido): ${m.ordersCount} · ${moneyFmt(m.ordersAmount)}\n` +
-                  `Caja (fecha pedido): ${m.posSalesCount} · ${moneyFmt(m.posSalesAmount)}\n` +
-                  `Cobros pedidos (entrada $): ${moneyFmt(incomeCobrosAmount(m))}\n` +
-                  `Gastos (Expense): ${moneyFmt(m.expensesAmount)}`;
+            const hasData = isCurrentMonth && (
+              isIncomeView
+                ? incomeCajaAmount(m) > 0 || incomeCobrosAmount(m) > 0
+                : m.ordersCount > 0 ||
+                  m.posSalesCount > 0 ||
+                  incomeCobrosAmount(m) > 0 ||
+                  m.expensesAmount > 0
+            );
 
-              return (
-                <Grid item xs={1} key={date.toISOString()}>
-                  <Paper
-                    elevation={hasData ? 1 : 0}
-                    title={isCurrentMonth ? `${tip}\n\nClic para ver detalle` : tip}
-                    onClick={isCurrentMonth && !monthLoading ? () => handleDayClick(date) : undefined}
+            const tip = isIncomeView
+              ? `${format(date, 'dd/MM/yyyy')}\n` +
+                `Caja (entrada del dinero): ${moneyFmt(incomeCajaAmount(m))}\n` +
+                `Cobros pedidos: ${moneyFmt(incomeCobrosAmount(m))}\n` +
+                `Total ingresos: ${moneyFmt(incomeViewTotal(m))}`
+              : `${format(date, 'dd/MM/yyyy')}\n` +
+                `Pedidos (fecha pedido): ${m.ordersCount} · ${moneyFmt(m.ordersAmount)}\n` +
+                `Caja (fecha pedido): ${m.posSalesCount} · ${moneyFmt(m.posSalesAmount)}\n` +
+                `Cobros pedidos (entrada $): ${moneyFmt(incomeCobrosAmount(m))}\n` +
+                `Gastos (Expense): ${moneyFmt(m.expensesAmount)}`;
+
+            return (
+              <Box
+                key={date.toISOString()}
+                title={isCurrentMonth ? `${tip}\n\nClic para ver detalle` : tip}
+                onClick={isCurrentMonth && !monthLoading ? () => handleDayClick(date) : undefined}
+                sx={{
+                  minHeight: cellMinHeight,
+                  p: 0.65,
+                  cursor: isCurrentMonth && !monthLoading ? 'pointer' : 'default',
+                  bgcolor: 'background.paper',
+                  opacity: isCurrentMonth ? 1 : 0.38,
+                  position: 'relative',
+                  borderRight: '1px solid',
+                  borderColor: 'divider',
+                  transition: 'background-color 0.15s ease',
+                  ...(isCurrentMonth && !monthLoading && {
+                    '&:hover': {
+                      bgcolor: alpha(theme.palette.primary.main, 0.05),
+                    },
+                  }),
+                  ...(hasData && {
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 2,
+                      bgcolor: isIncomeView ? chartColors.collected : chartColors.orderMoney,
+                      opacity: 0.85,
+                    },
+                  }),
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mb: 0.35,
+                    ...(isToday && isCurrentMonth && {
+                      bgcolor: 'primary.main',
+                      color: 'primary.contrastText',
+                    }),
+                  }}
+                >
+                  <Typography
+                    variant="caption"
                     sx={{
-                      position: 'relative',
-                      p: 0.5,
-                      pt: 1.85,
-                      minHeight: cellMinHeight,
-                      borderRadius: 2,
-                      bgcolor: isCurrentMonth ? 'background.paper' : outsideMonthBg,
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      cursor: isCurrentMonth && !monthLoading ? 'pointer' : 'default',
-                      transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
-                      ...(isCurrentMonth && !monthLoading && {
-                        '&:hover': { borderColor: 'primary.main', boxShadow: 1 },
-                      }),
+                      fontWeight: 800,
+                      fontSize: '0.72rem',
+                      lineHeight: 1,
+                      color: isToday && isCurrentMonth ? 'inherit' : isCurrentMonth ? 'text.primary' : 'text.disabled',
                     }}
                   >
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        top: 4,
-                        left: 5,
-                        minWidth: 20,
-                        height: 20,
-                        borderRadius: '6px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        bgcolor: alpha(theme.palette.text.primary, 0.06),
-                        border: '1px solid',
-                        borderColor: 'divider',
-                      }}
-                    >
-                      <Typography variant="caption" sx={{ fontWeight: 800, fontSize: '0.7rem', lineHeight: 1 }}>
-                        {format(date, 'd')}
-                      </Typography>
-                    </Box>
+                    {format(date, 'd')}
+                  </Typography>
+                </Box>
 
-                    {hasData ? (
-                      <Stack spacing={0.45} sx={{ mt: 0.1 }}>
-                        {!isIncomeView && m.ordersAmount > 0 && (
-                          <DayValueStrip
-                            valueText={moneyFmt(m.ordersAmount)}
-                            barPercent={pct(m.ordersAmount, maxOA)}
-                            accentBorder={chartColors.orders}
-                            accentValue={chartColors.orderMoney}
-                            track={chartColors.track}
-                            theme={theme}
-                          />
-                        )}
-                        {!isIncomeView && m.posSalesAmount > 0 && (
-                          <DayValueStrip
-                            valueText={moneyFmt(m.posSalesAmount)}
-                            barPercent={pct(m.posSalesAmount, maxOpPos)}
-                            accentBorder={chartColors.posSales}
-                            accentValue={chartColors.posSales}
-                            track={chartColors.track}
-                            theme={theme}
-                          />
-                        )}
-                        {isIncomeView && incomeCajaAmount(m) > 0 && (
-                          <DayValueStrip
-                            valueText={moneyFmt(incomeCajaAmount(m))}
-                            barPercent={pct(incomeCajaAmount(m), maxCajaIncome)}
-                            accentBorder={chartColors.posSales}
-                            accentValue={chartColors.posSales}
-                            track={chartColors.track}
-                            theme={theme}
-                          />
-                        )}
-                        {incomeCobrosAmount(m) > 0 && (
-                          <DayValueStrip
-                            valueText={moneyFmt(incomeCobrosAmount(m))}
-                            barPercent={pct(incomeCobrosAmount(m), maxCA)}
-                            accentBorder={chartColors.collected}
-                            accentValue={chartColors.collected}
-                            track={chartColors.track}
-                            theme={theme}
-                          />
-                        )}
-                        {!isIncomeView && m.expensesAmount > 0 && (
-                          <DayValueStrip
-                            valueText={moneyFmt(m.expensesAmount)}
-                            barPercent={pct(m.expensesAmount, maxEA)}
-                            accentBorder={chartColors.expense}
-                            accentValue={chartColors.expense}
-                            track={chartColors.track}
-                            theme={theme}
-                          />
-                        )}
-                      </Stack>
-                    ) : isCurrentMonth ? (
-                      <Box sx={{ mt: 2, textAlign: 'center' }}>
-                        <Typography variant="caption" color="text.disabled" sx={{ opacity: 0.5 }}>
-                          —
-                        </Typography>
-                      </Box>
-                    ) : null}
-                  </Paper>
-                </Grid>
-              );
-            })}
+                {hasData ? (
+                  <Stack spacing={0.1}>
+                    {!isIncomeView && m.ordersAmount > 0 && (
+                      <ValueStrip
+                        valueText={moneyFmtCompact(m.ordersAmount)}
+                        barPercent={pct(m.ordersAmount, maxOA)}
+                        color={chartColors.orderMoney}
+                        track={chartColors.track}
+                      />
+                    )}
+                    {!isIncomeView && m.posSalesAmount > 0 && (
+                      <ValueStrip
+                        valueText={moneyFmtCompact(m.posSalesAmount)}
+                        barPercent={pct(m.posSalesAmount, maxOpPos)}
+                        color={chartColors.posSales}
+                        track={chartColors.track}
+                      />
+                    )}
+                    {isIncomeView && incomeCajaAmount(m) > 0 && (
+                      <ValueStrip
+                        valueText={moneyFmtCompact(incomeCajaAmount(m))}
+                        barPercent={pct(incomeCajaAmount(m), maxCajaIncome)}
+                        color={chartColors.posSales}
+                        track={chartColors.track}
+                      />
+                    )}
+                    {incomeCobrosAmount(m) > 0 && (
+                      <ValueStrip
+                        valueText={moneyFmtCompact(incomeCobrosAmount(m))}
+                        barPercent={pct(incomeCobrosAmount(m), maxCA)}
+                        color={chartColors.collected}
+                        track={chartColors.track}
+                      />
+                    )}
+                    {!isIncomeView && m.expensesAmount > 0 && (
+                      <ValueStrip
+                        valueText={moneyFmtCompact(m.expensesAmount)}
+                        barPercent={pct(m.expensesAmount, maxEA)}
+                        color={chartColors.expense}
+                        track={chartColors.track}
+                      />
+                    )}
+                  </Stack>
+                ) : isCurrentMonth ? (
+                  <Typography
+                    variant="caption"
+                    color="text.disabled"
+                    sx={{ display: 'block', textAlign: 'center', py: 0.75, fontSize: '0.65rem' }}
+                  >
+                    —
+                  </Typography>
+                ) : null}
+              </Box>
+            );
+          });
 
-            <Grid item xs={1}>
-              <Paper
-                elevation={0}
-                title={
-                  isIncomeView
-                    ? `Caja: ${moneyFmt(weekPosIncomeAmount)} · Cobros: ${moneyFmt(weekCollectedAmount)} · Total: ${moneyFmt(weekPosIncomeAmount + weekCollectedAmount)}`
-                    : `Ped: ${moneyFmt(weekOrdersAmount)} · Caja: ${moneyFmt(weekPosSalesAmount)} · Cobros: ${moneyFmt(weekCollectedAmount)} · Gas: ${moneyFmt(weekExpensesAmount)}`
-                }
+          const weekTip = isIncomeView
+            ? `Caja: ${moneyFmt(weekPosIncomeAmount)} · Cobros: ${moneyFmt(weekCollectedAmount)} · Total: ${moneyFmt(weekPosIncomeAmount + weekCollectedAmount)}`
+            : `Ped: ${moneyFmt(weekOrdersAmount)} · Caja: ${moneyFmt(weekPosSalesAmount)} · Cobros: ${moneyFmt(weekCollectedAmount)} · Gas: ${moneyFmt(weekExpensesAmount)}`;
+
+          return (
+            <Box
+              key={weekIndex}
+              sx={{
+                ...calendarWeekGridSx,
+                borderBottom: weekIndex < weeks.length - 1 ? '1px solid' : 'none',
+                borderColor: 'divider',
+              }}
+            >
+              {weekCells}
+              <Box
+                title={weekTip}
                 sx={{
                   p: 0.5,
                   minHeight: cellMinHeight,
-                  borderRadius: 2,
-                  bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.08 : 0.04),
-                  border: '1px solid',
+                  bgcolor: alpha(theme.palette.text.primary, theme.palette.mode === 'dark' ? 0.04 : 0.025),
+                  borderLeft: '1px solid',
                   borderColor: 'divider',
                   display: 'flex',
                   flexDirection: 'column',
-                  alignItems: 'center',
+                  alignItems: 'stretch',
                   justifyContent: 'center',
-                  gap: 0.25,
+                  gap: 0.2,
                 }}
               >
                 {!isIncomeView && (
-                  <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.62rem', color: chartColors.orderMoney, lineHeight: 1.1 }}>
-                    {moneyFmt(weekOrdersAmount)}
-                  </Typography>
+                  <WeekSummaryAmount value={weekOrdersAmount} color={chartColors.orderMoney} moneyFmtCompact={moneyFmtCompact} />
                 )}
                 {!isIncomeView && (
-                  <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.62rem', color: chartColors.posSales, lineHeight: 1.1 }}>
-                    {moneyFmt(weekPosSalesAmount)}
-                  </Typography>
+                  <WeekSummaryAmount value={weekPosSalesAmount} color={chartColors.posSales} moneyFmtCompact={moneyFmtCompact} />
                 )}
                 {isIncomeView && (
-                  <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.62rem', color: chartColors.posSales, lineHeight: 1.1 }}>
-                    {moneyFmt(weekPosIncomeAmount)}
-                  </Typography>
+                  <WeekSummaryAmount value={weekPosIncomeAmount} color={chartColors.posSales} moneyFmtCompact={moneyFmtCompact} />
                 )}
-                <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.62rem', color: chartColors.collected, lineHeight: 1.1 }}>
-                  {moneyFmt(weekCollectedAmount)}
-                </Typography>
-                {isIncomeView && (
-                  <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.62rem', color: chartColors.incomeTotal, lineHeight: 1.1, pt: 0.25, borderTop: '1px solid', borderColor: 'divider', width: '100%', textAlign: 'center' }}>
-                    {moneyFmt(weekPosIncomeAmount + weekCollectedAmount)}
-                  </Typography>
+                <WeekSummaryAmount value={weekCollectedAmount} color={chartColors.collected} moneyFmtCompact={moneyFmtCompact} />
+                {isIncomeView ? (
+                  <WeekSummaryAmount
+                    value={weekPosIncomeAmount + weekCollectedAmount}
+                    color={chartColors.incomeTotal}
+                    moneyFmtCompact={moneyFmtCompact}
+                  />
+                ) : (
+                  <WeekSummaryAmount value={weekExpensesAmount} color={chartColors.expense} moneyFmtCompact={moneyFmtCompact} />
                 )}
-                {isIncomeView ? null : (
-                  <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.62rem', color: chartColors.expense, lineHeight: 1.1 }}>
-                    {moneyFmt(weekExpensesAmount)}
-                  </Typography>
-                )}
-              </Paper>
-            </Grid>
-          </Grid>
-        );
-      })}
+              </Box>
+            </Box>
+          );
+        })}
+      </Paper>
 
-      <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}>
-        {!isIncomeView && (
-          <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.orderMoney, 0.08), border: '1px solid', borderColor: alpha(chartColors.orderMoney, 0.35) }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Pedidos en el mes</Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.orderMoney }}>{moneyFmt(monthData.totals.orders)}</Typography>
-          </Paper>
-        )}
-        {!isIncomeView && (
-        <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.posSales, 0.08), border: '1px solid', borderColor: alpha(chartColors.posSales, 0.35) }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Caja en el mes (fecha pedido)</Typography>
-          <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.posSales }}>{moneyFmt(monthData.totals.posSales)}</Typography>
-        </Paper>
-        )}
-        {isIncomeView && (
-        <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.posSales, 0.08), border: '1px solid', borderColor: alpha(chartColors.posSales, 0.35) }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Caja en el mes (entrada del dinero)</Typography>
-          <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.posSales }}>{moneyFmt(monthData.totals.posIncome)}</Typography>
-        </Paper>
-        )}
-        <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.collected, 0.08), border: '1px solid', borderColor: alpha(chartColors.collected, 0.35) }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{isIncomeView ? 'Cobros pedidos en el mes' : 'Ingresos en el mes (Income)'}</Typography>
-          <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.collected }}>{moneyFmt(monthData.totals.collected)}</Typography>
-        </Paper>
-        {isIncomeView && (
-          <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.incomeTotal, 0.08), border: '1px solid', borderColor: alpha(chartColors.incomeTotal, 0.35) }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Total ingresos del mes</Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.incomeTotal }}>{moneyFmt(monthIncomeTotal)}</Typography>
-          </Paper>
-        )}
-        {!isIncomeView && (
-          <Paper elevation={0} sx={{ px: 1.5, py: 0.75, borderRadius: 1.5, bgcolor: alpha(chartColors.expense, 0.08), border: '1px solid', borderColor: alpha(chartColors.expense, 0.35) }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Gastos en el mes</Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: chartColors.expense }}>{moneyFmt(monthData.totals.expenses)}</Typography>
-          </Paper>
-        )}
-      </Stack>
+      <Paper variant="outlined" sx={{ p: { xs: 1.25, sm: 1.5 }, borderRadius: 2 }}>
+        <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" sx={{ mb: 1 }}>
+          Totales del mes
+        </Typography>
+        <Grid container spacing={2}>
+          {!isIncomeView && (
+            <Grid item xs={6} sm={4} md={3}>
+              <MonthTotalItem label="Pedidos" value={monthData.totals.orders} color={chartColors.orderMoney} moneyFmt={moneyFmt} />
+            </Grid>
+          )}
+          {!isIncomeView && (
+            <Grid item xs={6} sm={4} md={3}>
+              <MonthTotalItem label="Caja (fecha pedido)" value={monthData.totals.posSales} color={chartColors.posSales} moneyFmt={moneyFmt} />
+            </Grid>
+          )}
+          {isIncomeView && (
+            <Grid item xs={6} sm={4} md={3}>
+              <MonthTotalItem label="Caja (entrada del dinero)" value={monthData.totals.posIncome} color={chartColors.posSales} moneyFmt={moneyFmt} />
+            </Grid>
+          )}
+          <Grid item xs={6} sm={4} md={3}>
+            <MonthTotalItem
+              label={isIncomeView ? 'Cobros pedidos' : 'Ingresos (Income)'}
+              value={monthData.totals.collected}
+              color={chartColors.collected}
+              moneyFmt={moneyFmt}
+            />
+          </Grid>
+          {isIncomeView && (
+            <Grid item xs={6} sm={4} md={3}>
+              <MonthTotalItem label="Total ingresos" value={monthIncomeTotal} color={chartColors.incomeTotal} moneyFmt={moneyFmt} />
+            </Grid>
+          )}
+          {!isIncomeView && (
+            <Grid item xs={6} sm={4} md={3}>
+              <MonthTotalItem label="Gastos" value={monthData.totals.expenses} color={chartColors.expense} moneyFmt={moneyFmt} />
+            </Grid>
+          )}
+        </Grid>
+      </Paper>
 
       <CalendarDayDetailDialog
         open={Boolean(selectedDay)}

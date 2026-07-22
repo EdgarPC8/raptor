@@ -3,6 +3,7 @@ import {
   Box, Button, Typography, Grid, Paper, Collapse, TextField, IconButton, Tooltip,
   Accordion, AccordionSummary, AccordionDetails, Divider,
   useTheme, CircularProgress, ToggleButton, ToggleButtonGroup,
+  Chip, LinearProgress, Stack,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 
@@ -25,6 +26,9 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AddIcon from '@mui/icons-material/Add';
 import PrintIcon from '@mui/icons-material/Print';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import TodayIcon from '@mui/icons-material/Today';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 
 import {
   updateOrderItemRequest,
@@ -38,6 +42,7 @@ import {
 } from '../../../../api/ordersRequest';
 import { getAllProductsAll } from '../../../../api/inventoryControlRequest';
 import { useAuth } from '../../../../context/AuthContext';
+import { formatDateTime } from '../../../../helpers/functions';
 
 const ORDER_DATE_FMT = 'dd/MM/yyyy HH:mm:ss';
 
@@ -166,6 +171,43 @@ const buildFullDate = (dateStr, hh, mm, ss) => {
   const str = `${dateStr}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
   const d = new Date(str);
   return isNaN(d.getTime()) ? null : d;
+};
+
+function getOrderStatusMeta(items) {
+  const sev = getOrderStatusSeverity(items);
+  if (sev === 3) return { label: 'Completo', color: 'success' };
+  if (sev === 0) return { label: 'Sin avance', color: 'error' };
+  if (sev === 1) return { label: 'Entregado · falta cobro', color: 'warning' };
+  if (sev === 2) return { label: 'Cobrado · falta entrega', color: 'info' };
+  return { label: 'Parcial', color: 'warning' };
+}
+
+function orderProgress(items) {
+  const list = items || [];
+  if (!list.length) return { paid: 0, delivered: 0, paidCount: 0, deliveredCount: 0, total: 0 };
+  const paidCount = list.filter((i) => i.paidAt).length;
+  const deliveredCount = list.filter((i) => i.deliveredAt).length;
+  return {
+    paid: (paidCount / list.length) * 100,
+    delivered: (deliveredCount / list.length) * 100,
+    paidCount,
+    deliveredCount,
+    total: list.length,
+  };
+}
+
+const STATUS_LEGEND = [
+  { label: 'Sin avance', key: 'error' },
+  { label: 'Entregado · falta cobro', key: 'warning' },
+  { label: 'Cobrado · falta entrega', key: 'info' },
+  { label: 'Completo', key: 'success' },
+];
+
+const WEEKDAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+const calendarGridSx = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
 };
 
 /* ---------------- Component ---------------- */
@@ -603,37 +645,49 @@ export default forwardRef(function OrderCalendarView({
           : ''}? Esta acción no se puede deshacer.
       </SimpleDialog>
 
-      <Box
+      <Stack
         data-tour="pedidos-month-nav"
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: 0.5,
-          mb: 0.75,
-        }}
+        direction={{ xs: 'column', sm: 'row' }}
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        justifyContent="space-between"
+        spacing={1}
+        sx={{ mb: 1.25 }}
       >
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
-          <IconButton size="small" onClick={handlePrevMonth} aria-label="Mes anterior" sx={{ p: 0.25 }}>
-            <ChevronLeftIcon fontSize="small" />
+        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
+          <IconButton size="small" onClick={handlePrevMonth} aria-label="Mes anterior">
+            <ChevronLeftIcon />
           </IconButton>
           <Typography
-            variant="subtitle2"
+            variant="subtitle1"
             sx={{
-              minWidth: 108,
+              minWidth: 140,
               textAlign: 'center',
-              lineHeight: 1.2,
               textTransform: 'capitalize',
-              fontWeight: 600,
+              fontWeight: 800,
             }}
           >
             {format(currentDate, 'MMMM yyyy', { locale: es })}
           </Typography>
-          <IconButton size="small" onClick={handleNextMonth} aria-label="Mes siguiente" sx={{ p: 0.25 }}>
-            <ChevronRightIcon fontSize="small" />
+          <IconButton size="small" onClick={handleNextMonth} aria-label="Mes siguiente">
+            <ChevronRightIcon />
           </IconButton>
-          {loadingOrders ? <CircularProgress size={14} sx={{ ml: 0.25 }} /> : null}
-        </Box>
+          <Tooltip title="Ir a hoy">
+            <Button
+              size="small"
+              variant="text"
+              startIcon={<TodayIcon sx={{ fontSize: '1rem !important' }} />}
+              onClick={() => {
+                const now = new Date();
+                setCurrentDate(startOfMonth(now));
+                setSelectedDate(now);
+              }}
+              sx={{ ml: 0.5, minWidth: 0, px: 1, fontSize: '0.75rem', fontWeight: 600 }}
+            >
+              Hoy
+            </Button>
+          </Tooltip>
+          {loadingOrders ? <CircularProgress size={16} sx={{ ml: 0.5 }} /> : null}
+        </Stack>
 
         <ToggleButtonGroup
           data-tour="pedidos-filter"
@@ -642,140 +696,245 @@ export default forwardRef(function OrderCalendarView({
           value={orderFilter}
           onChange={(_e, val) => val && setOrderFilter(val)}
           sx={{
-            flex: { xs: '1 1 100%', sm: '0 1 auto' },
-            justifyContent: { xs: 'center', sm: 'flex-start' },
+            alignSelf: { xs: 'stretch', sm: 'center' },
             '& .MuiToggleButton-root': {
-              py: 0.2,
-              px: 0.9,
-              minHeight: 26,
-              fontSize: '0.75rem',
-              lineHeight: 1.2,
+              flex: { xs: 1, sm: '0 0 auto' },
+              py: 0.5,
+              px: 1.25,
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              textTransform: 'none',
             },
           }}
         >
-          <ToggleButton value="all" sx={{ textTransform: 'none' }}>Todos</ToggleButton>
-          <ToggleButton value="customer" sx={{ textTransform: 'none' }}>Clientes</ToggleButton>
-          <ToggleButton value="supplier" sx={{ textTransform: 'none' }}>Proveedores</ToggleButton>
+          <ToggleButton value="all">Todos</ToggleButton>
+          <ToggleButton value="customer">Clientes</ToggleButton>
+          <ToggleButton value="supplier">Proveedores</ToggleButton>
         </ToggleButtonGroup>
-      </Box>
+      </Stack>
 
-      <Grid container spacing={1}>
-        {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((day) => (
-          <Grid item xs={12 / 7} key={day}>
-            <Typography variant="subtitle2" align="center">{day}</Typography>
-          </Grid>
+      <Stack
+        direction="row"
+        flexWrap="wrap"
+        useFlexGap
+        spacing={1.5}
+        sx={{ mb: 1, gap: { xs: 0.75, sm: 1.5 }, alignItems: 'center' }}
+      >
+        {STATUS_LEGEND.map(({ label, key }) => (
+          <Stack key={key} direction="row" alignItems="center" spacing={0.6}>
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                bgcolor: theme.palette[key].main,
+                flexShrink: 0,
+              }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', lineHeight: 1.2 }}>
+              {label}
+            </Typography>
+          </Stack>
         ))}
-      </Grid>
+      </Stack>
+
+      <Paper
+        variant="outlined"
+        sx={{
+          borderRadius: 2,
+          overflow: 'hidden',
+          mb: 1,
+          borderColor: alpha(theme.palette.divider, 0.9),
+        }}
+      >
+        <Box
+          sx={{
+            ...calendarGridSx,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.06 : 0.03),
+          }}
+        >
+          {WEEKDAY_LABELS.map((day) => (
+            <Typography
+              key={day}
+              variant="caption"
+              align="center"
+              sx={{
+                py: 0.85,
+                fontWeight: 700,
+                color: 'primary.main',
+                fontSize: '0.72rem',
+                letterSpacing: 0.3,
+              }}
+            >
+              {day}
+            </Typography>
+          ))}
+        </Box>
 
       {weeks.map((week, weekIndex) => {
         const shouldShowCollapse = selectedDate && week.some(day => isSameDay(day, selectedDate));
 
         return (
           <React.Fragment key={weekIndex}>
-            <Grid container spacing={1}>
+            <Box
+              sx={{
+                ...calendarGridSx,
+                borderBottom: weekIndex < weeks.length - 1 || shouldShowCollapse ? '1px solid' : 'none',
+                borderColor: 'divider',
+              }}
+            >
               {week.map((date) => {
                 const dailyOrders = ordersOnDate(date);
                 const customerCount = dailyOrders.filter((o) => o.orderKind !== 'supplier').length;
                 const supplierCount = dailyOrders.filter((o) => o.orderKind === 'supplier').length;
                 const isSelected = selectedDate && isSameDay(date, selectedDate);
-
-                const statusBase = getCalendarDayBaseColor(dailyOrders, theme);
-                const statusBg = statusBase
-                  ? alpha(statusBase, tones.state)
-                  : theme.palette.mode === 'dark'
-                    ? theme.palette.background.paper
-                    : 'white';
-
+                const isToday = isSameDay(date, new Date());
                 const isOutOfMonth = !isSameMonth(date, currentDate);
-                const dayBg = isOutOfMonth
-                  ? alpha(theme.palette.action.disabledBackground, tones.outOfMonth)
-                  : statusBg;
+                const statusBase = getCalendarDayBaseColor(dailyOrders, theme);
+                const hasOrders = dailyOrders.length > 0;
+
+                let countLabel = '';
+                if (hasOrders) {
+                  if (orderFilter === 'all' && customerCount > 0 && supplierCount > 0) {
+                    countLabel = `${customerCount} cli · ${supplierCount} prov`;
+                  } else if (orderFilter === 'all' && customerCount > 0) {
+                    countLabel = `${customerCount} ${customerCount === 1 ? 'pedido' : 'pedidos'}`;
+                  } else if (orderFilter === 'all' && supplierCount > 0) {
+                    countLabel = `${supplierCount} ${supplierCount === 1 ? 'pedido' : 'pedidos'}`;
+                  } else {
+                    countLabel = `${dailyOrders.length} ${dailyOrders.length === 1 ? 'pedido' : 'pedidos'}`;
+                  }
+                }
 
                 return (
-                  <Grid item xs={12 / 7} key={date.toISOString()}>
-                    <Paper
-                      elevation={3}
-                      data-tour={
-                        tourFocusDay && isSameDay(date, tourFocusDay)
-                          ? 'pedidos-day-focus'
-                          : undefined
-                      }
-                      onClick={() => handleDayClick(date)}
-                      sx={{
-                        minHeight: 100,
-                        p: 1,
-                        backgroundColor: isSelected
-                          ? alpha(theme.palette.primary.main, tones.selected)
-                          : dayBg,
-                        border: '1px solid',
-                        borderColor: alpha(theme.palette.divider, tones.border),
-                        cursor: 'pointer',
-                        transition: 'background-color 0.2s ease',
+                  <Box
+                    key={date.toISOString()}
+                    data-tour={
+                      tourFocusDay && isSameDay(date, tourFocusDay)
+                        ? 'pedidos-day-focus'
+                        : undefined
+                    }
+                    onClick={() => handleDayClick(date)}
+                    sx={{
+                      minHeight: { xs: 68, sm: 84 },
+                      p: 0.75,
+                      cursor: 'pointer',
+                      bgcolor: 'background.paper',
+                      opacity: isOutOfMonth ? 0.38 : 1,
+                      position: 'relative',
+                      borderRight: '1px solid',
+                      borderColor: 'divider',
+                      '&:nth-of-type(7n)': { borderRight: 'none' },
+                      transition: 'background-color 0.15s ease',
+                      ...(isSelected && {
+                        bgcolor: alpha(theme.palette.primary.main, 0.08),
+                        boxShadow: `inset 0 0 0 2px ${theme.palette.primary.main}`,
+                        zIndex: 1,
+                      }),
+                      ...(!isSelected && {
                         '&:hover': {
-                          backgroundColor: isSelected
-                            ? alpha(theme.palette.primary.main, Math.min(1, tones.selected + 0.05))
-                            : (statusBase
-                                ? alpha(statusBase, tones.stateHover) // mismo color del estado
-                                : alpha(theme.palette.primary.main, tones.hoverNeutral) // fallback
-                              ),
+                          bgcolor: alpha(theme.palette.primary.main, 0.05),
                         },
+                      }),
+                      ...(hasOrders && statusBase && {
+                        '&::before': {
+                          content: '""',
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: 3,
+                          bgcolor: statusBase,
+                        },
+                      }),
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        ...(isToday && {
+                          bgcolor: 'primary.main',
+                          color: 'primary.contrastText',
+                        }),
                       }}
                     >
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: '0.8125rem',
+                          lineHeight: 1,
+                          color: isToday ? 'inherit' : isOutOfMonth ? 'text.disabled' : 'text.primary',
+                        }}
+                      >
                         {format(date, 'd')}
                       </Typography>
+                    </Box>
 
-                      {dailyOrders.length > 0 ? (
-                        <Box sx={{ mt: 1 }}>
-                          {orderFilter === 'all' ? (
-                            <>
-                              {customerCount > 0 && (
-                                <Typography variant="caption" color="info.main" display="block">
-                                  Cli: {customerCount}
-                                </Typography>
-                              )}
-                              {supplierCount > 0 && (
-                                <Typography variant="caption" color="secondary.main" display="block">
-                                  Prov: {supplierCount}
-                                </Typography>
-                              )}
-                            </>
-                          ) : (
-                            <Typography variant="body2">
-                              {dailyOrders.length} {dailyOrders.length === 1 ? 'pedido' : 'pedidos'}
-                            </Typography>
-                          )}
-                        </Box>
-                      ) : (
-                        <Box sx={{ mt: 1 }}>
-                          <Typography variant="caption" color="text.disabled">
-                            Sin pedidos
-                          </Typography>
-                        </Box>
-                      )}
-                    </Paper>
-                  </Grid>
+                    {hasOrders ? (
+                      <Typography
+                        variant="caption"
+                        noWrap
+                        sx={{
+                          display: 'block',
+                          mt: 0.5,
+                          fontSize: '0.62rem',
+                          fontWeight: 600,
+                          color: statusBase || 'text.secondary',
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {countLabel}
+                      </Typography>
+                    ) : null}
+                  </Box>
                 );
               })}
-            </Grid>
+            </Box>
 
             <Collapse in={shouldShowCollapse} timeout="auto" unmountOnExit>
               <Box
                 data-tour="pedidos-day-detail"
                 sx={{
-                  mt: 1,
-                  mb: 2,
-                  p: 2,
-                  border: '1px solid',
-                  borderColor: theme.palette.divider,
-                  borderRadius: 2,
+                  px: { xs: 1, sm: 1.25 },
+                  py: 1.25,
+                  bgcolor: alpha(theme.palette.primary.main, 0.02),
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
                 }}
               >
-                <Typography variant="h6" gutterBottom>
-                  Pedidos del {selectedDate && format(selectedDate, 'dd/MM/yyyy')}
-                </Typography>
+                <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1.5, gap: 1 }}>
+                  <CalendarTodayIcon color="primary" fontSize="small" />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="subtitle1" fontWeight={800} sx={{ lineHeight: 1.2 }}>
+                      {selectedDate && format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {selectedOrders.length}{' '}
+                      {selectedOrders.length === 1 ? 'pedido registrado' : 'pedidos registrados'}
+                    </Typography>
+                  </Box>
+                  {selectedOrders.length > 0 && (
+                    <Chip
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                      label={`${selectedOrders.length} en total`}
+                      sx={{ fontWeight: 700 }}
+                    />
+                  )}
+                </Stack>
                 {selectedOrders.length === 0 && (
-                  <Typography variant="body2" color="text.secondary">No hay pedidos este día.</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+                    No hay pedidos este día.
+                  </Typography>
                 )}
 
                 {selectedOrders.map((order) => {
@@ -812,6 +971,8 @@ export default forwardRef(function OrderCalendarView({
                   const isTourFocusOrder =
                     expandedOrders[order.id] === true &&
                     findDemoCustomerOrder()?.id === order.id;
+                  const statusMeta = getOrderStatusMeta(orderItems);
+                  const progress = orderProgress(orderItems);
 
                   return (
                     <Accordion
@@ -826,33 +987,82 @@ export default forwardRef(function OrderCalendarView({
                         backgroundColor: orderColor,
                         border: '1px solid',
                         borderColor: alpha(theme.palette.divider, tones.border),
-                        '&:before': { display: 'none' }
+                        borderRadius: '12px !important',
+                        overflow: 'hidden',
+                        '&:before': { display: 'none' },
+                        boxShadow: 'none',
                       }}
                     >
                       <AccordionSummary
                         expandIcon={<ExpandMoreIcon />}
-                        sx={{ alignItems: 'center' }}
+                        sx={{
+                          alignItems: 'center',
+                          minHeight: 56,
+                          '& .MuiAccordionSummary-content': { my: 1 },
+                        }}
                       >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', justifyContent: 'space-between' }}>
-                          <Box>
-                            <Typography variant="subtitle1">
-                              Cliente: {order.ERP_customer?.name || order.customer?.name || "Cliente"}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Pedido #{order.id} – Total: ${orderTotal.toFixed(2)}
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, width: '100%', justifyContent: 'space-between', pr: 0.5 }}>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mb: 0.35, gap: 0.5 }}>
+                              <Typography variant="subtitle2" fontWeight={800} noWrap sx={{ maxWidth: '100%' }}>
+                                {order.ERP_customer?.name || order.customer?.name || 'Cliente'}
+                              </Typography>
+                              <Chip
+                                size="small"
+                                label={statusMeta.label}
+                                color={statusMeta.color}
+                                variant="outlined"
+                                sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700 }}
+                              />
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Pedido #{order.id} · Total ${orderTotal.toFixed(2)}
                               {hasUnpaid ? (
                                 <>
                                   {' '}
-                                  · Por cobrar: <b>${unpaidTotal.toFixed(2)}</b>
+                                  · Por cobrar:{' '}
+                                  <Box component="span" sx={{ fontWeight: 800, color: 'warning.dark' }}>
+                                    ${unpaidTotal.toFixed(2)}
+                                  </Box>
                                 </>
                               ) : (
-                                ' · Cobrado'
+                                <>
+                                  {' '}
+                                  ·{' '}
+                                  <Box component="span" sx={{ fontWeight: 700, color: 'success.main' }}>
+                                    Cobrado
+                                  </Box>
+                                </>
                               )}
                             </Typography>
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 0.75, maxWidth: 360 }}>
+                              <Box sx={{ flex: 1, minWidth: 100 }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.62rem' }}>
+                                  Cobro {progress.paidCount}/{progress.total}
+                                </Typography>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={progress.paid}
+                                  color="success"
+                                  sx={{ height: 4, borderRadius: 2, mt: 0.25, bgcolor: alpha(theme.palette.success.main, 0.12) }}
+                                />
+                              </Box>
+                              <Box sx={{ flex: 1, minWidth: 100 }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.62rem' }}>
+                                  Entrega {progress.deliveredCount}/{progress.total}
+                                </Typography>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={progress.delivered}
+                                  color="info"
+                                  sx={{ height: 4, borderRadius: 2, mt: 0.25, bgcolor: alpha(theme.palette.info.main, 0.12) }}
+                                />
+                              </Box>
+                            </Stack>
                           </Box>
 
                           {/* Acciones de la orden (editar / eliminar) */}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flexShrink: 0 }}>
                             {canManageOrders && (
                               <Tooltip title={orderEditMode[order.id] ? "Cancelar edición" : "Editar orden"}>
                                 <IconButton
@@ -886,19 +1096,26 @@ export default forwardRef(function OrderCalendarView({
                         </Box>
                       </AccordionSummary>
 
-                      <AccordionDetails>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5, flexWrap: 'wrap' }}>
+                      <AccordionDetails sx={{ pt: 0, px: { xs: 1, sm: 1.5 }, pb: 1.5 }}>
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          spacing={0.75}
+                          sx={{ mb: 1.5, flexWrap: 'wrap', gap: 0.75, pb: 1, borderBottom: 1, borderColor: 'divider' }}
+                        >
                           <Tooltip title="Comprobante / factura">
-                            <IconButton
+                            <Button
                               size="small"
-                              color="primary"
+                              variant="outlined"
+                              startIcon={<PrintIcon fontSize="small" />}
                               onClick={() => {
                                 setPrintReceipt(buildReceiptFromCustomerOrder(order));
                                 setPrintOpen(true);
                               }}
+                              sx={{ borderRadius: 1.5, fontSize: '0.75rem' }}
                             >
-                              <PrintIcon fontSize="small" />
-                            </IconButton>
+                              Imprimir
+                            </Button>
                           </Tooltip>
                           {canManageOrders && hasUnpaid && (
                             <Button
@@ -907,11 +1124,12 @@ export default forwardRef(function OrderCalendarView({
                               color="primary"
                               startIcon={<PaymentsIcon />}
                               onClick={() => setPayCustomerOrder(order)}
+                              sx={{ borderRadius: 1.5, fontSize: '0.75rem', fontWeight: 700 }}
                             >
                               Abonar pedido
                             </Button>
                           )}
-                        </Box>
+                        </Stack>
 
                         {/* Bloque de edición de la ORDEN */}
                         {orderEditMode[order.id] && (
@@ -1048,9 +1266,10 @@ export default forwardRef(function OrderCalendarView({
                         {/* Lista de productos */}
                         <Box
                           data-tour={isTourFocusOrder ? 'pedidos-order-items' : undefined}
-                          sx={{ ml: 1 }}
                         >
-                          <Typography variant="body2" gutterBottom>Productos:</Typography>
+                          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: 0.8, display: 'block', mb: 1 }}>
+                            Productos del pedido
+                          </Typography>
 
                           {orderItems.map((item, idx) => {
                             const itemId = item.id;
@@ -1071,74 +1290,145 @@ export default forwardRef(function OrderCalendarView({
                               item.product?.name ||
                               item.name ||
                               "Producto";
+                            const itemStatus = getOrderStatusMeta([item]);
 
                             return (
                               <Box
                                 key={idx}
                                 sx={{
-                                  mb: 2,
-                                  p: 1,
+                                  mb: 1.25,
+                                  p: 1.25,
                                   border: '1px solid',
                                   borderColor: alpha(theme.palette.divider, tones.border),
-                                  borderRadius: 1,
+                                  borderRadius: 1.5,
                                   backgroundColor: getColorByStatus([item], theme, tones.state),
-                                  transition: 'background-color 0.2s ease',
+                                  transition: 'background-color 0.2s ease, box-shadow 0.15s ease',
                                   '&:hover': {
                                     backgroundColor: itemBase
-                                      ? alpha(itemBase, tones.stateHover) // mismo color del estado
+                                      ? alpha(itemBase, tones.stateHover)
                                       : alpha(theme.palette.primary.main, tones.hoverNeutral),
+                                    boxShadow: `0 2px 8px ${alpha(theme.palette.common.black, 0.05)}`,
                                   },
                                 }}
                               >
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                                  <Box>
-                                    <Typography variant="body2"><strong>{productName}</strong></Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: !isEditing ? 0.75 : 0 }}>
+                                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mb: 0.25, gap: 0.5 }}>
+                                      <Typography variant="body2" fontWeight={700}>
+                                        {productName}
+                                      </Typography>
+                                      {!isEditing && (
+                                        <Chip
+                                          size="small"
+                                          label={itemStatus.label}
+                                          color={itemStatus.color}
+                                          variant="outlined"
+                                          sx={{ height: 18, fontSize: '0.62rem', fontWeight: 700 }}
+                                        />
+                                      )}
+                                    </Stack>
                                     {!isEditing && (
-                                      <Typography variant="caption">
+                                      <Typography variant="caption" color="text.secondary">
                                         {item.quantity}{' '}
                                         {getProductUnitLabel(item.ERP_inventory_product)} ×{' '}
                                         {formatUnitPrice(item.price)} ={' '}
-                                        {formatProductPrice(formatOrderLineTotal(item.quantity, item.price))}
+                                        <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                                          {formatProductPrice(formatOrderLineTotal(item.quantity, item.price))}
+                                        </Box>
                                       </Typography>
                                     )}
                                   </Box>
 
-                                  {/* Eliminar ítem (solo Programador y fuera de edición) */}
                                   {canManageOrders && !isEditing && (
                                     <Tooltip title="Eliminar ítem">
                                       <IconButton
                                         size="small"
+                                        color="error"
                                         onClick={() => openItemDialog(item)}
+                                        sx={{ mt: -0.25 }}
                                       >
-                                        <DeleteOutlineIcon />
+                                        <DeleteOutlineIcon fontSize="small" />
                                       </IconButton>
                                     </Tooltip>
                                   )}
                                 </Box>
 
-                                {/* Acciones rápidas si no está en edición */}
-                                {!item.paidAt && !isEditing && (
-                                  <Tooltip title="Marcar como Pagado">
-                                    <IconButton onClick={() => handlePaid(itemId)}>
-                                      <MonetizationOnIcon />
-                                    </IconButton>
-                                  </Tooltip>
-                                )}
-                                {!item.deliveredAt && !isEditing && (
-                                  <Tooltip title="Marcar como Entregado">
-                                    <IconButton onClick={() => handleDeliver(itemId)}>
-                                      <LocalShippingIcon />
-                                    </IconButton>
-                                  </Tooltip>
+                                {!isEditing && (
+                                  <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ gap: 0.5 }}>
+                                    {item.paidAt ? (
+                                      <Chip
+                                        size="small"
+                                        icon={<CheckCircleOutlineIcon />}
+                                        label="Pagado"
+                                        color="success"
+                                        variant="outlined"
+                                        sx={{ height: 24, fontSize: '0.68rem' }}
+                                      />
+                                    ) : (
+                                      <Tooltip title="Marcar como pagado">
+                                        <Button
+                                          size="small"
+                                          variant="outlined"
+                                          color="success"
+                                          startIcon={<MonetizationOnIcon sx={{ fontSize: '1rem !important' }} />}
+                                          onClick={() => handlePaid(itemId)}
+                                          sx={{ minHeight: 26, py: 0.25, fontSize: '0.72rem', borderRadius: 1.5 }}
+                                        >
+                                          Cobrar
+                                        </Button>
+                                      </Tooltip>
+                                    )}
+                                    {item.deliveredAt ? (
+                                      <Chip
+                                        size="small"
+                                        icon={<LocalShippingIcon />}
+                                        label="Entregado"
+                                        color="info"
+                                        variant="outlined"
+                                        sx={{ height: 24, fontSize: '0.68rem' }}
+                                      />
+                                    ) : (
+                                      <Tooltip title="Marcar como entregado">
+                                        <Button
+                                          size="small"
+                                          variant="outlined"
+                                          color="info"
+                                          startIcon={<LocalShippingIcon sx={{ fontSize: '1rem !important' }} />}
+                                          onClick={() => handleDeliver(itemId)}
+                                          sx={{ minHeight: 26, py: 0.25, fontSize: '0.72rem', borderRadius: 1.5 }}
+                                        >
+                                          Entregar
+                                        </Button>
+                                      </Tooltip>
+                                    )}
+                                    {canManageOrders && (
+                                      <Button
+                                        size="small"
+                                        onClick={toggleEdit}
+                                        variant="text"
+                                        sx={{ minHeight: 26, py: 0.25, fontSize: '0.72rem', ml: 'auto' }}
+                                      >
+                                        Editar
+                                      </Button>
+                                    )}
+                                  </Stack>
                                 )}
 
-                                {/* Botón Editar solo para Programador */}
-                                {canManageOrders && !isEditing && (
-                                  <Box sx={{ mt: 1 }}>
-                                    <Button size="small" onClick={toggleEdit} variant="outlined">
-                                      Editar
-                                    </Button>
-                                  </Box>
+                                {(item.paidAt || item.deliveredAt) && !isEditing && (
+                                  <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.75, gap: 0.5 }}>
+                                    {item.paidAt && (
+                                      <Typography variant="caption" color="success.main" sx={{ display: 'flex', alignItems: 'center', gap: 0.35 }}>
+                                        <CheckCircleOutlineIcon sx={{ fontSize: 14 }} />
+                                        Pagado: {formatDateTime(item.paidAt)}
+                                      </Typography>
+                                    )}
+                                    {item.deliveredAt && (
+                                      <Typography variant="caption" color="info.main" sx={{ display: 'flex', alignItems: 'center', gap: 0.35 }}>
+                                        <LocalShippingIcon sx={{ fontSize: 14 }} />
+                                        Entregado: {formatDateTime(item.deliveredAt)}
+                                      </Typography>
+                                    )}
+                                  </Stack>
                                 )}
 
                                 {/* Modo edición: fechas + cantidad/precio */}
@@ -1259,15 +1549,32 @@ export default forwardRef(function OrderCalendarView({
                           })}
 
                           {orderItems.length > 0 && (
-                            <Typography variant="body2" fontWeight={700} sx={{ mt: 1, mb: 1 }}>
-                              Total pedido:{' '}
-                              {formatProductPrice(
-                                orderItems.reduce(
-                                  (acc, i) => acc + formatOrderLineTotal(i.quantity, i.price),
-                                  0,
-                                ),
-                              )}
-                            </Typography>
+                            <Paper
+                              variant="outlined"
+                              sx={{
+                                mt: 1,
+                                mb: 1,
+                                px: 1.25,
+                                py: 0.75,
+                                borderRadius: 1.5,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                bgcolor: alpha(theme.palette.primary.main, 0.04),
+                              }}
+                            >
+                              <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                                Total del pedido
+                              </Typography>
+                              <Typography variant="subtitle1" fontWeight={800} color="primary.main">
+                                {formatProductPrice(
+                                  orderItems.reduce(
+                                    (acc, i) => acc + formatOrderLineTotal(i.quantity, i.price),
+                                    0,
+                                  ),
+                                )}
+                              </Typography>
+                            </Paper>
                           )}
 
                           <Divider sx={{ my: 1 }} />
@@ -1291,12 +1598,14 @@ export default forwardRef(function OrderCalendarView({
                                 mt: 2,
                                 p: 1.5,
                                 border: '1px dashed',
-                                borderColor: 'divider',
-                                borderRadius: 1,
+                                borderColor: alpha(theme.palette.primary.main, 0.35),
+                                borderRadius: 1.5,
+                                bgcolor: alpha(theme.palette.primary.main, 0.03),
                               }}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <Typography variant="subtitle2" gutterBottom>
+                              <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <AddIcon fontSize="small" color="primary" />
                                 Añadir producto al pedido
                               </Typography>
                               <Grid container spacing={1} alignItems="flex-end">
@@ -1394,6 +1703,7 @@ export default forwardRef(function OrderCalendarView({
           </React.Fragment>
         );
       })}
+      </Paper>
     </Box>
 
     <PrintFormatDialog

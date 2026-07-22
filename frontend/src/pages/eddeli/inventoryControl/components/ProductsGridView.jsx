@@ -27,7 +27,7 @@ import {
   createProduct,
   registerMovement,
 } from "../../../../api/inventoryControlRequest";
-import { pathImg } from "../../../../api/axios";
+import { pathImg, buildImageUrl } from "../../../../api/axios";
 import { mediaStoragePath } from "../../../../utils/mediaPaths.js";
 import toast from "react-hot-toast";
 import { useAuth } from "../../../../context/AuthContext";
@@ -58,9 +58,7 @@ function unitAbbrOf(p) {
 
 function ProductCard({ product, onEdit, onDuplicate, onStockAdjusted, pathImgBase }) {
   const { toast: authToast } = useAuth();
-  const imgSrc = product?.primaryImageUrl
-    ? `${pathImgBase}${product.primaryImageUrl}`
-    : null;
+  const imgSrc = buildImageUrl(product?.primaryImageUrl);
   const categoryName = formatProductCategoryName(product);
   const current = stockNum(product);
   const abbr = unitAbbrOf(product);

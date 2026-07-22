@@ -4,7 +4,11 @@ import {
   Typography,
   Box,
   Stack,
+  Paper,
 } from "@mui/material";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
+import AssignmentIcon from "@mui/icons-material/Assignment";
 import { useCallback, useRef, useState } from "react";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 import TourHelpButton from "../../../components/TourHelpButton.jsx";
@@ -237,50 +241,88 @@ function OrderPage() {
   }, [resetPageTourDemo, startTourBase]);
 
   return (
-    <Container>
-      <Stack
+    <Container maxWidth="xl" sx={{ py: { xs: 1, sm: 1.5 }, px: { xs: 1.5, sm: 2 } }}>
+      <Paper
+        variant="panel"
         data-tour="pedidos-header"
-        direction="row"
-        flexWrap="wrap"
-        alignItems="center"
-        spacing={0.75}
-        useFlexGap
-        sx={{ mb: 1, gap: 0.75 }}
+        sx={{ p: { xs: 1.25, sm: 1.5 }, mb: 1.5, borderRadius: 2 }}
       >
-        <Typography variant="subtitle1" sx={{ flex: "1 1 auto", minWidth: 120, mb: 0, fontWeight: 600 }}>
-          Pedidos Registrados
-        </Typography>
-        <TourHelpButton onClick={startTour} title="Ver tutorial de pedidos" />
-        <Button
-          data-tour="pedidos-create-customer"
-          size="small"
-          variant="contained"
-          sx={{ py: 0.4, px: 1.25, minHeight: 28, fontSize: "0.8125rem" }}
-          onClick={() => {
-            setIsEditing(false);
-            setOrderToEdit(null);
-            setTitleDialog("Registrar nuevo pedido");
-            handleDialog();
-          }}
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          flexWrap="wrap"
+          alignItems={{ xs: "stretch", sm: "center" }}
+          spacing={1}
+          useFlexGap
         >
-          Crear pedido (cliente)
-        </Button>
-        <Button
-          data-tour="pedidos-create-supplier"
-          size="small"
-          variant="contained"
-          color="secondary"
-          sx={{ py: 0.4, px: 1.25, minHeight: 28, fontSize: "0.8125rem" }}
-          onClick={() => {
-            setIsEditingSupplier(false);
-            setSupplierOrderToEdit(null);
-            setSupplierPrefill(null);
-            handleSupplierDialog();
-          }}
-        >
-          Pedido a proveedor
-        </Button>
-      </Stack>
+          <Box sx={{ flex: "1 1 auto", minWidth: 0, display: "flex", alignItems: "flex-start", gap: 1 }}>
+            <Box
+              sx={{
+                display: { xs: "none", sm: "flex" },
+                alignItems: "center",
+                justifyContent: "center",
+                width: 40,
+                height: 40,
+                borderRadius: 2,
+                bgcolor: "primary.main",
+                color: "primary.contrastText",
+                flexShrink: 0,
+              }}
+            >
+              <AssignmentIcon fontSize="small" />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h6" sx={{ mb: 0.25, fontWeight: 800, lineHeight: 1.2 }}>
+                Pedidos
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Calendario de pedidos a clientes y compras a proveedores
+              </Typography>
+            </Box>
+          </Box>
+
+          <Stack
+            direction="row"
+            flexWrap="wrap"
+            alignItems="center"
+            spacing={0.75}
+            useFlexGap
+            sx={{ flexShrink: 0, justifyContent: { xs: "flex-end", sm: "flex-end" } }}
+          >
+            <TourHelpButton onClick={startTour} title="Ver tutorial de pedidos" />
+            <Button
+              data-tour="pedidos-create-customer"
+              size="small"
+              variant="contained"
+              startIcon={<PersonAddIcon sx={{ fontSize: "1rem !important" }} />}
+              sx={{ py: 0.65, px: 1.5, minHeight: 32, fontSize: "0.8125rem", fontWeight: 600, borderRadius: 1.5 }}
+              onClick={() => {
+                setIsEditing(false);
+                setOrderToEdit(null);
+                setTitleDialog("Registrar nuevo pedido");
+                handleDialog();
+              }}
+            >
+              Pedido cliente
+            </Button>
+            <Button
+              data-tour="pedidos-create-supplier"
+              size="small"
+              variant="outlined"
+              color="secondary"
+              startIcon={<LocalShippingOutlinedIcon sx={{ fontSize: "1rem !important" }} />}
+              sx={{ py: 0.65, px: 1.5, minHeight: 32, fontSize: "0.8125rem", fontWeight: 600, borderRadius: 1.5 }}
+              onClick={() => {
+                setIsEditingSupplier(false);
+                setSupplierOrderToEdit(null);
+                setSupplierPrefill(null);
+                handleSupplierDialog();
+              }}
+            >
+              Pedido proveedor
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
 
       <SimpleDialog
         open={openDialog}
@@ -349,7 +391,8 @@ function OrderPage() {
         />
       </SimpleDialog>
 
-      <OrderCalendaryTable
+      <Paper variant="panel" sx={{ p: { xs: 1, sm: 1.25 }, borderRadius: 2, overflow: 'hidden' }}>
+        <OrderCalendaryTable
         ref={calendarTourRef}
         orders={orders}
         loadingOrders={loadingOrders}
@@ -371,6 +414,7 @@ function OrderPage() {
           setOpenSupplierDialog(true);
         }}
       />
+      </Paper>
     </Container>
   );
 }

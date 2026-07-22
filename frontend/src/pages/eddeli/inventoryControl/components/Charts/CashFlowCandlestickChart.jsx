@@ -19,6 +19,7 @@ import { ColorType, createChart, CandlestickSeries } from "lightweight-charts";
 import ChartBlockHeader from "../../../../../components/Charts/ChartBlockHeader";
 import { ChartSkeleton } from "../../../../../components/ContentSkeleton.jsx";
 import { getCashFlowCandlesRequest } from "../../../../../api/financeRequest";
+import { dashboardPanelSx } from "../dashboardPanelStyles.js";
 
 const CANDLE_LIMIT = 25;
 
@@ -37,13 +38,8 @@ const compactToggleSx = {
 };
 
 const paperSx = {
+  ...dashboardPanelSx,
   p: { xs: 1, sm: 1.25 },
-  borderRadius: 2,
-  height: "100%",
-  boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-  overflow: "hidden",
-  minWidth: 0,
-  boxSizing: "border-box",
 };
 
 const moneyFmt = (v) =>
@@ -208,7 +204,7 @@ export default function CashFlowCandlestickChart({ onCandleSelect, onDrillReset,
   const selectedLabel = payload?.candles?.find((c) => c.key === selectedKey)?.label;
 
   return (
-    <Paper sx={{ ...paperSx, overflowX: "auto" }}>
+    <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto" }}>
       <Stack
         direction="row"
         alignItems="center"
