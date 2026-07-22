@@ -87,12 +87,18 @@ function matchesQuickCategory(product, categoryMatch) {
   return rootName.includes(needle) || catName.includes(needle);
 }
 
-export function filterQuickAccessInStock(products, tierGroups = [], categoryMatch = "") {
+export function filterQuickAccessInStock(
+  products,
+  tierGroups = [],
+  categoryMatch = "",
+  { allowZeroStock = false } = {},
+) {
   return (products || [])
     .filter((p) => {
       if (!matchesQuickCategory(p, categoryMatch)) return false;
       if (p.type && p.type !== "final") return false;
       if (p.isActive === 0 || p.isActive === false) return false;
+      if (allowZeroStock) return true;
       return Number(p.stock || 0) > 0;
     })
     .sort((a, b) => {
@@ -105,9 +111,9 @@ export function filterQuickAccessInStock(products, tierGroups = [], categoryMatc
     });
 }
 
-function filterSurtidoInStock(products, tierGroup) {
+function filterSurtidoInStock(products, tierGroup, { allowZeroStock = false } = {}) {
   return getSurtidoProductsForTierGroup(products, tierGroup)
-    .filter((p) => Number(p.stock || 0) > 0)
+    .filter((p) => (allowZeroStock ? true : Number(p.stock || 0) > 0))
     .sort((a, b) => Number(b.stock || 0) - Number(a.stock || 0));
 }
 
@@ -119,6 +125,8 @@ export default function CajaQuickProductsDialog({
   onAddSurtido,
   tierGroups = [],
   categoryMatch = "",
+  /** Programador/Administrador: canasta sin tope de stock (se regula al vender). */
+  allowBasketOverStock = false,
 }) {
   const theme = useTheme();
   const [selectedQty, setSelectedQty] = useState(1);
@@ -126,13 +134,20 @@ export default function CajaQuickProductsDialog({
   const [selectedTierGroup, setSelectedTierGroup] = useState(null);
   const [basketQtyById, setBasketQtyById] = useState({});
 
-  const items = filterQuickAccessInStock(products, tierGroups, categoryMatch);
+  const items = filterQuickAccessInStock(products, tierGroups, categoryMatch, {
+    allowZeroStock: allowBasketOverStock,
+  });
   const activeGroups = useMemo(() => findActiveTierGroups(tierGroups), [tierGroups]);
   const surtidoMode = Boolean(selectedTierGroup);
   const surtidoLabel = selectedTierGroup ? getTierGroupLabel(selectedTierGroup) : "";
   const surtidoItems = useMemo(
-    () => (selectedTierGroup ? filterSurtidoInStock(products, selectedTierGroup) : []),
-    [products, selectedTierGroup],
+    () =>
+      selectedTierGroup
+        ? filterSurtidoInStock(products, selectedTierGroup, {
+            allowZeroStock: allowBasketOverStock,
+          })
+        : [],
+    [products, selectedTierGroup, allowBasketOverStock],
   );
   const surtidoTiers = useMemo(
     () =>
@@ -300,7 +315,11 @@ export default function CajaQuickProductsDialog({
     const stock = Number(product.stock || 0);
     setBasketQtyById((prev) => {
       const current = Math.floor(Number(prev[id] || 0));
-      const next = stock > 0 ? Math.min(current + selectedQty, stock) : current + selectedQty;
+      const next = allowBasketOverStock
+        ? current + selectedQty
+        : stock > 0
+          ? Math.min(current + selectedQty, stock)
+          : current + selectedQty;
       if (next <= current) return prev;
       return { ...prev, [id]: next };
     });
@@ -568,8 +587,12 @@ export default function CajaQuickProductsDialog({
         {gridProducts.length === 0 ? (
           <Typography color="text.secondary" sx={{ py: 6, textAlign: "center" }}>
             {surtidoMode
-              ? "No hay panes disponibles en esta canasta."
-              : "No hay productos con stock para accesos rápidos."}
+              ? allowBasketOverStock
+                ? "No hay panes en esta canasta."
+                : "No hay panes disponibles en esta canasta."
+              : allowBasketOverStock
+                ? "No hay productos para accesos rápidos."
+                : "No hay productos con stock para accesos rápidos."}
           </Typography>
         ) : (
           <Grid container spacing={1.5} data-tour="caja-quick-grid">
@@ -580,7 +603,11 @@ export default function CajaQuickProductsDialog({
                 ? Math.floor(Number(basketQtyById[Number(product.id)] || 0))
                 : 0;
               const stock = Number(product.stock || 0);
-              const atStockLimit = surtidoMode && stock > 0 && inBasket >= stock;
+              const atStockLimit =
+                surtidoMode &&
+                !allowBasketOverStock &&
+                stock > 0 &&
+                inBasket >= stock;
               const cardTotal = surtidoMode
                 ? null
                 : lineTotalFor(product, selectedQty, tierGroups);

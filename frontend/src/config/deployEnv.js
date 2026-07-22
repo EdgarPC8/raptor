@@ -1,6 +1,6 @@
 /**
  * Despliegue del frontend (VITE_* via Vite --mode).
- * Dev: `npm run eddeli` | `npm run store` | `npm run raptor` (shell sin backend)
+ * Dev: `npm run eddeli` (con entitlement) | `npm run dev:eddeli` (libre) | `npm run store` | `npm run raptor` (shell sin backend)
  */
 
 export const API_PREFIX = import.meta.env.VITE_API_PREFIX || "eddeliapi";

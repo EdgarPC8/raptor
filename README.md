@@ -17,7 +17,16 @@ App nueva: copiá `.env.example` → `.env.<mode>` y `npm run build:app -- <mode
 ## Desarrollo
 
 ```bash
-# EdDeli → http://localhost:5173/eddeli/ (API local :3001)
+cd raptor/frontend
+
+# EdDeli LIBRE (recomendado para programar) → http://localhost:5173/eddeli/
+# Sin límites de módulos/permisos del gestor. Necesitas backend EdDeli (:3001).
+npm run dev:eddeli
+# atajo:
+npm run dev
+
+# EdDeli CON entitlement (como producción) → http://localhost:5173/eddeli/
+# Respeta módulos/estados empujados por el gestor. Backend EdDeli (:3001).
 npm run eddeli
 
 # Store → http://localhost:5174/store/ (API local :3003)
@@ -25,10 +34,17 @@ npm run store
 
 # Raptor invitado → http://localhost:5175/raptor/ (sin backend)
 npm run raptor
-
-# Atajo por defecto: EdDeli
-npm run dev
 ```
+
+### ¿Cuál usar?
+
+| Comando | ¿Gestor / permisos? | Para qué |
+|---------|---------------------|----------|
+| `npm run dev:eddeli` / `npm run dev` | No: acceso total a módulos | Programar día a día |
+| `npm run eddeli` | Sí: lee entitlement del backend | Probar planes, mantenimiento, oculto, etc. |
+
+`dev:eddeli` fuerza `VITE_SUBSCRIPTIONS_ENABLED=false`.  
+`eddeli` usa lo de `.env.eddeli` (`VITE_SUBSCRIPTIONS_ENABLED=true`).
 
 ## Builds
 

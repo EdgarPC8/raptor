@@ -194,6 +194,10 @@ export default function CajaPage() {
     tourId: CAJA_TOUR_ID,
     getSteps: getCajaTourSteps,
   });
+  const isProgrammer = user?.loginRol === "Programador";
+  const isAdmin = user?.loginRol === "Administrador" || isProgrammer;
+  /** Admin/Programador: canasta de accesos rápidos sin tope de stock. */
+  const allowBasketOverStock = isAdmin;
   const draftUserId = user?.userId != null ? String(user.userId) : null;
   const [products, setProducts] = useState([]);
   const [tierGroups, setTierGroups] = useState([]);
@@ -2018,6 +2022,7 @@ export default function CajaPage() {
         products={products}
         tierGroups={effectiveTierGroups}
         categoryMatch={activeApp.cajaQuickCategoryMatch}
+        allowBasketOverStock={allowBasketOverStock}
         onAdd={(product, qty) => addToCart(product, qty)}
         onAddSurtido={addSurtidoBatch}
       />

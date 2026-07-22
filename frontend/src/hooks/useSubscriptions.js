@@ -11,6 +11,10 @@ import { SHELL_ONLY } from "../config/deployEnv.js";
  *   - "true"  → limitar por entitlement guardado en el backend.
  *   - "false" → acceso total (desarrollo libre).
  *   - sin definir → desactivado en `npm run dev`, activado en build de producción.
+ *
+ * Comandos:
+ *   npm run eddeli      → usa .env.eddeli (normalmente true)
+ *   npm run dev:eddeli  → fuerza false (programar libre)
  */
 const ENV_OVERRIDE = import.meta.env.VITE_SUBSCRIPTIONS_ENABLED;
 export const SUBSCRIPTIONS_ENABLED =
