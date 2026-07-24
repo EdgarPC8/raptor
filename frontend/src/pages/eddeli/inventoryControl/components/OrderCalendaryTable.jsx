@@ -205,9 +205,13 @@ const STATUS_LEGEND = [
 
 const WEEKDAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
+/** Radio visible en celdas del calendario (fecha + N pedidos). */
+const DAY_CELL_RADIUS = '12px';
+
 const calendarGridSx = {
   display: 'grid',
   gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+  gap: 1,
 };
 
 /* ---------------- Component ---------------- */
@@ -742,7 +746,7 @@ export default forwardRef(function OrderCalendarView({
         variant="outlined"
         sx={{
           borderRadius: 2,
-          overflow: 'hidden',
+          p: { xs: 0.75, sm: 1 },
           mb: 1,
           borderColor: alpha(theme.palette.divider, 0.9),
         }}
@@ -750,9 +754,14 @@ export default forwardRef(function OrderCalendarView({
         <Box
           sx={{
             ...calendarGridSx,
+            gap: 0,
+            mb: 0.75,
+            pb: 0.75,
             borderBottom: '1px solid',
             borderColor: 'divider',
             bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.06 : 0.03),
+            borderRadius: 1.5,
+            px: 0.5,
           }}
         >
           {WEEKDAY_LABELS.map((day) => (
@@ -781,8 +790,7 @@ export default forwardRef(function OrderCalendarView({
             <Box
               sx={{
                 ...calendarGridSx,
-                borderBottom: weekIndex < weeks.length - 1 || shouldShowCollapse ? '1px solid' : 'none',
-                borderColor: 'divider',
+                mb: weekIndex < weeks.length - 1 || shouldShowCollapse ? 0.75 : 0,
               }}
             >
               {week.map((date) => {
@@ -809,8 +817,10 @@ export default forwardRef(function OrderCalendarView({
                 }
 
                 return (
-                  <Box
+                  <Paper
                     key={date.toISOString()}
+                    variant="outlined"
+                    elevation={0}
                     data-tour={
                       tourFocusDay && isSameDay(date, tourFocusDay)
                         ? 'pedidos-day-focus'
@@ -818,24 +828,31 @@ export default forwardRef(function OrderCalendarView({
                     }
                     onClick={() => handleDayClick(date)}
                     sx={{
-                      minHeight: { xs: 68, sm: 84 },
-                      p: 0.75,
+                      minHeight: { xs: 72, sm: 88 },
+                      p: 1,
                       cursor: 'pointer',
                       bgcolor: 'background.paper',
                       opacity: isOutOfMonth ? 0.38 : 1,
                       position: 'relative',
-                      borderRight: '1px solid',
-                      borderColor: 'divider',
-                      '&:nth-of-type(7n)': { borderRight: 'none' },
-                      transition: 'background-color 0.15s ease',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      borderRadius: DAY_CELL_RADIUS,
+                      overflow: 'hidden',
+                      '&.MuiPaper-rounded': {
+                        borderRadius: DAY_CELL_RADIUS,
+                      },
+                      transition: 'border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease',
                       ...(isSelected && {
                         bgcolor: alpha(theme.palette.primary.main, 0.08),
-                        boxShadow: `inset 0 0 0 2px ${theme.palette.primary.main}`,
+                        borderWidth: 2,
+                        borderColor: 'primary.main',
                         zIndex: 1,
                       }),
                       ...(!isSelected && {
                         '&:hover': {
                           bgcolor: alpha(theme.palette.primary.main, 0.05),
+                          borderColor: alpha(theme.palette.primary.main, 0.5),
                         },
                       }),
                       ...(hasOrders && statusBase && {
@@ -845,7 +862,7 @@ export default forwardRef(function OrderCalendarView({
                           top: 0,
                           left: 0,
                           right: 0,
-                          height: 3,
+                          height: 4,
                           bgcolor: statusBase,
                         },
                       }),
@@ -853,12 +870,13 @@ export default forwardRef(function OrderCalendarView({
                   >
                     <Box
                       sx={{
-                        width: 28,
-                        height: 28,
+                        width: 30,
+                        height: 30,
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        flexShrink: 0,
                         ...(isToday && {
                           bgcolor: 'primary.main',
                           color: 'primary.contrastText',
@@ -868,7 +886,7 @@ export default forwardRef(function OrderCalendarView({
                       <Typography
                         variant="body2"
                         sx={{
-                          fontWeight: 700,
+                          fontWeight: 800,
                           fontSize: '0.8125rem',
                           lineHeight: 1,
                           color: isToday ? 'inherit' : isOutOfMonth ? 'text.disabled' : 'text.primary',
@@ -879,22 +897,35 @@ export default forwardRef(function OrderCalendarView({
                     </Box>
 
                     {hasOrders ? (
-                      <Typography
-                        variant="caption"
-                        noWrap
+                      <Box
                         sx={{
-                          display: 'block',
-                          mt: 0.5,
-                          fontSize: '0.62rem',
-                          fontWeight: 600,
-                          color: statusBase || 'text.secondary',
-                          lineHeight: 1.2,
+                          mt: 'auto',
+                          width: '100%',
+                          pt: 0.5,
                         }}
                       >
-                        {countLabel}
-                      </Typography>
+                        <Typography
+                          variant="caption"
+                          noWrap
+                          title={countLabel}
+                          sx={{
+                            display: 'block',
+                            px: 0.65,
+                            py: 0.3,
+                            borderRadius: '10px',
+                            fontSize: '0.62rem',
+                            fontWeight: 700,
+                            textAlign: 'center',
+                            color: statusBase || 'text.secondary',
+                            bgcolor: alpha(statusBase || theme.palette.text.primary, theme.palette.mode === 'dark' ? 0.18 : 0.1),
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {countLabel}
+                        </Typography>
+                      </Box>
                     ) : null}
-                  </Box>
+                  </Paper>
                 );
               })}
             </Box>
@@ -903,11 +934,14 @@ export default forwardRef(function OrderCalendarView({
               <Box
                 data-tour="pedidos-day-detail"
                 sx={{
+                  mx: 0.25,
+                  mb: 0.75,
                   px: { xs: 1, sm: 1.25 },
                   py: 1.25,
-                  bgcolor: alpha(theme.palette.primary.main, 0.02),
-                  borderTop: '1px solid',
-                  borderColor: 'divider',
+                  bgcolor: alpha(theme.palette.primary.main, 0.03),
+                  border: '1px solid',
+                  borderColor: alpha(theme.palette.primary.main, 0.22),
+                  borderRadius: 2,
                 }}
               >
                 <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1.5, gap: 1 }}>
