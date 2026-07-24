@@ -1165,7 +1165,7 @@ export const APP_PUBLIC_SECTIONS = [
   },
 ];
 
-/** Estados de módulo para /sistema/modulos (4 visibles). */
+/** Estados de módulo para /sistema/modulos. */
 export const MODULE_STATUS_META = {
   active: {
     id: "active",
@@ -1199,6 +1199,12 @@ export const MODULE_STATUS_META = {
     color: "warning",
     description: "Previsto a futuro; aún no hay pantallas útiles.",
   },
+  hidden: {
+    id: "hidden",
+    label: "Oculto",
+    color: "secondary",
+    description: "No se muestra en el menú ni es accesible en la app.",
+  },
 };
 
 /** Normaliza legacy: development → maintenance. */
@@ -1208,7 +1214,8 @@ export function normalizeModuleStatus(status) {
     status === "active" ||
     status === "maintenance" ||
     status === "developer" ||
-    status === "planned"
+    status === "planned" ||
+    status === "hidden"
   ) {
     return status;
   }
@@ -1253,12 +1260,19 @@ export function resolveGroupModuleStatus(group) {
   if (sections.length === 0) return "planned";
   const operational = sections
     .map(resolveModuleStatus)
-    .filter((s) => s !== "planned");
-  if (operational.length === 0) return "planned";
+    .filter((s) => s !== "planned" && s !== "hidden");
+  if (operational.length === 0) {
+    const onlyHidden =
+      sections.length > 0 &&
+      sections.every((s) => resolveModuleStatus(s) === "hidden");
+    if (onlyHidden) return "hidden";
+    return "planned";
+  }
   // Si hay secciones en uso, el módulo sigue «en uso» (el mantenimiento es por sección).
   if (operational.some((s) => s === "active")) return "active";
   if (operational.some((s) => s === "maintenance")) return "maintenance";
   if (operational.some((s) => s === "developer")) return "developer";
+  if (operational.every((s) => s === "hidden")) return "hidden";
   return "active";
 }
 
@@ -1289,13 +1303,16 @@ export function listCatalogModuleGroupsWithStatus() {
       sectionCount: sections.length,
       plannedSectionCount: sectionRows.filter((s) => s.status === "planned").length,
       maintenanceSectionCount: sectionRows.filter((s) => s.status === "maintenance").length,
+      hiddenSectionCount: sectionRows.filter((s) => s.status === "hidden").length,
       sectionItems: sectionRows,
       sections: sectionRows.map((s) =>
         s.status === "planned"
           ? `${s.name} (próx.)`
           : s.status === "maintenance"
             ? `${s.name} (mant.)`
-            : s.name,
+            : s.status === "hidden"
+              ? `${s.name} (oculto)`
+              : s.name,
       ),
       status,
       statusMeta: MODULE_STATUS_META[status],

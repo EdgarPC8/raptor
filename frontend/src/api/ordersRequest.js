@@ -308,6 +308,26 @@ export const paySupplierOrderRequest = async (orderId, data) =>
     headers: { Authorization: jwt() },
   });
 
+export const createSupplierPackRequest = async (data) =>
+  await axios.post("/orders/supplier-payables/packs", data, {
+    headers: { Authorization: jwt() },
+  });
+
+export const updateSupplierPackRequest = async (packId, data) =>
+  await axios.put(`/orders/supplier-payables/packs/${packId}`, data, {
+    headers: { Authorization: jwt() },
+  });
+
+export const dissolveSupplierPackRequest = async (packId) =>
+  await axios.post(`/orders/supplier-payables/packs/${packId}/dissolve`, {}, {
+    headers: { Authorization: jwt() },
+  });
+
+export const paySupplierPackRequest = async (packId, data) =>
+  await axios.post(`/orders/supplier-payables/packs/${packId}/pay`, data, {
+    headers: { Authorization: jwt() },
+  });
+
 export const updateSupplierOrderPaymentRequest = async (paymentId, data) =>
   await axios.put(`/orders/supplier-payables/payments/${paymentId}`, data, {
     headers: { Authorization: jwt() },

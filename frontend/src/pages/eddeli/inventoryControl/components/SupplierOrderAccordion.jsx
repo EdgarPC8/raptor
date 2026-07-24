@@ -156,6 +156,9 @@ export default function SupplierOrderAccordion({
   const remaining = supplierRemaining(order);
   const fullyPaid = remaining <= 0.009;
   const payPct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
+  /** Programador puede abrir el modal de edición aunque ya esté recibido, si aún hay saldo. */
+  const canOpenEditModal =
+    Boolean(onEdit) && (!order.receivedAt || (isProgramador && !fullyPaid));
 
   const severity = supplierSeverity(order);
   const base = severityColor(severity, theme.palette);
@@ -577,7 +580,7 @@ export default function SupplierOrderAccordion({
                   </Button>
                 </>
               )}
-              {!order.receivedAt && onEdit && (
+              {canOpenEditModal && (
                 <Button size="small" variant="outlined" onClick={() => onEdit(order)}>
                   Editar
                 </Button>

@@ -14,6 +14,7 @@ import {
   findPlannedSectionForPath,
   shouldBlockMaintenancePath,
   shouldBlockPlannedPath,
+  shouldBlockHiddenPath,
 } from "../config/sectionMaintenanceAccess.js";
 import SectionMaintenanceBlocked from "../pages/SectionMaintenanceBlocked.jsx";
 import SectionPlannedBlocked from "../pages/SectionPlannedBlocked.jsx";
@@ -127,6 +128,16 @@ export default function ProtectedRoute({ requiredRol }) {
     );
   }
 
+  if (shouldBlockHiddenPath(location.pathname, subModules)) {
+    return (
+      <Navigate
+        to="/no-subscription"
+        replace
+        state={{ from: location.pathname, reason: "hidden" }}
+      />
+    );
+  }
+
   if (!hasActiveSubscription(subscription, expired)) {
     // Sin plan: home con menú (para ir a Configuración / Módulos), no bloquear la base.
     if (path === "/" || path === "") {
@@ -143,9 +154,12 @@ export default function ProtectedRoute({ requiredRol }) {
     const key = String(sectionKey).split("?")[0];
     return path === key || path.startsWith(`${key}/`);
   };
-  const hasAccess = subscription.subscription?.modules?.find((m) =>
-    m.sections.some((s) => sectionMatches(s.key)),
-  );
+  const hasAccess = subscription.subscription?.modules?.find((m) => {
+    if (m.status === "hidden") return false;
+    return m.sections.some(
+      (s) => s.status !== "hidden" && sectionMatches(s.key),
+    );
+  });
 
   if (!hasAccess) {
     return (

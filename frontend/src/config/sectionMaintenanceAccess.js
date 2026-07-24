@@ -7,6 +7,7 @@ import { API_MODE } from "./deployEnv.js";
 import {
   APP_MODULE_GROUPS,
   resolveModuleStatus,
+  resolveGroupModuleStatus,
 } from "./appModulesCatalog.js";
 
 /** Producción: build de deploy (Vite prod) o API_MODE=production. */
@@ -305,4 +306,108 @@ export function isMenuLinkPlanned(link, subscriptionModules) {
   }
   if (!isAppInProduction()) return false;
   return isPathPlanned(link);
+}
+
+/** Secciones / módulos ocultos (hidden): no se muestran en el menú. */
+export function listHiddenSectionsFromSubscription(modules = []) {
+  const out = [];
+  const seen = new Set();
+
+  const push = (path, name, moduleLabel, description) => {
+    const p = normalizePath(path);
+    if (!p || p.includes(":") || seen.has(p)) return;
+    seen.add(p);
+    out.push({
+      path: p,
+      name,
+      moduleLabel,
+      description: description || "",
+    });
+  };
+
+  for (const mod of modules) {
+    const moduleHidden = mod.status === "hidden";
+    for (const section of mod.sections || []) {
+      if (!moduleHidden && section.status !== "hidden") continue;
+      push(section.key, section.name, mod.name, "");
+    }
+  }
+  return out;
+}
+
+export function listHiddenSections() {
+  const out = [];
+  const seen = new Set();
+
+  const push = (path, name, moduleLabel, description) => {
+    const p = normalizePath(path);
+    if (!p || p.includes(":") || seen.has(p)) return;
+    seen.add(p);
+    out.push({
+      path: p,
+      name,
+      moduleLabel,
+      description: description || "",
+    });
+  };
+
+  for (const group of APP_MODULE_GROUPS) {
+    const groupHidden =
+      group.status === "hidden" ||
+      resolveGroupModuleStatus(group) === "hidden";
+    for (const section of group.sections || []) {
+      const st = resolveModuleStatus(section);
+      if (!groupHidden && st !== "hidden") continue;
+      push(
+        section.path,
+        section.name,
+        group.label,
+        section.description || group.summary,
+      );
+    }
+  }
+  return out;
+}
+
+function getHiddenIndex(subscriptionModules) {
+  const list =
+    Array.isArray(subscriptionModules) && subscriptionModules.length > 0
+      ? listHiddenSectionsFromSubscription(subscriptionModules)
+      : listHiddenSections();
+  const paths = list.map((s) => s.path).sort((a, b) => b.length - a.length);
+  return { list, paths };
+}
+
+export function findHiddenSectionForPath(pathname, subscriptionModules) {
+  const { list, paths } = getHiddenIndex(subscriptionModules);
+  return findSectionByPath(pathname, subscriptionModules, list, paths);
+}
+
+export function isPathHidden(pathname, subscriptionModules) {
+  return Boolean(findHiddenSectionForPath(pathname, subscriptionModules));
+}
+
+/**
+ * Oculto: nadie lo ve en menú ni entra por URL (tampoco Programador),
+ * a diferencia de mantenimiento/próximamente.
+ */
+export function shouldBlockHiddenPath(pathname, subscriptionModules) {
+  if (Array.isArray(subscriptionModules) && subscriptionModules.length > 0) {
+    return isPathHidden(pathname, subscriptionModules);
+  }
+  if (!isAppInProduction()) return false;
+  return isPathHidden(pathname);
+}
+
+/** Ocultar del menú lateral. */
+export function shouldHideHiddenMenuLink() {
+  return true;
+}
+
+export function isMenuLinkHidden(link, subscriptionModules) {
+  if (Array.isArray(subscriptionModules) && subscriptionModules.length > 0) {
+    return isPathHidden(link, subscriptionModules);
+  }
+  if (!isAppInProduction()) return false;
+  return isPathHidden(link);
 }

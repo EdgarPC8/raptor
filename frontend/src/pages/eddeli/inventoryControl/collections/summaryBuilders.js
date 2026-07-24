@@ -106,6 +106,103 @@ export function buildPendingByProduct(customerItems) {
   };
 }
 
+/**
+ * Agrega ítems de pedidos a proveedor con saldo (por pagar).
+ * Espera filas con { product, quantity, unitPrice|price, lineTotal?, taxRate? }.
+ */
+export function buildSupplierPendingByProduct(supplierItems) {
+  const byProductPrice = new Map();
+  let grandTotal = 0;
+  let grandQty = 0;
+
+  for (const it of supplierItems || []) {
+    const qty = toNum(it.quantity ?? it.qty, 0);
+    if (qty <= 0) continue;
+    const price = toNum(it.unitPrice ?? it.price, 0);
+    const tax = toNum(it.taxRate, 0);
+    const total =
+      it.lineTotal != null
+        ? toNum(it.lineTotal)
+        : Number((qty * price * (1 + tax / 100)).toFixed(2));
+    grandTotal = Number((grandTotal + total).toFixed(2));
+    grandQty = Number((grandQty + qty).toFixed(2));
+    const product = String(it.product || "(sin nombre)");
+    const priceKey = String(price);
+    const mapKey = `${product}\0${priceKey}`;
+    if (!byProductPrice.has(mapKey)) {
+      byProductPrice.set(mapKey, {
+        product,
+        unitPrice: price,
+        qty: 0,
+        total: 0,
+        orderIds: [],
+        itemIds: [],
+      });
+    }
+    const agg = byProductPrice.get(mapKey);
+    agg.qty = Number((agg.qty + qty).toFixed(2));
+    agg.total = Number((agg.total + total).toFixed(2));
+    if (it.orderId != null && !agg.orderIds.includes(Number(it.orderId))) {
+      agg.orderIds.push(Number(it.orderId));
+    }
+    if (it.id != null) agg.itemIds.push(it.id);
+  }
+
+  const rows = Array.from(byProductPrice.values())
+    .map((r) => ({
+      ...r,
+      orderIds: r.orderIds.slice().sort((a, b) => Number(a) - Number(b)),
+    }))
+    .sort((a, b) => {
+      const byName = String(a.product).localeCompare(String(b.product), "es");
+      if (byName !== 0) return byName;
+      return a.unitPrice - b.unitPrice;
+    });
+
+  return { rows, grandTotal, grandQty };
+}
+
+/** Agrupa ítems de proveedores pendientes por fecha de pedido. */
+export function buildSupplierPendingByDate(supplierItems) {
+  const byDate = new Map();
+
+  for (const it of supplierItems || []) {
+    const qty = toNum(it.quantity ?? it.qty, 0);
+    if (qty <= 0) continue;
+    const price = toNum(it.unitPrice ?? it.price, 0);
+    const tax = toNum(it.taxRate, 0);
+    const lineTotal =
+      it.lineTotal != null
+        ? toNum(it.lineTotal)
+        : Number((qty * price * (1 + tax / 100)).toFixed(2));
+    const dateKey = it.orderDate || "—";
+
+    if (!byDate.has(dateKey)) {
+      byDate.set(dateKey, { date: dateKey, products: [], qty: 0, total: 0 });
+    }
+    const day = byDate.get(dateKey);
+    day.products.push({
+      product: it.product || "(sin nombre)",
+      qty,
+      unitPrice: price,
+      total: lineTotal,
+      orderId: it.orderId,
+    });
+    day.qty = Number((day.qty + qty).toFixed(2));
+    day.total = Number((day.total + lineTotal).toFixed(2));
+  }
+
+  const rows = Array.from(byDate.values())
+    .map((d) => ({
+      ...d,
+      products: d.products.sort((a, b) => b.total - a.total),
+    }))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+  const grandTotal = Number(rows.reduce((s, r) => s + r.total, 0).toFixed(2));
+  return { rows, grandTotal };
+}
+
 export function buildPendingByDate(customerItems) {
   const pendingItems = pendingItemsOf(customerItems);
   const byDate = new Map();

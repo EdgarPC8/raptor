@@ -58,14 +58,19 @@ function countMaintenanceSections(group) {
   return (group.sections || []).filter((s) => resolveModuleStatus(s) === "maintenance").length;
 }
 
+function countHiddenSections(group) {
+  return (group.sections || []).filter((s) => resolveModuleStatus(s) === "hidden").length;
+}
+
 function orderSectionsForPreview(sections = []) {
+  const hidden = sections.filter((s) => resolveModuleStatus(s) === "hidden");
   const planned = sections.filter((s) => resolveModuleStatus(s) === "planned");
   const maintenance = sections.filter((s) => resolveModuleStatus(s) === "maintenance");
   const other = sections.filter((s) => {
     const st = resolveModuleStatus(s);
-    return st !== "planned" && st !== "maintenance";
+    return st !== "planned" && st !== "maintenance" && st !== "hidden";
   });
-  return [...planned, ...maintenance, ...other];
+  return [...hidden, ...planned, ...maintenance, ...other];
 }
 
 function RoleChips({ roles, showInternalRoles = false }) {
@@ -89,17 +94,20 @@ function SectionDetail({ section, expanded, onToggle, showInternalRoles = false 
   const statusMeta = MODULE_STATUS_META[status];
   const isPlanned = status === "planned";
   const isMaintenance = status === "maintenance";
-  const highlight = isPlanned || isMaintenance;
+  const isHidden = status === "hidden";
+  const highlight = isPlanned || isMaintenance || isHidden;
 
   return (
     <Box
       sx={{
         border: "1px solid",
-        borderColor: isPlanned
-          ? "warning.light"
-          : isMaintenance
-            ? "error.light"
-            : "divider",
+        borderColor: isHidden
+          ? "secondary.light"
+          : isPlanned
+            ? "warning.light"
+            : isMaintenance
+              ? "error.light"
+              : "divider",
         borderRadius: 2,
         mb: 1,
         overflow: "hidden",
@@ -113,6 +121,18 @@ function SectionDetail({ section, expanded, onToggle, showInternalRoles = false 
               <Typography variant="subtitle2" fontWeight={700}>
                 {section.name}
               </Typography>
+              {isHidden ? (
+                <Chip
+                  size="small"
+                  label="Oculto"
+                  sx={{
+                    height: 22,
+                    fontWeight: 700,
+                    bgcolor: "rgba(124,58,237,0.92)",
+                    color: "common.white",
+                  }}
+                />
+              ) : null}
               {isPlanned ? (
                 <Chip
                   size="small"
@@ -467,6 +487,7 @@ function ModulesInfoTab({
           const functions = countGroupFunctions(block);
           const planned = countPlannedSections(block);
           const maintenance = countMaintenanceSections(block);
+          const hidden = countHiddenSections(block);
           const ordered = orderSectionsForPreview(block.sections || []);
           const preview = ordered.slice(0, 5);
           const more = Math.max(0, ordered.length - preview.length);
@@ -517,17 +538,20 @@ function ModulesInfoTab({
                       const st = resolveModuleStatus(sec);
                       const isPlanned = st === "planned";
                       const isMaintenance = st === "maintenance";
-                      const highlight = isPlanned || isMaintenance;
+                      const isHidden = st === "hidden";
+                      const highlight = isPlanned || isMaintenance || isHidden;
                       return (
                         <Chip
                           key={`${block.id}-${sec.path}-${sec.name}`}
                           size="small"
                           label={
-                            isPlanned
-                              ? `${sec.name} · Próximamente`
-                              : isMaintenance
-                                ? `${sec.name} · Mantenimiento`
-                                : sec.name
+                            isHidden
+                              ? `${sec.name} · Oculto`
+                              : isPlanned
+                                ? `${sec.name} · Próximamente`
+                                : isMaintenance
+                                  ? `${sec.name} · Mantenimiento`
+                                  : sec.name
                           }
                           color={isPlanned ? "warning" : isMaintenance ? "error" : "default"}
                           variant={highlight ? "filled" : "outlined"}
@@ -536,6 +560,13 @@ function ModulesInfoTab({
                             maxWidth: "100%",
                             fontWeight: highlight ? 700 : 500,
                             fontSize: "0.68rem",
+                            ...(isHidden
+                              ? {
+                                  bgcolor: "rgba(124,58,237,0.92)",
+                                  color: "common.white",
+                                  borderColor: "transparent",
+                                }
+                              : null),
                             "& .MuiChip-label": {
                               overflow: "hidden",
                               textOverflow: "ellipsis",
@@ -569,6 +600,17 @@ function ModulesInfoTab({
                         color="error"
                         label={`${maintenance} mantenimiento`}
                         sx={{ fontWeight: 700 }}
+                      />
+                    ) : null}
+                    {hidden > 0 ? (
+                      <Chip
+                        size="small"
+                        label={`${hidden} oculto${hidden === 1 ? "" : "s"}`}
+                        sx={{
+                          fontWeight: 700,
+                          bgcolor: "rgba(124,58,237,0.92)",
+                          color: "common.white",
+                        }}
                       />
                     ) : null}
                     <Chip

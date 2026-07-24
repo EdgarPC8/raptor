@@ -98,6 +98,7 @@ import { APP_ROUTES } from "../config/appRoutes.js";
 import {
   isMenuLinkInMaintenance,
   isMenuLinkPlanned,
+  isMenuLinkHidden,
 } from "../config/sectionMaintenanceAccess.js";
 
 const DRAWER_W = 260;
@@ -607,6 +608,7 @@ export default function NavBar() {
   };
 
   const renderMenuItem = (item, nested = false) => {
+    if (isMenuLinkHidden(item.link, subModules)) return null;
     const inMaintenance = isMenuLinkInMaintenance(item.link, subModules);
     const isPlanned = isMenuLinkPlanned(item.link, subModules);
     const statusLabel = inMaintenance

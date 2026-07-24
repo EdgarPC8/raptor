@@ -9,6 +9,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import BuildCircleIcon from "@mui/icons-material/BuildCircle";
 import CodeIcon from "@mui/icons-material/Code";
 import ScheduleIcon from "@mui/icons-material/Schedule";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
@@ -39,6 +40,7 @@ const FILTERS = [
   { id: "active", label: "En uso" },
   { id: "maintenance", label: "Mantenimiento" },
   { id: "planned", label: "Próximamente" },
+  { id: "hidden", label: "Oculto" },
   { id: "developer", label: "Solo desarrollador" },
 ];
 
@@ -67,6 +69,7 @@ const STATUS_ICON = {
   development: BuildCircleIcon,
   developer: CodeIcon,
   planned: ScheduleIcon,
+  hidden: VisibilityOffIcon,
 };
 
 function ModuleCard({ module }) {
@@ -93,16 +96,22 @@ function ModuleCard({ module }) {
         ? "linear-gradient(135deg, rgba(211,47,47,0.4) 0%, rgba(20,20,20,0.92) 72%)"
         : module.status === "planned"
           ? "linear-gradient(135deg, rgba(245,180,0,0.35) 0%, rgba(20,20,20,0.92) 72%)"
-          : module.status === "developer"
-            ? "linear-gradient(135deg, rgba(2,136,209,0.4) 0%, rgba(20,20,20,0.92) 72%)"
-            : "linear-gradient(135deg, rgba(120,120,120,0.25) 0%, rgba(20,20,20,0.92) 72%)";
+          : module.status === "hidden"
+            ? "linear-gradient(135deg, rgba(124,58,237,0.45) 0%, rgba(20,20,20,0.92) 72%)"
+            : module.status === "developer"
+              ? "linear-gradient(135deg, rgba(2,136,209,0.4) 0%, rgba(20,20,20,0.92) 72%)"
+              : "linear-gradient(135deg, rgba(120,120,120,0.25) 0%, rgba(20,20,20,0.92) 72%)";
 
   const sectionItems = module.sectionItems || [];
   const highlightedFirst = [
+    ...sectionItems.filter((s) => s.status === "hidden"),
     ...sectionItems.filter((s) => s.status === "planned"),
     ...sectionItems.filter((s) => s.status === "maintenance"),
     ...sectionItems.filter(
-      (s) => s.status !== "planned" && s.status !== "maintenance",
+      (s) =>
+        s.status !== "planned" &&
+        s.status !== "maintenance" &&
+        s.status !== "hidden",
     ),
   ];
   const preview = highlightedFirst.slice(0, 5);
@@ -279,7 +288,8 @@ function ModuleCard({ module }) {
           {preview.map((sec) => {
             const isPlanned = sec.status === "planned";
             const isMaintenance = sec.status === "maintenance";
-            const highlight = isPlanned || isMaintenance;
+            const isHidden = sec.status === "hidden";
+            const highlight = isPlanned || isMaintenance || isHidden;
             const subSec = subSectionsByKey?.[sec.path] || null;
             const activeCaps = subSec
               ? subSec.capabilities.filter((c) => c.is_active).length
@@ -293,15 +303,17 @@ function ModuleCard({ module }) {
                 key={sec.name}
                 size="small"
                 label={
-                  isPlanned
-                    ? `${sec.name} · Próximamente`
-                    : isMaintenance
-                      ? `${sec.name} · Mantenimiento`
-                      : usageLabel
-                        ? `${sec.name} (${usageLabel})`
-                        : activeCaps > 0
-                          ? `${sec.name} · ${activeCaps} caps.`
-                          : sec.name
+                  isHidden
+                    ? `${sec.name} · Oculto`
+                    : isPlanned
+                      ? `${sec.name} · Próximamente`
+                      : isMaintenance
+                        ? `${sec.name} · Mantenimiento`
+                        : usageLabel
+                          ? `${sec.name} (${usageLabel})`
+                          : activeCaps > 0
+                            ? `${sec.name} · ${activeCaps} caps.`
+                            : sec.name
                 }
                 color={
                   isPlanned ? "warning" : isMaintenance ? "error" : "default"
@@ -312,6 +324,13 @@ function ModuleCard({ module }) {
                   maxWidth: "100%",
                   fontWeight: highlight ? 700 : 500,
                   fontSize: "0.68rem",
+                  ...(isHidden
+                    ? {
+                        bgcolor: "rgba(124,58,237,0.92)",
+                        color: "common.white",
+                        borderColor: "transparent",
+                      }
+                    : null),
                   "& .MuiChip-label": {
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -340,10 +359,19 @@ function ModuleCard({ module }) {
           <Chip
             size="small"
             icon={<StatusIcon sx={{ fontSize: "16px !important" }} />}
-            color={meta.color}
+            color={module.status === "hidden" ? undefined : meta.color}
             variant={module.status === "planned" ? "outlined" : "filled"}
             label={meta.label}
-            sx={{ height: 26, fontWeight: 700 }}
+            sx={{
+              height: 26,
+              fontWeight: 700,
+              ...(module.status === "hidden"
+                ? {
+                    bgcolor: "rgba(124,58,237,0.92)",
+                    color: "common.white",
+                  }
+                : null),
+            }}
           />
           {isTrial && endTrial && new Date(endTrial) < new Date() ? (
             <Stack spacing={0.25} alignItems="flex-end">

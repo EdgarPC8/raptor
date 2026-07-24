@@ -122,9 +122,24 @@ function getSupplierOrderSeverity(order) {
   return 1;
 }
 
+function getCustomerOrderSeverity(order) {
+  const items = order?.ERP_order_items || order?.items || [];
+  if (!items.length) return 3;
+  const { paid, fullyPaid } = customerOrderMoney(order);
+  const allDelivered = items.every((i) => i.deliveredAt);
+  const someDelivered = items.some((i) => i.deliveredAt);
+  const somePaid = fullyPaid || paid > 0.009 || items.some((i) => i.paidAt);
+
+  if (fullyPaid && allDelivered) return 3;
+  if (!somePaid && !someDelivered) return 0;
+  if (someDelivered && !fullyPaid) return 1;
+  if (somePaid && !allDelivered) return 2;
+  return 1;
+}
+
 function getOrderSeverity(order) {
   if (order?.orderKind === 'supplier') return getSupplierOrderSeverity(order);
-  return getOrderStatusSeverity(order.ERP_order_items || order.items || []);
+  return getCustomerOrderSeverity(order);
 }
 
 /** Color del día en calendario: gana el pedido “peor” (si hay uno rojo y otro verde → rojo). */
@@ -139,7 +154,46 @@ function getCalendarDayBaseColor(dailyOrders, theme) {
   return null;
 }
 
-// Devuelve el color base (success/error/warning/info) según el estado de los ítems (un pedido o lista coherente)
+const toNumber = (v, fallback = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+/** Total cobrable de una línea de pedido cliente. */
+function customerItemLineTotal(item) {
+  const qty = toNumber(item?.quantity);
+  const billable = Math.max(0, qty - toNumber(item?.damagedQty) - toNumber(item?.giftQty));
+  return billable * toNumber(item?.price);
+}
+
+/** Totales de cobro (usa paidAmount del API si viene — abonos parciales). */
+function customerOrderMoney(order) {
+  const items = order?.ERP_order_items || order?.items || [];
+  const total =
+    order?.totalAmount != null && Number.isFinite(Number(order.totalAmount))
+      ? Number(order.totalAmount)
+      : items.reduce((acc, i) => acc + customerItemLineTotal(i), 0);
+  let paid =
+    order?.paidAmount != null && Number.isFinite(Number(order.paidAmount))
+      ? Number(order.paidAmount)
+      : items.filter((i) => i.paidAt).reduce((acc, i) => acc + customerItemLineTotal(i), 0);
+  let remaining =
+    order?.remainingAmount != null && Number.isFinite(Number(order.remainingAmount))
+      ? Number(order.remainingAmount)
+      : Math.max(0, total - paid);
+  paid = Math.min(Math.max(0, paid), Math.max(0, total));
+  remaining = Math.max(0, remaining);
+  const payPct = total > 0.009 ? Math.min(100, (paid / total) * 100) : paid > 0 ? 100 : 0;
+  return {
+    total: Number(total.toFixed(2)),
+    paid: Number(paid.toFixed(2)),
+    remaining: Number(remaining.toFixed(2)),
+    payPct,
+    fullyPaid: remaining <= 0.009,
+  };
+}
+
+// Devuelve el color base según estado de ítems (líneas individuales)
 function getStatusBaseColor(items, theme) {
   const allPaid = items.every(i => i.paidAt);
   const allDelivered = items.every(i => i.deliveredAt);
@@ -147,11 +201,20 @@ function getStatusBaseColor(items, theme) {
   const someDelivered = items.some(i => i.deliveredAt);
   const { palette } = theme;
 
-  if (allPaid && allDelivered) return palette.success.main;   // ✓ pagado + entregado
-  if (!somePaid && !someDelivered) return palette.error.main; // ✗ nada pagado/entregado
-  if (someDelivered && !allPaid) return palette.warning.main; // entregado, falta pago
-  if (somePaid && !allDelivered) return palette.info.main;    // pagado, falta entrega
-  return null; // neutro
+  if (allPaid && allDelivered) return palette.success.main;
+  if (!somePaid && !someDelivered) return palette.error.main;
+  if (someDelivered && !allPaid) return palette.warning.main;
+  if (somePaid && !allDelivered) return palette.info.main;
+  return null;
+}
+
+function severityToBaseColor(sev, theme) {
+  const { palette } = theme;
+  if (sev === 0) return palette.error.main;
+  if (sev === 1) return palette.warning.main;
+  if (sev === 2) return palette.info.main;
+  if (sev === 3) return palette.success.main;
+  return null;
 }
 
 // Fondo por estado usando una tonalidad variable (alpha) unificada
@@ -161,10 +224,11 @@ function getColorByStatus(items, theme, tone) {
   return theme.palette.mode === 'dark' ? theme.palette.background.paper : 'white';
 }
 
-const toNumber = (v, fallback = 0) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-};
+function getColorByOrder(order, theme, tone) {
+  const base = severityToBaseColor(getOrderSeverity(order), theme);
+  if (base) return alpha(base, tone);
+  return theme.palette.mode === 'dark' ? theme.palette.background.paper : 'white';
+}
 
 const buildFullDate = (dateStr, hh, mm, ss) => {
   if (!dateStr || hh === '' || mm === '' || ss === '') return null;
@@ -173,8 +237,8 @@ const buildFullDate = (dateStr, hh, mm, ss) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-function getOrderStatusMeta(items) {
-  const sev = getOrderStatusSeverity(items);
+function getOrderStatusMeta(order) {
+  const sev = getOrderSeverity(order);
   if (sev === 3) return { label: 'Completo', color: 'success' };
   if (sev === 0) return { label: 'Sin avance', color: 'error' };
   if (sev === 1) return { label: 'Entregado · falta cobro', color: 'warning' };
@@ -182,17 +246,36 @@ function getOrderStatusMeta(items) {
   return { label: 'Parcial', color: 'warning' };
 }
 
-function orderProgress(items) {
-  const list = items || [];
-  if (!list.length) return { paid: 0, delivered: 0, paidCount: 0, deliveredCount: 0, total: 0 };
+function orderProgress(order) {
+  const list = order?.ERP_order_items || order?.items || (Array.isArray(order) ? order : []);
+  const money = Array.isArray(order) ? null : customerOrderMoney(order);
+  if (!list.length) {
+    return {
+      paid: 0,
+      delivered: 0,
+      paidCount: 0,
+      deliveredCount: 0,
+      total: 0,
+      paidAmount: 0,
+      orderTotal: 0,
+      remaining: 0,
+    };
+  }
   const paidCount = list.filter((i) => i.paidAt).length;
   const deliveredCount = list.filter((i) => i.deliveredAt).length;
+  const paidPct = money
+    ? money.payPct
+    : (paidCount / list.length) * 100;
   return {
-    paid: (paidCount / list.length) * 100,
+    paid: paidPct,
     delivered: (deliveredCount / list.length) * 100,
     paidCount,
     deliveredCount,
     total: list.length,
+    paidAmount: money?.paid ?? 0,
+    orderTotal: money?.total ?? 0,
+    remaining: money?.remaining ?? 0,
+    fullyPaid: money?.fullyPaid ?? paidCount === list.length,
   };
 }
 
@@ -990,23 +1073,17 @@ export default forwardRef(function OrderCalendarView({
 
                   const baseItems = order.ERP_order_items || order.items || [];
                   const orderItems = [...baseItems, ...(tourExtraItems[order.id] || [])];
-                  const orderColor = getColorByStatus(orderItems, theme, tones.state);
-                  const hasUnpaid = orderItems.some((i) => !i.paidAt);
-                  const orderTotal = orderItems.reduce(
-                    (acc, i) => acc + Number(i.price || 0) * Number(i.quantity || 0),
-                    0
-                  );
-                  const unpaidTotal = orderItems
-                    .filter((i) => !i.paidAt)
-                    .reduce(
-                      (acc, i) => acc + Number(i.price || 0) * Number(i.quantity || 0),
-                      0
-                    );
+                  const orderWithItems = { ...order, ERP_order_items: orderItems };
+                  const money = customerOrderMoney(orderWithItems);
+                  const hasUnpaid = !money.fullyPaid;
+                  const orderTotal = money.total;
+                  const unpaidTotal = money.remaining;
                   const isTourFocusOrder =
                     expandedOrders[order.id] === true &&
                     findDemoCustomerOrder()?.id === order.id;
-                  const statusMeta = getOrderStatusMeta(orderItems);
-                  const progress = orderProgress(orderItems);
+                  const statusMeta = getOrderStatusMeta(orderWithItems);
+                  const progress = orderProgress(orderWithItems);
+                  const orderColor = getColorByOrder(orderWithItems, theme, tones.state);
 
                   return (
                     <Accordion
@@ -1072,7 +1149,7 @@ export default forwardRef(function OrderCalendarView({
                             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 0.75, maxWidth: 360 }}>
                               <Box sx={{ flex: 1, minWidth: 100 }}>
                                 <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.62rem' }}>
-                                  Cobro {progress.paidCount}/{progress.total}
+                                  Cobro ${progress.paidAmount.toFixed(2)} / ${progress.orderTotal.toFixed(2)}
                                 </Typography>
                                 <LinearProgress
                                   variant="determinate"
