@@ -85,26 +85,52 @@ function hydratePacksAndLots(rawItems) {
   const lots = [];
   const packByKey = new Map();
   const lotBySig = new Map();
+  const packSigs = new Map(); // packKey -> Set of date signatures
+
+  for (const item of rawItems) {
+    const packKey = item.packKey || null;
+    if (!packKey) continue;
+    const hasLot = Boolean(item.expiresAt || item.lotCode || item.manufacturedAt);
+    const sig = hasLot
+      ? `${item.lotCode || ""}|${dateOnly(item.expiresAt)}|${dateOnly(item.manufacturedAt)}`
+      : null;
+    if (!packByKey.has(packKey)) {
+      const pack = {
+        key: packKey,
+        name: item.packName || "Paca",
+        useLots: false,
+        lotCode: "",
+        expiresAt: "",
+        manufacturedAt: "",
+      };
+      packByKey.set(packKey, pack);
+      packs.push(pack);
+      packSigs.set(packKey, new Set());
+    }
+    if (sig) packSigs.get(packKey).add(sig);
+  }
+
+  for (const [packKey, sigSet] of packSigs.entries()) {
+    const pack = packByKey.get(packKey);
+    const sigs = [...sigSet];
+    if (sigs.length > 1) {
+      pack.useLots = true;
+    } else if (sigs.length === 1) {
+      const [lotCode, expiresAt, manufacturedAt] = sigs[0].split("|");
+      pack.useLots = false;
+      pack.lotCode = lotCode || "";
+      pack.expiresAt = expiresAt || "";
+      pack.manufacturedAt = manufacturedAt || "";
+    }
+  }
 
   const items = rawItems.map((item) => {
     const lineId = newKey("line");
     const packKey = item.packKey || null;
-    const hasLot = Boolean(item.expiresAt || item.lotCode);
-
-    if (packKey && !packByKey.has(packKey)) {
-      const pack = {
-        key: packKey,
-        name: item.packName || "Paca",
-        useLots: hasLot,
-      };
-      packByKey.set(packKey, pack);
-      packs.push(pack);
-    } else if (packKey && hasLot) {
-      packByKey.get(packKey).useLots = true;
-    }
-
+    const pack = packKey ? packByKey.get(packKey) : null;
     let lotKey = null;
-    if (packKey && hasLot) {
+
+    if (pack?.useLots && (item.expiresAt || item.lotCode || item.manufacturedAt)) {
       const sig = `${packKey}|${item.lotCode || ""}|${dateOnly(item.expiresAt)}|${dateOnly(item.manufacturedAt)}`;
       if (!lotBySig.has(sig)) {
         const lot = {
@@ -139,12 +165,31 @@ function hydratePacksAndLots(rawItems) {
 function resolveItemLotFields(item, packs, lots) {
   const pack = item.packKey ? packs.find((p) => p.key === item.packKey) : null;
   const lot = item.lotKey ? lots.find((l) => l.key === item.lotKey) : null;
+  if (lot) {
+    return {
+      packKey: pack?.key || lot.packKey || null,
+      packName: pack?.name?.trim() || null,
+      lotCode: lot?.code?.trim() || null,
+      expiresAt: lot?.expiresAt || null,
+      manufacturedAt: lot?.manufacturedAt || null,
+    };
+  }
+  // Paca simple: un solo vencimiento para todos los productos de la paca.
+  if (pack && !pack.useLots) {
+    return {
+      packKey: pack.key,
+      packName: pack.name?.trim() || null,
+      lotCode: String(pack.lotCode || "").trim() || null,
+      expiresAt: pack.expiresAt || null,
+      manufacturedAt: pack.manufacturedAt || null,
+    };
+  }
   return {
     packKey: pack?.key || null,
     packName: pack?.name?.trim() || null,
-    lotCode: lot?.code?.trim() || null,
-    expiresAt: lot?.expiresAt || null,
-    manufacturedAt: lot?.manufacturedAt || null,
+    lotCode: null,
+    expiresAt: null,
+    manufacturedAt: null,
   };
 }
 
@@ -316,10 +361,47 @@ function SupplierOrderForm(
 
   const createPack = () => {
     const key = newKey("pack");
-    setPacks((prev) => [...prev, { key, name: `Paca ${prev.length + 1}`, useLots: false }]);
+    setPacks((prev) => [
+      ...prev,
+      {
+        key,
+        name: `Paca ${prev.length + 1}`,
+        useLots: false,
+        lotCode: "",
+        expiresAt: "",
+        manufacturedAt: "",
+      },
+    ]);
   };
 
   const updatePack = (packKey, patch) => {
+    if (patch.useLots === true) {
+      setPacks((prev) => {
+        const pack = prev.find((p) => p.key === packKey);
+        // Si la paca ya tenía un vencimiento único, lo pasa al primer lote.
+        if (pack && (pack.expiresAt || pack.lotCode || pack.manufacturedAt)) {
+          setLots((lotsPrev) => {
+            if (lotsPrev.some((l) => l.packKey === packKey)) return lotsPrev;
+            return [
+              ...lotsPrev,
+              {
+                key: newKey("lot"),
+                packKey,
+                code: pack.lotCode || "",
+                expiresAt: pack.expiresAt || "",
+                manufacturedAt: pack.manufacturedAt || "",
+              },
+            ];
+          });
+        }
+        return prev.map((p) =>
+          p.key === packKey
+            ? { ...p, ...patch, lotCode: "", expiresAt: "", manufacturedAt: "" }
+            : p,
+        );
+      });
+      return;
+    }
     if (patch.useLots === false) {
       setItems((itemsPrev) =>
         itemsPrev.map((it) =>
@@ -398,6 +480,18 @@ function SupplierOrderForm(
     for (const pack of packs) {
       if (!String(pack.name || "").trim()) {
         toast({ message: "Todas las pacas necesitan un nombre", variant: "warning" });
+        return;
+      }
+      if (
+        !pack.useLots &&
+        pack.manufacturedAt &&
+        pack.expiresAt &&
+        pack.manufacturedAt > pack.expiresAt
+      ) {
+        toast({
+          message: `En la paca «${pack.name}» la elaboración no puede ser posterior al vencimiento`,
+          variant: "warning",
+        });
         return;
       }
     }

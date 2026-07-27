@@ -175,8 +175,8 @@ export default function SupplierOrderItemsBoard({
       </Box>
 
       <Typography variant="caption" color="text.secondary">
-        Arrastrá productos a una paca. Si la paca usa lotes, creá lotes con distinta fecha y soltá
-        ahí. Los que quedan sin paca no generan lote al recibir.
+        Arrastrá productos a una paca. En la paca podés poner vencimiento (y elaboración). Si la
+        paca trae varias fechas, activá «varios lotes» y armá un lote por fecha.
       </Typography>
 
       <DropZone
@@ -236,6 +236,38 @@ export default function SupplierOrderItemsBoard({
                   </IconButton>
                 </Tooltip>
               </Box>
+
+              {!pack.useLots && (
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mb: 0.75 }}>
+                  <TextField
+                    size="small"
+                    label="Código lote"
+                    value={pack.lotCode || ""}
+                    onChange={(e) => onUpdatePack(pack.key, { lotCode: e.target.value })}
+                    placeholder="Opcional"
+                    sx={{ width: 120 }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Vencimiento"
+                    type="date"
+                    InputLabelProps={{ shrink: true }}
+                    value={pack.expiresAt || ""}
+                    onChange={(e) => onUpdatePack(pack.key, { expiresAt: e.target.value })}
+                    sx={{ width: 150 }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Elaboración"
+                    type="date"
+                    InputLabelProps={{ shrink: true }}
+                    value={pack.manufacturedAt || ""}
+                    onChange={(e) => onUpdatePack(pack.key, { manufacturedAt: e.target.value })}
+                    sx={{ width: 150 }}
+                  />
+                </Box>
+              )}
+
               <FormControlLabel
                 control={
                   <Checkbox
@@ -244,7 +276,7 @@ export default function SupplierOrderItemsBoard({
                     onChange={(e) => onUpdatePack(pack.key, { useLots: e.target.checked })}
                   />
                 }
-                label="Esta paca usa lotes / vencimientos"
+                label="Esta paca tiene varios lotes (fechas distintas)"
               />
             </Box>
 
@@ -257,7 +289,8 @@ export default function SupplierOrderItemsBoard({
                   sx={{ bgcolor: "background.paper" }}
                 >
                   <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                    Productos de la paca (sin lote)
+                    Productos de la paca
+                    {pack.expiresAt ? ` · vence ${pack.expiresAt}` : " · sin vencimiento aún"}
                   </Typography>
                   {items
                     .filter((it) => it.packKey === pack.key)
