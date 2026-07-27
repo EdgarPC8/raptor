@@ -87,8 +87,16 @@ function hydratePacksAndLots(rawItems) {
   const lotBySig = new Map();
   const packSigs = new Map(); // packKey -> Set of date signatures
 
+  const effectivePackKey = (item) => {
+    if (item.packKey) return String(item.packKey);
+    // Pedidos viejos / sin packKey: agrupar por nombre de paca.
+    const name = String(item.packName || "").trim();
+    if (name) return `name_${name}`;
+    return null;
+  };
+
   for (const item of rawItems) {
-    const packKey = item.packKey || null;
+    const packKey = effectivePackKey(item);
     if (!packKey) continue;
     const hasLot = Boolean(item.expiresAt || item.lotCode || item.manufacturedAt);
     const sig = hasLot
@@ -126,7 +134,7 @@ function hydratePacksAndLots(rawItems) {
 
   const items = rawItems.map((item) => {
     const lineId = newKey("line");
-    const packKey = item.packKey || null;
+    const packKey = effectivePackKey(item);
     const pack = packKey ? packByKey.get(packKey) : null;
     let lotKey = null;
 
@@ -167,7 +175,7 @@ function resolveItemLotFields(item, packs, lots) {
   const lot = item.lotKey ? lots.find((l) => l.key === item.lotKey) : null;
   if (lot) {
     return {
-      packKey: pack?.key || lot.packKey || null,
+      packKey: pack?.key || lot.packKey || item.packKey || null,
       packName: pack?.name?.trim() || null,
       lotCode: lot?.code?.trim() || null,
       expiresAt: lot?.expiresAt || null,
@@ -177,7 +185,7 @@ function resolveItemLotFields(item, packs, lots) {
   // Paca simple: un solo vencimiento para todos los productos de la paca.
   if (pack && !pack.useLots) {
     return {
-      packKey: pack.key,
+      packKey: pack.key || item.packKey || null,
       packName: pack.name?.trim() || null,
       lotCode: String(pack.lotCode || "").trim() || null,
       expiresAt: pack.expiresAt || null,
@@ -185,7 +193,7 @@ function resolveItemLotFields(item, packs, lots) {
     };
   }
   return {
-    packKey: pack?.key || null,
+    packKey: pack?.key || item.packKey || null,
     packName: pack?.name?.trim() || null,
     lotCode: null,
     expiresAt: null,
@@ -372,6 +380,18 @@ function SupplierOrderForm(
         manufacturedAt: "",
       },
     ]);
+    // Si hay productos sueltos, entran a la paca nueva (así se guardan al editar).
+    setItems((prev) => {
+      const free = prev.filter((it) => !it.packKey);
+      if (free.length === 0) return prev;
+      return prev.map((it) =>
+        !it.packKey ? { ...it, packKey: key, lotKey: null } : it,
+      );
+    });
+    toast({
+      message: "Paca creada. Los productos sueltos quedaron dentro; podés arrastrarlos si hace falta.",
+      variant: "info",
+    });
   };
 
   const updatePack = (packKey, patch) => {
@@ -480,6 +500,14 @@ function SupplierOrderForm(
     for (const pack of packs) {
       if (!String(pack.name || "").trim()) {
         toast({ message: "Todas las pacas necesitan un nombre", variant: "warning" });
+        return;
+      }
+      const inPack = items.some((it) => it.packKey === pack.key);
+      if (!inPack) {
+        toast({
+          message: `La paca «${pack.name || "sin nombre"}» no tiene productos. Arrastrá ítems o eliminá la paca.`,
+          variant: "warning",
+        });
         return;
       }
       if (

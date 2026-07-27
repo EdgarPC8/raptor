@@ -175,8 +175,8 @@ export default function SupplierOrderItemsBoard({
       </Box>
 
       <Typography variant="caption" color="text.secondary">
-        Arrastrá productos a una paca. En la paca podés poner vencimiento (y elaboración). Si la
-        paca trae varias fechas, activá «varios lotes» y armá un lote por fecha.
+        Creá una paca (los productos sueltos entran solos), poné vencimiento/elaboración en la paca.
+        Si hay varias fechas, activá «varios lotes» y arrastrá por lote.
       </Typography>
 
       <DropZone
