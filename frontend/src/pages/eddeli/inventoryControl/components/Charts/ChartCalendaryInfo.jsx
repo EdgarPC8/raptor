@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -208,6 +208,39 @@ export default function ChartCalendaryInfo({
   const [periodGranularity, setPeriodGranularity] = useState('day');
   const [periodLabel, setPeriodLabel] = useState(null);
 
+  /** Cache por clave yyyy-MM: evita re-pedir meses ya vistos. */
+  const monthCacheRef = useRef(new Map());
+
+  const monthKeyOf = useCallback((date) => format(date, 'yyyy-MM'), []);
+
+  const emptyMonthPayload = useCallback(
+    () => ({
+      days: {},
+      totals: { orders: 0, posSales: 0, posIncome: 0, collected: 0, expenses: 0 },
+    }),
+    []
+  );
+
+  const fetchMonthSummary = useCallback(async (year, month) => {
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const cached = monthCacheRef.current.get(key);
+    if (cached) return cached;
+
+    const { data } = await getCalendarMonthSummaryRequest(year, month);
+    const payload = {
+      days: data?.days ?? {},
+      totals: data?.totals ?? {
+        orders: 0,
+        posSales: 0,
+        posIncome: 0,
+        collected: 0,
+        expenses: 0,
+      },
+    };
+    monthCacheRef.current.set(key, payload);
+    return payload;
+  }, []);
+
   const chartColors = useMemo(() => {
     const p = theme.palette;
     const s = getChartSeriesColors(theme);
@@ -256,31 +289,42 @@ export default function ChartCalendaryInfo({
 
   useEffect(() => {
     let cancelled = false;
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    const key = monthKeyOf(currentDate);
+    const prevDate = addMonths(startOfMonth(currentDate), -1);
+
     const loadMonth = async () => {
-      setMonthLoading(true);
+      const cached = monthCacheRef.current.get(key);
+      if (cached) {
+        setMonthData(cached);
+        setMonthLoading(false);
+      } else {
+        setMonthLoading(true);
+      }
+
       try {
-        const { data } = await getCalendarMonthSummaryRequest(
-          currentDate.getFullYear(),
-          currentDate.getMonth() + 1
-        );
+        const currentPayload = await fetchMonthSummary(year, month);
         if (!cancelled) {
-          setMonthData({
-            days: data?.days ?? {},
-            totals: data?.totals ?? { orders: 0, posSales: 0, posIncome: 0, collected: 0, expenses: 0 },
-          });
+          setMonthData(currentPayload);
+          setMonthLoading(false);
         }
+        // Prefetch mes anterior en segundo plano (no compite con el mes visible).
+        fetchMonthSummary(prevDate.getFullYear(), prevDate.getMonth() + 1).catch(() => null);
       } catch (err) {
         console.error('Error calendario mes:', err);
         if (!cancelled) {
-          setMonthData({ days: {}, totals: { orders: 0, posSales: 0, collected: 0, expenses: 0 } });
+          setMonthData(emptyMonthPayload());
+          setMonthLoading(false);
         }
-      } finally {
-        if (!cancelled) setMonthLoading(false);
       }
     };
+
     loadMonth();
-    return () => { cancelled = true; };
-  }, [currentDate]);
+    return () => {
+      cancelled = true;
+    };
+  }, [currentDate, fetchMonthSummary, monthKeyOf, emptyMonthPayload]);
 
   const handleDayClick = useCallback(async (date) => {
     setSelectedDay(date);

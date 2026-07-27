@@ -85,7 +85,19 @@ npm run build:app -- <mode>
 
 No existe `build:eddeli:production`: **`build:eddeli` ya es el build de producción**.
 
-Tras el build de EdDeli, commit/push en el repo **eddeli** (`index.html` + `assets/`) y en el servidor:
+### Compilar y subir a Git (local)
+
+Desde `raptor/frontend`, un solo comando compila EdDeli, copia el build al
+repo `eddeli` y hace commit + push en **eddeli** y en **raptor** (si hay
+cambios). Lo que va entre comillas es el mensaje de commit:
+
+```bash
+cd raptor/frontend
+npm run git-push-eddeli -- "v1.0.01"
+# o: npm run git-push-eddeli -- "barra de abono + insumos"
+```
+
+En el servidor (después del push):
 
 ```bash
 cd /ruta/a/eddeli

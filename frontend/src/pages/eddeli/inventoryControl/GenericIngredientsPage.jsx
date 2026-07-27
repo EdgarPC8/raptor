@@ -8,9 +8,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   Grid,
   IconButton,
-  MenuItem,
+  InputAdornment,
+  List,
+  ListItemButton,
+  ListItemText,
   Paper,
   Stack,
   TextField,
@@ -24,24 +28,53 @@ import ScienceIcon from "@mui/icons-material/Science";
 import LinkIcon from "@mui/icons-material/Link";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
 import AddIcon from "@mui/icons-material/Add";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import EditIcon from "@mui/icons-material/Edit";
 import InventoryIcon from "@mui/icons-material/Inventory";
+import SearchIcon from "@mui/icons-material/Search";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
+import ShoppingBagIcon from "@mui/icons-material/ShoppingBag";
+import CloseIcon from "@mui/icons-material/Close";
 import {
-  bootstrapGenericIngredientsRequest,
-  createGenericIngredientRequest,
-  createPresentationRequest,
+  getAllProductsAll,
   getGenericIngredientsWorkbench,
-  getUnits,
   linkPresentationRequest,
   unlinkPresentationRequest,
 } from "../../../api/inventoryControlRequest.js";
 import { useAuth } from "../../../context/AuthContext.jsx";
 import { runMutationReload } from "../../../utils/mutationToast.js";
+import ProductForm from "./components/ProductForm.jsx";
 
 function formatStock(row) {
-  if (row.isCountUnit) return `${row.stock} ${row.unitAbbrev}`;
   return `${row.stock} ${row.unitAbbrev}`;
+}
+
+function RecipeChips({ count = 0, names = [], size = "small" }) {
+  if (!count) {
+    return (
+      <Chip
+        size={size}
+        variant="outlined"
+        color="default"
+        icon={<MenuBookIcon />}
+        label="Sin recetas"
+      />
+    );
+  }
+  const tip =
+    names.length > 0
+      ? `En recetas: ${names.slice(0, 8).join(", ")}${names.length > 8 ? "…" : ""}`
+      : `${count} línea(s) de receta`;
+  return (
+    <Tooltip title={tip}>
+      <Chip
+        size={size}
+        color="info"
+        variant="outlined"
+        icon={<MenuBookIcon />}
+        label={`En ${count} receta${count === 1 ? "" : "s"}`}
+      />
+    </Tooltip>
+  );
 }
 
 export default function GenericIngredientsPage() {
@@ -50,38 +83,56 @@ export default function GenericIngredientsPage() {
   const [loading, setLoading] = useState(true);
   const [generics, setGenerics] = useState([]);
   const [unlinked, setUnlinked] = useState([]);
-  const [units, setUnits] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
+  const [listFilter, setListFilter] = useState("");
 
-  const [openGeneric, setOpenGeneric] = useState(false);
-  const [openPresentation, setOpenPresentation] = useState(false);
   const [openLink, setOpenLink] = useState(false);
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [loadingEdit, setLoadingEdit] = useState(false);
 
-  const [genericForm, setGenericForm] = useState({ name: "", unitId: "", categoryFamily: "" });
-  const [presentationForm, setPresentationForm] = useState({
-    name: "",
-    purchasePresentation: "",
-    unitId: "",
-    stock: "",
-    price: "",
-  });
+  const [linkNote, setLinkNote] = useState("");
   const [linkProductId, setLinkProductId] = useState("");
+  const [linkSearch, setLinkSearch] = useState("");
 
   const selected = useMemo(
     () => generics.find((g) => g.id === selectedId) ?? null,
     [generics, selectedId]
   );
 
+  const filteredGenerics = useMemo(() => {
+    const q = listFilter.trim().toLowerCase();
+    if (!q) return generics;
+    return generics.filter(
+      (g) =>
+        g.name.toLowerCase().includes(q) ||
+        String(g.categoryName || "")
+          .toLowerCase()
+          .includes(q)
+    );
+  }, [generics, listFilter]);
+
+  const linkCandidates = useMemo(() => {
+    const q = linkSearch.trim().toLowerCase();
+    const list = [...unlinked].sort((a, b) => {
+      const ra = Number(a.recipeLines || 0);
+      const rb = Number(b.recipeLines || 0);
+      if (rb !== ra) return rb - ra;
+      return String(a.name).localeCompare(String(b.name), "es");
+    });
+    if (!q) return list;
+    return list.filter((p) => {
+      const hay = `${p.name} ${p.categoryName || ""} ${p.unitAbbrev || ""} ${(p.inRecipes || []).join(" ")}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [unlinked, linkSearch]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [wb, unitsRes] = await Promise.all([
-        getGenericIngredientsWorkbench(),
-        getUnits(),
-      ]);
+      const wb = await getGenericIngredientsWorkbench();
       setGenerics(wb.data?.generics ?? []);
       setUnlinked(wb.data?.unlinkedProducts ?? []);
-      setUnits(unitsRes.data ?? []);
       setSelectedId((prev) => {
         const list = wb.data?.generics ?? [];
         if (prev && list.some((g) => g.id === prev)) return prev;
@@ -99,48 +150,54 @@ export default function GenericIngredientsPage() {
     load();
   }, [load]);
 
-  const runBootstrap = async () => {
-    await runMutationReload(toast, {
-      promise: bootstrapGenericIngredientsRequest(),
-      reload: load,
-      successMessage: "Presentaciones listas (azúcar, harina, aceite)",
-    });
+  const openLinkModal = (preselectId = "") => {
+    setLinkProductId(preselectId ? String(preselectId) : "");
+    setLinkSearch("");
+    setLinkNote("");
+    setOpenLink(true);
   };
 
-  const saveGeneric = async () => {
-    if (!genericForm.name.trim() || !genericForm.unitId) return;
-    await runMutationReload(toast, {
-      promise: createGenericIngredientRequest({
-        name: genericForm.name.trim(),
-        unitId: Number(genericForm.unitId),
-        categoryFamily: genericForm.categoryFamily.trim() || genericForm.name.trim(),
-      }),
-      reload: () => {
-        load();
-        setOpenGeneric(false);
-        setGenericForm({ name: "", unitId: "", categoryFamily: "" });
-      },
-      successMessage: "Insumo genérico creado",
-    });
+  const openCreateProduct = () => {
+    setEditingProduct(null);
+    setProductDialogOpen(true);
   };
 
-  const savePresentation = async () => {
-    if (!selected || !presentationForm.name.trim()) return;
-    await runMutationReload(toast, {
-      promise: createPresentationRequest(selected.id, {
-        name: presentationForm.name.trim(),
-        purchasePresentation: presentationForm.purchasePresentation.trim() || null,
-        unitId: presentationForm.unitId ? Number(presentationForm.unitId) : selected.unitId,
-        stock: presentationForm.stock !== "" ? Number(presentationForm.stock) : 0,
-        price: presentationForm.price !== "" ? Number(presentationForm.price) : 0,
-      }),
-      reload: () => {
-        load();
-        setOpenPresentation(false);
-        setPresentationForm({ name: "", purchasePresentation: "", unitId: "", stock: "", price: "" });
-      },
-      successMessage: "Presentación creada y enlazada",
-    });
+  const closeProductDialog = () => {
+    setProductDialogOpen(false);
+    setEditingProduct(null);
+  };
+
+  const openEditProduct = async (productId) => {
+    if (!productId) return;
+    setLoadingEdit(true);
+    try {
+      const { data } = await getAllProductsAll();
+      const list = Array.isArray(data) ? data : [];
+      const full = list.find((p) => Number(p.id) === Number(productId));
+      if (!full) {
+        toast?.({ message: "No se encontró el producto para editar", variant: "error" });
+        return;
+      }
+      setEditingProduct(full);
+      setProductDialogOpen(true);
+    } catch (e) {
+      console.error(e);
+      toast?.({ message: "No se pudo cargar el producto", variant: "error" });
+    } finally {
+      setLoadingEdit(false);
+    }
+  };
+
+  const handleProductSaved = async () => {
+    const wasEdit = Boolean(editingProduct);
+    closeProductDialog();
+    await load();
+    if (!wasEdit) {
+      toast?.({
+        message: "Si es tipo final, usa Enlazar para asociarlo al genérico.",
+        variant: "info",
+      });
+    }
   };
 
   const linkExisting = async () => {
@@ -148,15 +205,16 @@ export default function GenericIngredientsPage() {
     await runMutationReload(toast, {
       promise: linkPresentationRequest(linkProductId, {
         genericProductId: selected.id,
-        purchasePresentation: presentationForm.purchasePresentation.trim() || null,
+        purchasePresentation: linkNote.trim() || null,
       }),
       reload: () => {
         load();
         setOpenLink(false);
         setLinkProductId("");
-        setPresentationForm({ name: "", purchasePresentation: "", unitId: "", stock: "", price: "" });
+        setLinkSearch("");
+        setLinkNote("");
       },
-      successMessage: "Producto enlazado al insumo genérico",
+      successMessage: "Producto final enlazado al genérico",
     });
   };
 
@@ -169,93 +227,98 @@ export default function GenericIngredientsPage() {
   };
 
   const accent = theme.palette.primary.main;
+  const selectedLink = unlinked.find((p) => String(p.id) === String(linkProductId));
 
   return (
     <Container maxWidth="xl" sx={{ py: 2 }}>
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        justifyContent="space-between"
-        alignItems={{ xs: "stretch", md: "flex-start" }}
-        spacing={2}
-        mb={2}
-      >
-        <Box>
-          <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
-            <ScienceIcon color="primary" />
-            <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              Insumos y presentaciones
-            </Typography>
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 640 }}>
-            Los <strong>insumos genéricos</strong> usan las recetas (Harina, Aceite…). Las{" "}
-            <strong>presentaciones</strong> son formatos de compra (quintal, arroba, funda 900ml) con
-            stock real — sin marca en el nombre. Bajo <strong>Azúcar</strong>: quintal y arroba;{" "}
-            <strong>Azúcar impalpable</strong> es otro insumo aparte.
+      <Stack spacing={1} mb={2}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <ScienceIcon color="primary" />
+          <Typography variant="h5" sx={{ fontWeight: 800 }}>
+            Insumos y presentaciones
           </Typography>
-        </Box>
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          <Button startIcon={<RefreshIcon />} variant="outlined" onClick={load} disabled={loading}>
-            Actualizar
-          </Button>
-          <Button
-            startIcon={<AutoFixHighIcon />}
-            variant="outlined"
-            color="secondary"
-            onClick={runBootstrap}
-            disabled={loading}
-          >
-            Crear presentaciones frecuentes
-          </Button>
-          <Button startIcon={<AddIcon />} variant="contained" onClick={() => setOpenGeneric(true)}>
-            Nuevo insumo
-          </Button>
         </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 720 }}>
+          <strong>Insumo genérico</strong> (tipo insumo) = Harina, lo usan las recetas.{" "}
+          <strong>Empaque</strong> (tipo final) = Quintal de harina.{" "}
+          <strong>Enlazar</strong> los une; en Movimientos → Abrir: baja el quintal y sube la harina.
+        </Typography>
       </Stack>
 
       <Grid container spacing={2}>
         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 1.5, borderRadius: 2, maxHeight: 560, overflow: "auto" }}>
+          <Paper sx={{ p: 1.5, borderRadius: 2, maxHeight: 620, overflow: "auto" }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1, px: 0.5 }}>
               Insumos genéricos ({generics.length})
             </Typography>
+            <TextField
+              size="small"
+              fullWidth
+              placeholder="Buscar insumo…"
+              value={listFilter}
+              onChange={(e) => setListFilter(e.target.value)}
+              sx={{ mb: 1.25 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
             {loading && <ListSkeleton count={5} itemHeight={72} />}
-            {generics.length === 0 && !loading && (
+            {!loading && filteredGenerics.length === 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
-                Sin insumos. Usa &quot;Crear presentaciones frecuentes&quot; o crea uno nuevo.
+                {generics.length === 0
+                  ? "Sin insumos genéricos. Crea un producto tipo insumo en Productos o con «Crear producto»."
+                  : "Ningún insumo coincide con la búsqueda."}
               </Typography>
             )}
             <Stack spacing={0.75}>
               {!loading &&
-                generics.map((g) => {
-                const active = g.id === selectedId;
-                return (
-                  <Paper
-                    key={g.id}
-                    elevation={0}
-                    onClick={() => setSelectedId(g.id)}
-                    sx={{
-                      p: 1.25,
-                      cursor: "pointer",
-                      borderRadius: 1.5,
-                      border: "2px solid",
-                      borderColor: active ? accent : "divider",
-                      bgcolor: active ? alpha(accent, 0.06) : "background.paper",
-                      transition: "border-color 0.15s ease",
-                    }}
-                  >
+                filteredGenerics.map((g) => {
+                  const active = g.id === selectedId;
+                  return (
+                    <Paper
+                      key={g.id}
+                      elevation={0}
+                      onClick={() => setSelectedId(g.id)}
+                      sx={{
+                        p: 1.25,
+                        cursor: "pointer",
+                        borderRadius: 1.5,
+                        border: "2px solid",
+                        borderColor: active ? accent : "divider",
+                        bgcolor: active ? alpha(accent, 0.06) : "background.paper",
+                        transition: "border-color 0.15s ease",
+                      }}
+                    >
                     <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                       {g.name}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block">
-                      Total: {g.totalStockDisplay} · {g.presentationCount} presentación(es)
+                      Stock total: {g.totalStockDisplay} · {g.presentationCount} presentación
+                      {g.presentationCount === 1 ? "" : "es"}
                     </Typography>
-                    <Stack direction="row" spacing={0.5} mt={0.75} flexWrap="wrap" useFlexGap>
-                      <Chip size="small" label={`${g.recipeLines} receta(s)`} variant="outlined" />
+                    <Stack direction="row" spacing={0.5} mt={0.75} flexWrap="wrap" useFlexGap alignItems="center">
+                      <RecipeChips count={g.recipeLines} names={g.inRecipes} />
                       <Chip size="small" label={g.categoryName} />
+                      <Tooltip title="Editar producto">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditProduct(g.id);
+                          }}
+                          disabled={loadingEdit}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </Stack>
-                  </Paper>
-                );
-              })}
+                    </Paper>
+                  );
+                })}
             </Stack>
           </Paper>
         </Grid>
@@ -271,48 +334,77 @@ export default function GenericIngredientsPage() {
                 mb={2}
               >
                 <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
+                      Insumo genérico (tipo insumo)
+                    </Typography>
+                    <Tooltip title="Editar producto">
+                      <IconButton
+                        size="small"
+                        onClick={() => openEditProduct(selected.id)}
+                        disabled={loadingEdit}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                  <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
                     {selected.name}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Stock disponible (todas las presentaciones):{" "}
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Stock disponible (genérico + presentaciones):{" "}
                     <strong>{selected.totalStockDisplay}</strong>
                     {selected.stockOnGeneric > 0 && (
-                      <> · incl. {selected.stockOnGeneric} g en el genérico directo</>
+                      <> · {selected.stockOnGeneric} g en el genérico directo</>
                     )}
                   </Typography>
-                  <Chip
-                    size="small"
-                    sx={{ mt: 1 }}
-                    icon={<InventoryIcon />}
-                    label={`Categoría familia: ${selected.categoryName}`}
-                  />
+                  <Stack direction="row" spacing={0.75} mt={1} flexWrap="wrap" useFlexGap>
+                    <Chip
+                      size="small"
+                      icon={<InventoryIcon />}
+                      label={`Familia: ${selected.categoryName}`}
+                    />
+                    <RecipeChips count={selected.recipeLines} names={selected.inRecipes} />
+                  </Stack>
+                  {selected.inRecipes?.length > 0 && (
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                      Usado en: {selected.inRecipes.slice(0, 6).join(", ")}
+                      {selected.inRecipes.length > 6 ? "…" : ""}
+                    </Typography>
+                  )}
                 </Box>
-                <Stack direction="row" spacing={1}>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                   <Button
                     size="small"
                     variant="outlined"
                     startIcon={<LinkIcon />}
-                    onClick={() => setOpenLink(true)}
+                    onClick={() => openLinkModal()}
+                    disabled={unlinked.length === 0}
                   >
-                    Enlazar producto
+                    Enlazar
                   </Button>
                   <Button
                     size="small"
                     variant="contained"
                     startIcon={<AddIcon />}
-                    onClick={() => {
-                      setPresentationForm((f) => ({ ...f, unitId: selected.unitId }));
-                      setOpenPresentation(true);
-                    }}
+                    onClick={openCreateProduct}
                   >
-                    Nueva presentación
+                    Crear producto
                   </Button>
                 </Stack>
               </Stack>
 
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                Presentaciones / marcas
+              <Divider sx={{ mb: 1.5 }} />
+
+              <Stack direction="row" alignItems="center" spacing={1} mb={1}>
+                <ShoppingBagIcon fontSize="small" color="action" />
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Empaques enlazados — tipo final ({selected.presentations?.length || 0})
+                </Typography>
+              </Stack>
+              <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+                Productos finales (Quintal, Arroba…) enlazados a este genérico. Al abrirlos en
+                Movimientos, baja su stock y sube el del insumo genérico.
               </Typography>
 
               {selected.presentations?.length === 0 ? (
@@ -326,8 +418,8 @@ export default function GenericIngredientsPage() {
                   }}
                 >
                   <Typography variant="body2" color="text.secondary">
-                    Aún no hay presentaciones. Ej. &quot;Quintal de azúcar&quot; y &quot;Arroba de
-                    azúcar&quot; (usa Crear presentaciones frecuentes).
+                    Sin empaques. Crea el producto (tipo final) con «Crear producto» o enlaza uno
+                    que ya exista.
                   </Typography>
                 </Box>
               ) : (
@@ -339,16 +431,27 @@ export default function GenericIngredientsPage() {
                       sx={{ p: 1.5, borderRadius: 1.5, display: "flex", alignItems: "center", gap: 1 }}
                     >
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                          {p.name}
-                        </Typography>
+                        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                            {p.name}
+                          </Typography>
+                          <Chip size="small" label={p.type === "final" ? "Final" : p.type} />
+                        </Stack>
                         <Typography variant="caption" color="text.secondary">
-                          {p.purchasePresentation || "—"} · Categoría: {p.categoryName} · Stock:{" "}
-                          {formatStock(p)}
+                          {p.purchasePresentation || "Sin nota"} · Stock: {formatStock(p)}
                           {!p.isCountUnit && p.stockGrams > 0 && ` (${p.stockGrams} g)`}
                         </Typography>
                       </Box>
-                      <Tooltip title="Quitar enlace">
+                      <Tooltip title="Editar producto">
+                        <IconButton
+                          size="small"
+                          onClick={() => openEditProduct(p.id)}
+                          disabled={loadingEdit}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Quitar enlace (el producto final sigue existiendo)">
                         <IconButton size="small" color="warning" onClick={() => unlink(p.id)}>
                           <LinkOffIcon fontSize="small" />
                         </IconButton>
@@ -360,176 +463,238 @@ export default function GenericIngredientsPage() {
             </Paper>
           ) : (
             <Paper sx={{ p: 4, borderRadius: 2, textAlign: "center" }}>
-              <Typography color="text.secondary">Selecciona un insumo genérico</Typography>
+              <Typography color="text.secondary">Selecciona un insumo genérico a la izquierda</Typography>
             </Paper>
           )}
 
           {unlinked.length > 0 && (
             <Paper sx={{ p: 2, borderRadius: 2, mt: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                Materia prima sin enlazar ({unlinked.length})
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                Productos finales sin enlazar ({unlinked.length})
               </Typography>
               <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
-                Productos de compra que aún no están ligados a un insumo genérico.
+                Tipo <strong>final</strong> (ej. Quintal de harina). Usa <strong>Enlazar</strong> para
+                asociarlos al genérico seleccionado.
               </Typography>
               <Stack direction="row" flexWrap="wrap" gap={0.75}>
-                {unlinked.slice(0, 24).map((p) => (
-                  <Chip
+                {unlinked.slice(0, 40).map((p) => (
+                  <Tooltip
                     key={p.id}
-                    size="small"
-                    label={p.name}
-                    variant="outlined"
-                    onClick={() => {
-                      if (selected) {
-                        setLinkProductId(String(p.id));
-                        setOpenLink(true);
-                      }
-                    }}
-                  />
+                    title={
+                      p.recipeLines
+                        ? `En ${p.recipeLines} receta(s)${
+                            p.inRecipes?.length
+                              ? `: ${p.inRecipes.slice(0, 5).join(", ")}`
+                              : ""
+                          }`
+                        : "Sin recetas"
+                    }
+                  >
+                    <Chip
+                      size="small"
+                      label={p.name}
+                      color={p.recipeLines ? "info" : "default"}
+                      variant={p.recipeLines ? "filled" : "outlined"}
+                      icon={p.recipeLines ? <MenuBookIcon /> : undefined}
+                      onClick={() => {
+                        if (selected) openLinkModal(p.id);
+                      }}
+                      disabled={!selected}
+                    />
+                  </Tooltip>
                 ))}
+                {unlinked.length > 40 && (
+                  <Chip size="small" variant="outlined" label={`+${unlinked.length - 40} más`} />
+                )}
               </Stack>
             </Paper>
           )}
         </Grid>
       </Grid>
 
-      <Dialog open={openGeneric} onClose={() => setOpenGeneric(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Nuevo insumo genérico</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Nombre (recetas)"
-              fullWidth
-              value={genericForm.name}
-              onChange={(e) => setGenericForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Ej: Aceite"
-            />
-            <TextField
-              label="Familia / categoría"
-              fullWidth
-              value={genericForm.categoryFamily}
-              onChange={(e) => setGenericForm((f) => ({ ...f, categoryFamily: e.target.value }))}
-              placeholder="Ej: Aceite (para presentaciones)"
-            />
-            <TextField
-              select
-              label="Unidad base"
-              fullWidth
-              value={genericForm.unitId}
-              onChange={(e) => setGenericForm((f) => ({ ...f, unitId: e.target.value }))}
-            >
-              {units.map((u) => (
-                <MenuItem key={u.id} value={u.id}>
-                  {u.name} ({u.abbreviation})
-                </MenuItem>
-              ))}
-            </TextField>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenGeneric(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={saveGeneric}>
-            Guardar
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={openPresentation} onClose={() => setOpenPresentation(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={openLink}
+        onClose={() => setOpenLink(false)}
+        maxWidth="sm"
+        fullWidth
+        scroll="paper"
+      >
         <DialogTitle>
-          Nueva presentación · {selected?.name}
+          Enlazar producto final a «{selected?.name}»
         </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Nombre completo"
-              fullWidth
-              value={presentationForm.name}
-              onChange={(e) => setPresentationForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Ej: Quintal Harina Pani Plus"
-            />
-            <TextField
-              label="Presentación"
-              fullWidth
-              value={presentationForm.purchasePresentation}
-              onChange={(e) =>
-                setPresentationForm((f) => ({ ...f, purchasePresentation: e.target.value }))
-              }
-              placeholder="Ej: Quintal, Funda 900ml"
-            />
-            <TextField
-              select
-              label="Unidad de compra"
-              fullWidth
-              value={presentationForm.unitId}
-              onChange={(e) => setPresentationForm((f) => ({ ...f, unitId: e.target.value }))}
-            >
-              {units.map((u) => (
-                <MenuItem key={u.id} value={u.id}>
-                  {u.name} ({u.abbreviation})
-                </MenuItem>
-              ))}
-            </TextField>
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <TextField
-                  label="Stock inicial"
-                  type="number"
-                  fullWidth
-                  value={presentationForm.stock}
-                  onChange={(e) => setPresentationForm((f) => ({ ...f, stock: e.target.value }))}
-                />
-              </Grid>
-              <Grid item xs={6}>
-                <TextField
-                  label="Precio ref."
-                  type="number"
-                  fullWidth
-                  value={presentationForm.price}
-                  onChange={(e) => setPresentationForm((f) => ({ ...f, price: e.target.value }))}
-                />
-              </Grid>
-            </Grid>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenPresentation(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={savePresentation}>
-            Crear
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Elige un producto <strong>tipo final</strong> ya creado (Quintal de harina, Quintal de
+            azúcar…). Sigue siendo final; solo se enlaza al genérico para poder abrirlo y pasar
+            stock a «{selected?.name}».
+          </Typography>
 
-      <Dialog open={openLink} onClose={() => setOpenLink(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Enlazar producto a {selected?.name}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              select
-              label="Producto existente"
-              fullWidth
-              value={linkProductId}
-              onChange={(e) => setLinkProductId(e.target.value)}
+          <TextField
+            size="small"
+            fullWidth
+            autoFocus
+            placeholder="Buscar producto final…"
+            value={linkSearch}
+            onChange={(e) => setLinkSearch(e.target.value)}
+            sx={{ mb: 1.5 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
+
+          <Paper
+            variant="outlined"
+            sx={{
+              maxHeight: 320,
+              overflow: "auto",
+              borderRadius: 1.5,
+              mb: 2,
+            }}
+          >
+            {linkCandidates.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
+                {unlinked.length === 0
+                  ? "No hay productos finales sin enlazar. Créalos con «Crear producto» (tipo final) o en Productos."
+                  : "Ningún producto coincide con la búsqueda."}
+              </Typography>
+            ) : (
+              <List disablePadding dense>
+                {linkCandidates.map((p) => {
+                  const active = String(p.id) === String(linkProductId);
+                  return (
+                    <ListItemButton
+                      key={p.id}
+                      selected={active}
+                      onClick={() => setLinkProductId(String(p.id))}
+                      sx={{ alignItems: "flex-start", py: 1 }}
+                    >
+                      <ListItemText
+                        primary={
+                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                              {p.name}
+                            </Typography>
+                            <Chip size="small" label="Final" />
+                          </Stack>
+                        }
+                        secondary={`Stock ${formatStock(p)} · ${p.categoryName}`}
+                      />
+                    </ListItemButton>
+                  );
+                })}
+              </List>
+            )}
+          </Paper>
+
+          {selectedLink && (
+            <Box
+              sx={{
+                mb: 2,
+                p: 1.25,
+                borderRadius: 1.5,
+                bgcolor: alpha(accent, 0.06),
+                border: "1px solid",
+                borderColor: alpha(accent, 0.25),
+              }}
             >
-              {unlinked.map((p) => (
-                <MenuItem key={p.id} value={p.id}>
-                  {p.name} (stock: {formatStock(p)})
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              label="Nota de presentación"
-              fullWidth
-              value={presentationForm.purchasePresentation}
-              onChange={(e) =>
-                setPresentationForm((f) => ({ ...f, purchasePresentation: e.target.value }))
-              }
-            />
-          </Stack>
+              <Typography variant="caption" color="text.secondary">
+                Seleccionado
+              </Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                {selectedLink.name}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                Al abrir este empaque en Movimientos: −1 {selectedLink.unitAbbrev} aquí y +stock en
+                «{selected?.name}».
+              </Typography>
+            </Box>
+          )}
+
+          <TextField
+            label="Nota (opcional)"
+            fullWidth
+            value={linkNote}
+            onChange={(e) => setLinkNote(e.target.value)}
+            placeholder="Ej: Quintal, Arroba"
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenLink(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={linkExisting}>
+          <Button
+            variant="contained"
+            startIcon={<LinkIcon />}
+            onClick={linkExisting}
+            disabled={!linkProductId}
+          >
             Enlazar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={productDialogOpen}
+        onClose={closeProductDialog}
+        fullWidth
+        maxWidth="lg"
+        scroll="paper"
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 2,
+            pt: 1,
+          }}
+        >
+          <DialogTitle sx={{ p: 0, fontWeight: 700, fontSize: "1.05rem" }}>
+            {editingProduct ? "Editar producto" : "Crear producto"}
+          </DialogTitle>
+          <IconButton
+            aria-label="Cerrar"
+            onClick={closeProductDialog}
+            size="small"
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        <DialogContent dividers>
+          {!editingProduct && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              Usa el mismo formulario de Productos. El tipo por defecto es <strong>final</strong>;
+              cámbialo a insumo si corresponde. Si es final, después usa <strong>Enlazar</strong>.
+            </Typography>
+          )}
+          <ProductForm
+            key={
+              productDialogOpen
+                ? editingProduct
+                  ? `edit-${editingProduct.id}`
+                  : "new-product"
+                : "closed"
+            }
+            isEditing={Boolean(editingProduct)}
+            datos={editingProduct || {}}
+            onClose={closeProductDialog}
+            reload={handleProductSaved}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1, borderTop: 1, borderColor: "divider" }}>
+          <Button type="button" onClick={closeProductDialog} color="inherit">
+            Cancelar
+          </Button>
+          <Box sx={{ flex: 1 }} />
+          <Button
+            type="submit"
+            form="eddeli-product-form"
+            variant="contained"
+            sx={{ minWidth: 160 }}
+          >
+            Guardar
           </Button>
         </DialogActions>
       </Dialog>

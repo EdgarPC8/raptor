@@ -10,16 +10,11 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Checkbox,
-  FormControlLabel,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
-import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import AddBoxIcon from "@mui/icons-material/AddBox";
 import AddBusinessIcon from "@mui/icons-material/AddBusiness";
 import CloseIcon from "@mui/icons-material/Close";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { useForm } from "react-hook-form";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
@@ -38,6 +33,7 @@ import ProductPriceReference, {
   formatOrderLineTotal,
   formatProductPrice,
 } from "./ProductPriceReference";
+import SupplierOrderItemsBoard, { ZONE } from "./SupplierOrderItemsBoard.jsx";
 import { uploadSupplierOrderVoucher } from "../../../../api/documentRequest.js";
 import { useBarcodeScanner } from "../../../../hooks/useBarcodeScanner.js";
 import {
@@ -46,6 +42,9 @@ import {
 } from "../../../../utils/productLookup.js";
 
 const pad2 = (n) => String(n).padStart(2, "0");
+
+const newKey = (prefix) =>
+  `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
 const localISODate = () => {
   const d = new Date();
@@ -78,6 +77,77 @@ const normalizeToYYYYMMDD = (datos) => {
   return localISODate();
 };
 
+const dateOnly = (v) => (v ? String(v).slice(0, 10) : "");
+
+/** Reconstruye packs/lots a partir de ítems guardados (edición). */
+function hydratePacksAndLots(rawItems) {
+  const packs = [];
+  const lots = [];
+  const packByKey = new Map();
+  const lotBySig = new Map();
+
+  const items = rawItems.map((item) => {
+    const lineId = newKey("line");
+    const packKey = item.packKey || null;
+    const hasLot = Boolean(item.expiresAt || item.lotCode);
+
+    if (packKey && !packByKey.has(packKey)) {
+      const pack = {
+        key: packKey,
+        name: item.packName || "Paca",
+        useLots: hasLot,
+      };
+      packByKey.set(packKey, pack);
+      packs.push(pack);
+    } else if (packKey && hasLot) {
+      packByKey.get(packKey).useLots = true;
+    }
+
+    let lotKey = null;
+    if (packKey && hasLot) {
+      const sig = `${packKey}|${item.lotCode || ""}|${dateOnly(item.expiresAt)}|${dateOnly(item.manufacturedAt)}`;
+      if (!lotBySig.has(sig)) {
+        const lot = {
+          key: newKey("lot"),
+          packKey,
+          code: item.lotCode || "",
+          expiresAt: dateOnly(item.expiresAt),
+          manufacturedAt: dateOnly(item.manufacturedAt),
+        };
+        lotBySig.set(sig, lot);
+        lots.push(lot);
+      }
+      lotKey = lotBySig.get(sig).key;
+    }
+
+    return {
+      lineId,
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      hasIva: Number(item.taxRate) > 0,
+      name: item.ERP_inventory_product?.name || item.name || "",
+      unitLabel: getProductUnitLabel(item.ERP_inventory_product),
+      packKey: packKey || null,
+      lotKey,
+    };
+  });
+
+  return { items, packs, lots };
+}
+
+function resolveItemLotFields(item, packs, lots) {
+  const pack = item.packKey ? packs.find((p) => p.key === item.packKey) : null;
+  const lot = item.lotKey ? lots.find((l) => l.key === item.lotKey) : null;
+  return {
+    packKey: pack?.key || null,
+    packName: pack?.name?.trim() || null,
+    lotCode: lot?.code?.trim() || null,
+    expiresAt: lot?.expiresAt || null,
+    manufacturedAt: lot?.manufacturedAt || null,
+  };
+}
+
 function SupplierOrderForm(
   {
     onClose,
@@ -95,6 +165,8 @@ function SupplierOrderForm(
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [items, setItems] = useState([]);
+  const [packs, setPacks] = useState([]);
+  const [lots, setLots] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState("");
   const [pendingVoucherFile, setPendingVoucherFile] = useState(null);
@@ -102,7 +174,12 @@ function SupplierOrderForm(
   const [supplierDialogOpen, setSupplierDialogOpen] = useState(false);
   const [ivaRate, setIvaRate] = useState(15);
   const tourGenRef = useRef(0);
+  const lotsRef = useRef([]);
   const { toast } = useAuth();
+
+  useEffect(() => {
+    lotsRef.current = lots;
+  }, [lots]);
 
   const selectedProductId = watch("productId");
   const watchQuantity = watch("quantity");
@@ -177,12 +254,15 @@ function SupplierOrderForm(
     setItems((prev) => [
       ...prev,
       {
+        lineId: newKey("line"),
         productId,
         quantity,
         unitPrice,
         hasIva: productIva > 0,
         name: product?.name || "",
         unitLabel: getProductUnitLabel(product),
+        packKey: null,
+        lotKey: null,
       },
     ]);
     setValue("productId", "");
@@ -191,34 +271,103 @@ function SupplierOrderForm(
     setValue("unitPrice", "");
   };
 
-  const removeItem = (index) => {
-    setItems((prev) => prev.filter((_, i) => i !== index));
+  const removeItem = (lineId) => {
+    setItems((prev) => prev.filter((it) => it.lineId !== lineId));
   };
 
-  const moveItem = (index, direction) => {
-    setItems((prev) => {
-      const target = index + direction;
-      if (target < 0 || target >= prev.length) return prev;
-      const next = [...prev];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
-  };
-
-  const updateItemField = (index, field, rawValue) => {
+  const updateItemField = (lineId, field, rawValue) => {
     setItems((prev) =>
-      prev.map((it, i) => {
-        if (i !== index) return it;
+      prev.map((it) => {
+        if (it.lineId !== lineId) return it;
         const value = rawValue === "" ? "" : Number(rawValue);
         return { ...it, [field]: value };
       }),
     );
   };
 
-  const toggleItemIva = (index, checked) => {
+  const toggleItemIva = (lineId, checked) => {
     setItems((prev) =>
-      prev.map((it, i) => (i === index ? { ...it, hasIva: checked } : it)),
+      prev.map((it) => (it.lineId === lineId ? { ...it, hasIva: checked } : it)),
     );
+  };
+
+  const handleDropItem = (lineId, zoneType, zoneKey) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.lineId !== lineId) return it;
+        if (zoneType === ZONE.FREE) {
+          return { ...it, packKey: null, lotKey: null };
+        }
+        if (zoneType === ZONE.PACK) {
+          return { ...it, packKey: zoneKey, lotKey: null };
+        }
+        if (zoneType === ZONE.LOT) {
+          const lot = lotsRef.current.find((l) => l.key === zoneKey);
+          return {
+            ...it,
+            packKey: lot?.packKey || it.packKey,
+            lotKey: zoneKey,
+          };
+        }
+        return it;
+      }),
+    );
+  };
+
+  const createPack = () => {
+    const key = newKey("pack");
+    setPacks((prev) => [...prev, { key, name: `Paca ${prev.length + 1}`, useLots: false }]);
+  };
+
+  const updatePack = (packKey, patch) => {
+    if (patch.useLots === false) {
+      setItems((itemsPrev) =>
+        itemsPrev.map((it) =>
+          it.packKey === packKey ? { ...it, lotKey: null } : it,
+        ),
+      );
+      setLots((lotsPrev) => lotsPrev.filter((l) => l.packKey !== packKey));
+    }
+    setPacks((prev) =>
+      prev.map((p) => (p.key === packKey ? { ...p, ...patch } : p)),
+    );
+  };
+
+  const removePack = (packKey) => {
+    setItems((prev) =>
+      prev.map((it) =>
+        it.packKey === packKey ? { ...it, packKey: null, lotKey: null } : it,
+      ),
+    );
+    setLots((prev) => prev.filter((l) => l.packKey !== packKey));
+    setPacks((prev) => prev.filter((p) => p.key !== packKey));
+  };
+
+  const createLot = (packKey) => {
+    setLots((prev) => [
+      ...prev,
+      {
+        key: newKey("lot"),
+        packKey,
+        code: "",
+        expiresAt: "",
+        manufacturedAt: "",
+      },
+    ]);
+    setPacks((prev) =>
+      prev.map((p) => (p.key === packKey ? { ...p, useLots: true } : p)),
+    );
+  };
+
+  const updateLot = (lotKey, patch) => {
+    setLots((prev) => prev.map((l) => (l.key === lotKey ? { ...l, ...patch } : l)));
+  };
+
+  const removeLot = (lotKey) => {
+    setItems((prev) =>
+      prev.map((it) => (it.lotKey === lotKey ? { ...it, lotKey: null } : it)),
+    );
+    setLots((prev) => prev.filter((l) => l.key !== lotKey));
   };
 
   const handleSupplierCreated = async (created) => {
@@ -246,17 +395,40 @@ function SupplierOrderForm(
       return;
     }
 
+    for (const pack of packs) {
+      if (!String(pack.name || "").trim()) {
+        toast({ message: "Todas las pacas necesitan un nombre", variant: "warning" });
+        return;
+      }
+    }
+
+    for (const item of items) {
+      if (!item.lotKey) continue;
+      const lot = lots.find((l) => l.key === item.lotKey);
+      if (!lot?.expiresAt) {
+        toast({
+          message: `El lote de «${item.name}» necesita fecha de vencimiento`,
+          variant: "warning",
+        });
+        return;
+      }
+    }
+
     const localDT = new Date(`${data.date}T12:00:00`);
     const payload = {
       supplierId: Number(selectedSupplier),
       notes: data.notes || null,
       date: toLocalISOWithOffset(localDT),
-      items: items.map((it) => ({
-        productId: it.productId,
-        quantity: Number(it.quantity),
-        unitPrice: Number(it.unitPrice),
-        taxRate: it.hasIva ? Number(ivaRate) || 0 : 0,
-      })),
+      items: items.map((it) => {
+        const lotFields = resolveItemLotFields(it, packs, lots);
+        return {
+          productId: it.productId,
+          quantity: Number(it.quantity),
+          unitPrice: Number(it.unitPrice),
+          taxRate: it.hasIva ? Number(ivaRate) || 0 : 0,
+          ...lotFields,
+        };
+      }),
     };
 
     const voucherFile = pendingVoucherFile;
@@ -298,6 +470,8 @@ function SupplierOrderForm(
       }
       reset();
       setItems([]);
+      setPacks([]);
+      setLots([]);
       setPendingVoucherFile(null);
       if (reload) await reload();
       if (onClose) await onClose();
@@ -313,15 +487,10 @@ function SupplierOrderForm(
       setSelectedSupplier(String(datos.supplierId || ""));
       setValue("notes", datos.notes || "");
       setValue("date", normalizeToYYYYMMDD(datos));
-      const loaded = (datos.ERP_supplier_order_items || []).map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        hasIva: Number(item.taxRate) > 0,
-        name: item.ERP_inventory_product?.name || "",
-        unitLabel: getProductUnitLabel(item.ERP_inventory_product),
-      }));
-      setItems(loaded);
+      const hydrated = hydratePacksAndLots(datos.ERP_supplier_order_items || []);
+      setItems(hydrated.items);
+      setPacks(hydrated.packs);
+      setLots(hydrated.lots);
       const firstIva = (datos.ERP_supplier_order_items || []).find(
         (item) => Number(item.taxRate) > 0,
       );
@@ -330,6 +499,8 @@ function SupplierOrderForm(
     }
 
     setItems([]);
+    setPacks([]);
+    setLots([]);
     setPendingVoucherFile(null);
     setValue("notes", "");
     setValue("date", prefillDate || localISODate());
@@ -362,6 +533,8 @@ function SupplierOrderForm(
         setSelectedSupplier(String(supplier.id));
       }
       setItems([]);
+      setPacks([]);
+      setLots([]);
       const picks = [
         products.find((p) => Number(p.id) === 101),
         products.find((p) => Number(p.id) === 201),
@@ -381,12 +554,15 @@ function SupplierOrderForm(
         setItems((prev) => [
           ...prev,
           {
+            lineId: newKey("line"),
             productId: p.id,
             quantity: qty,
             unitPrice,
             hasIva: Number(p?.taxRate) > 0,
             name: p.name,
             unitLabel: getProductUnitLabel(p),
+            packKey: null,
+            lotKey: null,
             _tourDemo: true,
           },
         ]);
@@ -413,8 +589,7 @@ function SupplierOrderForm(
       onSubmit={handleSubmit(submitOrder)}
     >
       <Grid container spacing={3}>
-        {/* Columna izquierda: entradas */}
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} md={5}>
           <Grid container spacing={2}>
             <Grid item xs={12} data-tour="pedido-prov-supplier">
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -514,7 +689,7 @@ function SupplierOrderForm(
               />
             </Grid>
             <Grid item xs={12} sx={{ display: "flex", justifyContent: "flex-start" }}>
-              <Tooltip title="Agregar producto">
+              <Tooltip title="Agregar a la lista (sin paca)">
                 <IconButton
                   color="primary"
                   onClick={addItem}
@@ -523,6 +698,9 @@ function SupplierOrderForm(
                   <AddIcon />
                 </IconButton>
               </Tooltip>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 1, alignSelf: "center" }}>
+                Se agrega sin paca; después lo arrastrás si hace falta
+              </Typography>
             </Grid>
 
             <Grid item xs={12}>
@@ -556,8 +734,7 @@ function SupplierOrderForm(
           </Grid>
         </Grid>
 
-        {/* Columna derecha: lista de productos */}
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} md={7}>
           <Box
             data-tour="pedido-prov-items"
             sx={{
@@ -570,135 +747,26 @@ function SupplierOrderForm(
               flexDirection: "column",
               gap: 1,
               bgcolor: "background.default",
+              maxHeight: { md: "70vh" },
+              overflow: "auto",
             }}
           >
-            <Typography variant="subtitle2" fontWeight={700}>
-              Productos del pedido ({items.length})
-            </Typography>
-
-            {items.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                Aún no has agregado productos. Selecciona un producto, cantidad y precio, y presiona el
-                botón +.
-              </Typography>
-            ) : (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-                {items.map((item, index) => (
-                  <Box
-                    key={`${item.productId}-${index}`}
-                    sx={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      columnGap: 0.75,
-                      rowGap: 0.25,
-                      border: 1,
-                      borderColor: "divider",
-                      borderRadius: 1,
-                      px: 0.75,
-                      py: 0.5,
-                      bgcolor: "background.paper",
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        flex: "1 1 100%",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 0.25,
-                      }}
-                    >
-                      <Typography
-                        variant="caption"
-                        fontWeight={600}
-                        sx={{ flex: 1, lineHeight: 1.2 }}
-                      >
-                        {index + 1}. {item.name}
-                      </Typography>
-                      <Tooltip title="Subir">
-                        <span>
-                          <IconButton
-                            size="small"
-                            sx={{ p: 0.25 }}
-                            onClick={() => moveItem(index, -1)}
-                            disabled={index === 0}
-                          >
-                            <ArrowUpwardIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip title="Bajar">
-                        <span>
-                          <IconButton
-                            size="small"
-                            sx={{ p: 0.25 }}
-                            onClick={() => moveItem(index, 1)}
-                            disabled={index === items.length - 1}
-                          >
-                            <ArrowDownwardIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip title="Quitar">
-                        <IconButton
-                          size="small"
-                          color="error"
-                          sx={{ p: 0.25 }}
-                          onClick={() => removeItem(index)}
-                        >
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                    <TextField
-                      label="Cant."
-                      type="number"
-                      size="small"
-                      value={item.quantity}
-                      onChange={(e) => updateItemField(index, "quantity", e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                      inputProps={{ min: 0.01, step: "any" }}
-                      sx={{ width: 78 }}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      {item.unitLabel || "u."} ×
-                    </Typography>
-                    <TextField
-                      label="P. unit."
-                      type="number"
-                      size="small"
-                      value={item.unitPrice}
-                      onChange={(e) => updateItemField(index, "unitPrice", e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                      inputProps={{ min: 0, step: "0.001" }}
-                      sx={{ width: 92 }}
-                    />
-                    <FormControlLabel
-                      sx={{ ml: 0.25, mr: 0, "& .MuiFormControlLabel-label": { fontSize: "0.75rem" } }}
-                      control={
-                        <Checkbox
-                          size="small"
-                          sx={{ p: 0.25 }}
-                          checked={Boolean(item.hasIva)}
-                          onChange={(e) => toggleItemIva(index, e.target.checked)}
-                        />
-                      }
-                      label={`IVA ${Number(ivaRate) || 0}%`}
-                    />
-                    <Typography
-                      variant="body2"
-                      fontWeight={700}
-                      sx={{ ml: "auto", minWidth: 72, textAlign: "right" }}
-                    >
-                      {formatProductPrice(
-                        formatOrderLineTotal(item.quantity, item.unitPrice) *
-                          (item.hasIva ? 1 + (Number(ivaRate) || 0) / 100 : 1),
-                      )}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            )}
+            <SupplierOrderItemsBoard
+              items={items}
+              packs={packs}
+              lots={lots}
+              ivaRate={ivaRate}
+              onRemoveItem={removeItem}
+              onUpdateItemField={updateItemField}
+              onToggleItemIva={toggleItemIva}
+              onDropItem={handleDropItem}
+              onCreatePack={createPack}
+              onUpdatePack={updatePack}
+              onRemovePack={removePack}
+              onCreateLot={createLot}
+              onUpdateLot={updateLot}
+              onRemoveLot={removeLot}
+            />
 
             {items.length > 0 && (
               <Box sx={{ mt: "auto", pt: 1, borderTop: 1, borderColor: "divider" }}>

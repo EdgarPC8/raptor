@@ -441,6 +441,54 @@ export const deleteUnitRequest = async (id) =>
     headers: { Authorization: jwt() },
   });
 
+// 📦 LOTES Y VENCIMIENTOS
+
+export const getBatchesSummaryRequest = async (params = {}) => {
+  if (isGuestDataMode()) {
+    return { data: { warnDays: 30, active: 0, expiring: 0, expired: 0, depleted: 0, total: 0 } };
+  }
+  return axios.get("/inventory/batches/summary", {
+    params,
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const getBatchesRequest = async (params = {}) => {
+  if (isGuestDataMode()) return { data: [] };
+  return axios.get("/inventory/batches", {
+    params,
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const createBatchRequest = async (data) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.post("/inventory/batches", data, {
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const updateBatchRequest = async (id, data) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.put(`/inventory/batches/${id}`, data, {
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const writeOffBatchRequest = async (id) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.post(`/inventory/batches/${id}/write-off`, {}, {
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const deleteBatchRequest = async (id) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.delete(`/inventory/batches/${id}`, {
+    headers: { Authorization: jwt() },
+  });
+};
+
 
 
 export const getAllCustomersRequest = async () => {

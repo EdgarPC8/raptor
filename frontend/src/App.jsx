@@ -6,6 +6,7 @@ import ProtectedRoute from "./context/ProtectedRoute.jsx";
 import PublicOnlyRoute from "./context/PublicOnlyRoute.jsx";
 import GuestExploreRoute from "./context/GuestExploreRoute.jsx";
 import NavBar from "./components/NavBar.jsx";
+import AppMaintenanceOverlay from "./components/AppMaintenanceOverlay.jsx";
 import { SHELL_ONLY } from "./config/deployEnv.js";
 import { APP_ID } from "./config/appInfo.js";
 import { APP_ROUTES, LEGACY_ROUTE_REDIRECTS } from "./config/appRoutes.js";
@@ -32,6 +33,9 @@ const TramosPage = lazy(
 );
 const UnitPage = lazy(
   () => import("./pages/eddeli/inventoryControl/UnitPage.jsx"),
+);
+const BatchesPage = lazy(
+  () => import("./pages/eddeli/inventoryControl/BatchesPage.jsx"),
 );
 const MovementPage = lazy(
   () => import("./pages/eddeli/inventoryControl/MovementPage.jsx"),
@@ -242,6 +246,7 @@ export default function App() {
               <Route path={APP_ROUTES.inventory.categories} element={<LazyPage><CategoryPage /></LazyPage>} />
               <Route path={APP_ROUTES.inventory.tierGroups} element={<LazyPage><TramosPage /></LazyPage>} />
               <Route path={APP_ROUTES.inventory.units} element={<LazyPage><UnitPage /></LazyPage>} />
+              <Route path={APP_ROUTES.inventory.batches} element={<LazyPage><BatchesPage /></LazyPage>} />
               <Route path={APP_ROUTES.production.ingredients} element={<LazyPage><GenericIngredientsPage /></LazyPage>} />
               <Route path={APP_ROUTES.production.recipes} element={<LazyPage><RecipePage /></LazyPage>} />
               <Route path={APP_ROUTES.production.manufacturing} element={<LazyPage><ProductionManagerPage /></LazyPage>} />
@@ -270,6 +275,7 @@ export default function App() {
   return (
     <AuthProvider>
       <div id="sale-receipt-print-root" aria-hidden="true" />
+      <AppMaintenanceOverlay />
       <Routes>
         <Route element={<PublicOnlyRoute />}>
           <Route
@@ -299,6 +305,16 @@ export default function App() {
           }
         />
 
+        {/* App en mantenimiento: pantalla completa, sin NavBar */}
+        <Route
+          path="/mantenimiento"
+          element={
+            <LazyPage>
+              <MaintenancePage />
+            </LazyPage>
+          }
+        />
+
         <Route element={<NavBar />}>
           {LEGACY_ROUTE_REDIRECTS.map(([from, to]) => (
             <Route
@@ -317,7 +333,6 @@ export default function App() {
             element={<SubscriptionExpiredPage />}
           />
           <Route path="/no-subscription" element={<NoSubscriptionPage />} />
-          <Route path="/mantenimiento" element={<MaintenancePage />} />
           <Route path={APP_ROUTES.public.catalog} element={<CatalogoPage />} />
           <Route path={APP_ROUTES.public.stores} element={<StoresPublicPage />} />
           <Route path="/catalogo" element={<Navigate to={APP_ROUTES.public.catalog} replace />} />
@@ -426,6 +441,7 @@ export default function App() {
             <Route path={APP_ROUTES.inventory.categories} element={<CategoryPage />} />
             <Route path={APP_ROUTES.inventory.tierGroups} element={<TramosPage />} />
             <Route path={APP_ROUTES.inventory.units} element={<UnitPage />} />
+            <Route path={APP_ROUTES.inventory.batches} element={<BatchesPage />} />
             <Route path={APP_ROUTES.inventory.movement} element={<MovementPage />} />
             <Route path={APP_ROUTES.production.recipes} element={<RecipePage />} />
             <Route

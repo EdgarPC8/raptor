@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Grid, Paper, Box, Stack } from "@mui/material";
 import {
   getFinanceDashboardHeroRequest,
@@ -14,14 +14,15 @@ import CashFlowCandlestickChart from "./components/Charts/CashFlowCandlestickCha
 import { resolveMirrorFromCandle } from "./components/Charts/cashFlowLinkUtils";
 import FinanceSummaryCards from "./components/FinanceSummaryCards";
 import DashboardStockPanel from "./components/DashboardStockPanel";
+import DashboardBatchesPanel from "./components/DashboardBatchesPanel";
 import OrderStatusSummaryPanel from "./components/OrderStatusSummaryPanel";
 import IncomeExpenseCategoryChart from "./components/IncomeExpenseCategoryChart";
 import ObligationsSummaryPanel from "./components/ObligationsSummaryPanel";
 import RecurringExpensesSummaryPanel from "./components/RecurringExpensesSummaryPanel";
 import YearFinanceOverviewChart from "./components/Charts/YearFinanceOverviewChart";
-import { buildPendingCollectionsBreakdown } from "./finance/pendingCollections.js";
 import GuestDemoBanner from "../../../components/GuestDemoBanner.jsx";
 import { dashboardPanelSx, dashboardPageSx } from "./components/dashboardPanelStyles.js";
+import DeferredMount from "./components/DeferredMount.jsx";
 
 const paperSx = {
   ...dashboardPanelSx,
@@ -29,6 +30,8 @@ const paperSx = {
 };
 
 const defaultProductsStock = { agotados: [], porAgotarse: [] };
+
+const defaultBatchesAlerts = { expired: [], expiring: [], warnDays: 30 };
 
 const defaultObligations = {
   summary: { totalReceivable: 0, totalPayable: 0, openCount: 0 },
@@ -54,17 +57,14 @@ export const DashBoardPage = () => {
   const [loadingRest, setLoadingRest] = useState(true);
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0 });
   const [productsStock, setProductsStock] = useState(defaultProductsStock);
+  const [batchesAlerts, setBatchesAlerts] = useState(defaultBatchesAlerts);
   const [overView, setOverView] = useState([]);
   const [incomeExpenseBreakdown, setIncomeExpenseBreakdown] = useState({});
-  const [workbench, setWorkbench] = useState({
-    customers: [],
-    orders: [],
-    groups: [],
-    payments: [],
-  });
   const [obligations, setObligations] = useState(defaultObligations);
   const [recurring, setRecurring] = useState(defaultRecurring);
   const [mirrorFocus, setMirrorFocus] = useState(null);
+  const [allowHeavy, setAllowHeavy] = useState(false);
+  const [heavyWave, setHeavyWave] = useState(0);
   const calendarSectionRef = useRef(null);
   const [calendarNavigate, setCalendarNavigate] = useState(null);
 
@@ -83,14 +83,7 @@ export const DashBoardPage = () => {
     setMirrorFocus(null);
   }, []);
 
-  const pendingBreakdown = useMemo(
-    () => buildPendingCollectionsBreakdown(workbench),
-    [workbench],
-  );
-
-  const pendingTotal = loadingRest
-    ? Number(summary?.futureIncome ?? 0)
-    : pendingBreakdown.total;
+  const pendingTotal = Number(summary?.futureIncome ?? 0);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +91,8 @@ export const DashBoardPage = () => {
     const load = async () => {
       setLoadingHero(true);
       setLoadingRest(true);
+      setAllowHeavy(false);
+      setHeavyWave(0);
 
       try {
         const { data } = await getFinanceDashboardHeroRequest();
@@ -116,17 +111,15 @@ export const DashBoardPage = () => {
         setOverView(data.overView ?? []);
         setIncomeExpenseBreakdown(data.incomeExpenseBreakdown ?? {});
         setProductsStock(data.productsStock ?? defaultProductsStock);
-        setWorkbench({
-          customers: data.workbench?.customers ?? [],
-          orders: data.workbench?.orders ?? [],
-          groups: data.workbench?.groups ?? [],
-          payments: data.workbench?.payments ?? [],
-        });
+        setBatchesAlerts(data.batchesAlerts ?? defaultBatchesAlerts);
         setRecurring(data.recurring ?? defaultRecurring);
       } catch (err) {
         console.error("Error al cargar paneles del dashboard:", err);
       } finally {
-        if (!cancelled) setLoadingRest(false);
+        if (!cancelled) {
+          setLoadingRest(false);
+          setAllowHeavy(true);
+        }
       }
     };
 
@@ -135,6 +128,17 @@ export const DashBoardPage = () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!allowHeavy) return undefined;
+    setHeavyWave(1);
+    const t2 = window.setTimeout(() => setHeavyWave(2), 120);
+    const t3 = window.setTimeout(() => setHeavyWave(3), 280);
+    return () => {
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+    };
+  }, [allowHeavy]);
 
   return (
     <Box sx={dashboardPageSx}>
@@ -166,13 +170,8 @@ export const DashBoardPage = () => {
               {loadingRest ? (
                 <PanelSkeleton height={260} />
               ) : (
-                <IncomeExpenseCategoryChart data={incomeExpenseBreakdown} />
+                <DashboardBatchesPanel batchesAlerts={batchesAlerts} />
               )}
-            </Grid>
-            <Grid item xs={12} sx={{ minWidth: 0 }}>
-              <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto" }}>
-                <YearFinanceOverviewChart onMonthSelect={handleYearMonthSelect} />
-              </Paper>
             </Grid>
           </Grid>
         </Grid>
@@ -198,44 +197,98 @@ export const DashBoardPage = () => {
           </Stack>
         </Grid>
 
+        <Grid item xs={12}>
+          <Grid container spacing={{ xs: 1.5, sm: 2 }} alignItems="stretch">
+            <Grid item xs={12} md={5} lg={4} sx={{ minWidth: 0, display: "flex" }}>
+              {loadingRest ? (
+                <Box sx={{ width: "100%" }}>
+                  <PanelSkeleton height={260} />
+                </Box>
+              ) : (
+                <Box sx={{ width: "100%", display: "flex", "& > *": { flex: 1, width: "100%" } }}>
+                  <IncomeExpenseCategoryChart data={incomeExpenseBreakdown} />
+                </Box>
+              )}
+            </Grid>
+            <Grid item xs={12} md={7} lg={8} sx={{ minWidth: 0, display: "flex" }}>
+              <Paper
+                variant="panel"
+                sx={{ ...paperSx, overflowX: "auto", width: "100%", height: "100%" }}
+              >
+                {heavyWave >= 1 ? (
+                  <YearFinanceOverviewChart onMonthSelect={handleYearMonthSelect} />
+                ) : (
+                  <PanelSkeleton height={260} />
+                )}
+              </Paper>
+            </Grid>
+          </Grid>
+        </Grid>
+
         <Grid item xs={12} md={6}>
           <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto", height: "100%" }}>
-            <CashFlowMirrorChart focus={mirrorFocus} onClearFocus={handleClearMirrorFocus} />
+            {heavyWave >= 2 ? (
+              <CashFlowMirrorChart focus={mirrorFocus} onClearFocus={handleClearMirrorFocus} />
+            ) : (
+              <PanelSkeleton height={280} />
+            )}
           </Paper>
         </Grid>
         <Grid item xs={12} md={6}>
-          <CashFlowCandlestickChart
-            onCandleSelect={handleCandleSelect}
-            onDrillReset={handleClearMirrorFocus}
-            selectedKey={mirrorFocus?.highlightKey ?? null}
-          />
+          {heavyWave >= 2 ? (
+            <CashFlowCandlestickChart
+              onCandleSelect={handleCandleSelect}
+              onDrillReset={handleClearMirrorFocus}
+              selectedKey={mirrorFocus?.highlightKey ?? null}
+            />
+          ) : (
+            <PanelSkeleton height={280} />
+          )}
         </Grid>
 
         <Grid item xs={12}>
           <Box ref={calendarSectionRef}>
             <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto" }}>
-              <ChartCalendaryInfo navigateToMonth={calendarNavigate} />
+              {heavyWave >= 3 ? (
+                <ChartCalendaryInfo navigateToMonth={calendarNavigate} />
+              ) : (
+                <PanelSkeleton height={360} />
+              )}
             </Paper>
           </Box>
         </Grid>
 
         <Grid item xs={12}>
-          <ProductChartsPanel />
+          {heavyWave >= 3 ? (
+            <DeferredMount height={320} rootMargin="320px">
+              <ProductChartsPanel />
+            </DeferredMount>
+          ) : (
+            <PanelSkeleton height={320} />
+          )}
         </Grid>
 
         <Grid item xs={12} md={6}>
           <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto" }}>
-            {loadingRest ? (
-              <PanelSkeleton height={280} />
+            {heavyWave >= 3 ? (
+              <DeferredMount height={280} rootMargin="320px">
+                <CustomersAccordionTable />
+              </DeferredMount>
             ) : (
-              <CustomersAccordionTable workbench={workbench} />
+              <PanelSkeleton height={280} />
             )}
           </Paper>
         </Grid>
 
         <Grid item xs={12} md={6}>
           <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto" }}>
-            <ExpensePurchaseStats />
+            {heavyWave >= 3 ? (
+              <DeferredMount height={280} rootMargin="320px">
+                <ExpensePurchaseStats />
+              </DeferredMount>
+            ) : (
+              <PanelSkeleton height={280} />
+            )}
           </Paper>
         </Grid>
       </Grid>

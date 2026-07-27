@@ -1,4 +1,4 @@
-/** Altura fija compartida: alertas de inventario + ingresos/gastos por categoría (misma fila). */
+/** Altura fija compartida: alertas de inventario + lotes/vencimientos (misma fila). */
 export const DASHBOARD_TWIN_PANEL_HEIGHT = 368;
 
 export const dashboardTwinPanelSx = {

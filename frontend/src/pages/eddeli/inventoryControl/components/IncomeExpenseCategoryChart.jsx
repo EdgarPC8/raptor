@@ -15,7 +15,7 @@ import { money } from "../collections/helpers.js";
 import { getIncomeExpenseBreakdownDetail } from "../../../../api/financeRequest";
 import IncomeExpenseCategoryDetailDialog from "./IncomeExpenseCategoryDetailDialog";
 import {
-  dashboardTwinPanelSx,
+  DASHBOARD_TWIN_PANEL_HEIGHT,
   DASHBOARD_TWIN_PANEL_BODY_HEIGHT,
 } from "./dashboardTwinPanelLayout.js";
 
@@ -118,9 +118,12 @@ export default function IncomeExpenseCategoryChart({ data }) {
     borderRadius: 2,
     minWidth: 0,
     width: "100%",
+    height: "100%",
+    minHeight: DASHBOARD_TWIN_PANEL_HEIGHT,
     display: "flex",
     flexDirection: "column",
-    ...dashboardTwinPanelSx,
+    boxSizing: "border-box",
+    overflow: "hidden",
   };
 
   if (!platforms || !groups) {
@@ -131,7 +134,7 @@ export default function IncomeExpenseCategoryChart({ data }) {
           subtitle="Totales por fecha en Income y Expense (no por fecha de pedido)."
           sx={{ mb: 1, flexShrink: 0 }}
         />
-        <Box sx={{ height: DASHBOARD_TWIN_PANEL_BODY_HEIGHT, overflow: "hidden" }}>
+        <Box sx={{ height: DASHBOARD_TWIN_PANEL_BODY_HEIGHT, flex: 1, overflow: "hidden" }}>
           <ChartSkeleton height={Math.max(160, DASHBOARD_TWIN_PANEL_BODY_HEIGHT - 48)} />
         </Box>
       </Paper>
@@ -166,9 +169,8 @@ export default function IncomeExpenseCategoryChart({ data }) {
 
         <Box
           sx={{
-            height: DASHBOARD_TWIN_PANEL_BODY_HEIGHT,
+            flex: 1,
             minHeight: DASHBOARD_TWIN_PANEL_BODY_HEIGHT,
-            maxHeight: DASHBOARD_TWIN_PANEL_BODY_HEIGHT,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

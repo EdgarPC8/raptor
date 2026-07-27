@@ -514,7 +514,7 @@ function MovementForm({
       });
       toastAuth({
         promise,
-        successMessage: "Presentación abierta — stock transferido al insumo genérico",
+        successMessage: "Empaque abierto — stock pasado al insumo genérico",
         onSuccess: () => {
           onClose?.();
           onSaved?.(Number(formData.productId));
@@ -765,7 +765,7 @@ function MovementForm({
           </Stack>
         ) : (
           <Typography variant="body2" color="text.secondary">
-            Elige una presentación enlazada.
+            Elige un empaque enlazado (producto final → genérico).
           </Typography>
         )
       ) : isAjuste ? (
@@ -902,7 +902,7 @@ function MovementForm({
                 <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <SearchableSelect
-                      label={isApertura ? "Presentación a abrir" : "Producto"}
+                      label={isApertura ? "Empaque a abrir (tipo final)" : "Producto"}
                       items={filteredProductOptions}
                       value={selectedProductId || ""}
                       disabled={isEdit}
@@ -919,7 +919,7 @@ function MovementForm({
                       getOptionLabel={(opt) => opt?.name ?? ""}
                       getOptionValue={(opt) => opt?.id ?? ""}
                       placeholder={
-                        isApertura ? "Quintal, arroba, funda…" : "Busca un producto…"
+                        isApertura ? "Quintal de harina, arroba…" : "Busca un producto…"
                       }
                     />
                   </Box>
@@ -971,7 +971,7 @@ function MovementForm({
                         isGenericIngredientProduct(selectedProduct)
                           ? "Insumo genérico"
                           : selectedProduct.genericProductId
-                            ? "Presentación"
+                            ? "Empaque → genérico"
                             : "Producto"
                       }
                       color={isGenericIngredientProduct(selectedProduct) ? "secondary" : "default"}

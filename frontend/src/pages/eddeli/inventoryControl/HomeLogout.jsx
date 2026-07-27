@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import { keyframes, useTheme } from "@mui/material/styles";
 import LoginIcon from "@mui/icons-material/Login";
+import DashboardIcon from "@mui/icons-material/Dashboard";
 import BakeryDiningIcon from "@mui/icons-material/BakeryDining";
 import StoreMallDirectoryRoundedIcon from "@mui/icons-material/StoreMallDirectoryRounded";
 import ExtensionIcon from "@mui/icons-material/Extension";
@@ -34,6 +35,7 @@ import { listCatalogModuleGroupsWithStatus } from "../../../config/appModulesCat
 import { SHELL_ONLY } from "../../../config/deployEnv.js";
 import { APP_ROUTES } from "../../../config/appRoutes.js";
 import { raptorLogoUrl } from "../../../config/raptorBrand.js";
+import { getPostLoginPath } from "../../../utils/postLoginPath.js";
 import SchoolIcon from "@mui/icons-material/School";
 
 const HOME_MODULE_IDS = ["operacion", "inventario", "ventas", "finanzas", "produccion"];
@@ -350,10 +352,11 @@ function ModuleMarqueeCard({ item, accent, rotateOffset }) {
 
 export default function HomeLogout() {
   const { activeApp } = useAppSettings();
-  const { enterGuestMode, isAuthenticated, isGuest } = useAuth();
+  const { enterGuestMode, isAuthenticated, isGuest, user } = useAuth();
   const theme = useTheme();
   const navigate = useNavigate();
   const [paused, setPaused] = useState(false);
+  const panelPath = getPostLoginPath(user?.loginRol);
 
   const showCatalog = activeApp?.showPublicCatalog !== false;
   const showPropia = activeApp?.showPublicStoresPropia !== false;
@@ -626,8 +629,12 @@ export default function HomeLogout() {
               <>
                 <Button
                   variant="contained"
-                  startIcon={<SchoolIcon />}
+                  startIcon={isAuthenticated ? <DashboardIcon /> : <SchoolIcon />}
                   onClick={() => {
+                    if (isAuthenticated) {
+                      navigate(panelPath);
+                      return;
+                    }
                     enterGuestMode();
                     navigate("/inicio", { replace: true });
                   }}
@@ -638,17 +645,37 @@ export default function HomeLogout() {
                     boxShadow: `0 8px 22px ${alpha(theme.palette.primary.main, 0.35)}`,
                   }}
                 >
-                  {isGuest || isAuthenticated ? "Seguir explorando" : "Entrar como invitado"}
+                  {isAuthenticated
+                    ? "Ir al panel"
+                    : isGuest
+                      ? "Seguir explorando"
+                      : "Entrar como invitado"}
                 </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<LoginIcon />}
-                  onClick={() => navigate("/login")}
-                  sx={{ fontWeight: 700 }}
-                >
-                  Iniciar sesión
-                </Button>
+                {!isAuthenticated ? (
+                  <Button
+                    variant="outlined"
+                    startIcon={<LoginIcon />}
+                    onClick={() => navigate("/login")}
+                    sx={{ fontWeight: 700 }}
+                  >
+                    Iniciar sesión
+                  </Button>
+                ) : null}
               </>
+            ) : isAuthenticated ? (
+              <Button
+                variant="contained"
+                startIcon={<DashboardIcon />}
+                onClick={() => navigate(panelPath)}
+                sx={{
+                  fontWeight: 800,
+                  px: 2.5,
+                  background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${colors.orange || theme.palette.secondary.main})`,
+                  boxShadow: `0 8px 22px ${alpha(theme.palette.primary.main, 0.35)}`,
+                }}
+              >
+                Ir al panel
+              </Button>
             ) : (
               <Button
                 variant="contained"

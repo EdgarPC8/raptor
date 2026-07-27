@@ -1,4 +1,4 @@
-import { Navigate, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Container,
@@ -40,10 +40,6 @@ export default function SubscriptionExpiredPage() {
         <CircularProgress size={64} />
       </Box>
     );
-  }
-
-  if (subscription?.maintenance) {
-    return <Navigate to="/mantenimiento" replace />;
   }
 
   const modules = subscription?.subscription?.modules || [];

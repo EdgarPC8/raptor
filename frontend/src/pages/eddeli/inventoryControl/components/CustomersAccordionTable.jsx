@@ -92,6 +92,25 @@ function buildChartSegments(row) {
 function normalizeRows(rawList) {
   return safeArray(rawList).map((r) => {
     const orders = safeArray(r.orders);
+    const apiProductSummary = safeArray(r.productSummary);
+
+    // Respuesta liviana del API: ya trae productSummary sin orders anidados.
+    if (!orders.length && apiProductSummary.length) {
+      return {
+        customerId: r.customerId ?? r.customer?.id,
+        customer: r.customer ?? null,
+        ordersCount: toNum(r.ordersCount),
+        lineItems: apiProductSummary.length,
+        units: toNum(r.totalQuantity),
+        unitsDelivered: toNum(r.unitsDelivered),
+        revenueTotal: toNum(r.totalAmount),
+        totalAmountDeuda: numOrNull(r.totalAmountDeuda),
+        revenuePending: numOrNull(r.revenuePending),
+        lastOrderAt: r.lastOrderAt ?? r.updatedAt ?? null,
+        productSummary: apiProductSummary,
+        _raw: r,
+      };
+    }
 
     let lineItems = 0;
     let unitsFromItems = 0;
@@ -135,20 +154,19 @@ function normalizeRows(rawList) {
 
     const productSummary = Array.from(productMap.values());
     const computedTotalAmount = productSummary.reduce((s, p) => s + toNum(p.totalAmount), 0);
-    const computedPendingAmount = productSummary.reduce((s, p) => s + toNum(p.pendingAmount), 0);
 
     return {
       customerId: r.customerId ?? r.customer?.id,
       customer: r.customer ?? null,
-      ordersCount: orders.length,
+      ordersCount: orders.length || toNum(r.ordersCount),
       lineItems,
       units: toNum(r.totalQuantity) || unitsFromItems,
       unitsDelivered,
       revenueTotal: toNum(r.totalAmount) || computedTotalAmount,
-      totalAmountDeuda: numOrNull(r.totalAmountDeuda), // preserva null si no viene
-      revenuePending: numOrNull(r.revenuePending),      // preserva null si no viene
+      totalAmountDeuda: numOrNull(r.totalAmountDeuda),
+      revenuePending: numOrNull(r.revenuePending),
       lastOrderAt: r.lastOrderAt ?? r.updatedAt ?? null,
-      productSummary,
+      productSummary: productSummary.length ? productSummary : apiProductSummary,
       _raw: r,
     };
   });

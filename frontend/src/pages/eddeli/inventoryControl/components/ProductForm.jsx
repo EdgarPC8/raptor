@@ -56,7 +56,7 @@ const PRODUCT_NUMERIC_FIELDS = [
 const PRODUCT_FORM_DEFAULTS = {
   name: "",
   desc: "",
-  type: "raw",
+  type: "final",
   unitId: "",
   categoryId: "",
   barcode: "",
@@ -395,7 +395,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
 
     setValue("name", datos.name || "");
     setValue("desc", datos.desc || "");
-    setValue("type", datos.type || "raw");
+    setValue("type", datos.type || (isEditing ? "raw" : "final"));
     setValue("unitId", datos.unitId || "");
     setValue("categoryId", datos.categoryId || "");
     setValue("price", datos.price || 0);
@@ -486,7 +486,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
     if (barcode) fd.append("barcode", barcode);
     else if (isEditing) fd.append("barcode", "");
     if (data.desc?.trim()) fd.append("desc", data.desc.trim());
-    fd.append("type", data.type || "raw");
+    fd.append("type", data.type || "final");
     fd.append("unitId", String(unitId));
     if (data.categoryId) fd.append("categoryId", String(data.categoryId));
 
@@ -649,7 +649,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
             fullWidth
             variant="standard"
             margin="dense"
-            value={watch("type") ?? "raw"}
+            value={watch("type") ?? "final"}
             {...register("type")}
           >
             <MenuItem value="raw">Materia prima</MenuItem>

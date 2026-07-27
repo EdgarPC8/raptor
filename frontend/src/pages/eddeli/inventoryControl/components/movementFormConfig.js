@@ -38,7 +38,7 @@ export const MOVEMENT_TYPES = [
   {
     value: "apertura",
     label: "Abrir presentación",
-    hint: "Quintal/funda → insumo genérico",
+    hint: "Quintal (final) → insumo genérico",
     color: "warning",
   },
 ];
@@ -104,7 +104,8 @@ export function gramsToGenericDisplay(genericProduct, grams) {
 }
 
 export function isPresentationProduct(p) {
-  return Boolean(p?.genericProductId) && p?.type === "raw";
+  // Empaque de compra (quintal, arroba…) enlazado a un genérico; puede ser tipo final (nuevo) o raw (legado).
+  return Boolean(p?.genericProductId) && !p?.isGenericIngredient;
 }
 
 export function isGenericIngredientProduct(p) {

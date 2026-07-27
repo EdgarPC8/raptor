@@ -376,7 +376,7 @@ export const APP_MODULE_GROUPS = [
   {
     id: "inventario",
     label: "Inventario",
-    summary: "Catálogo, stock, (próx.) bodegas y lotes/vencimientos.",
+    summary: "Catálogo, stock, lotes/vencimientos y (próx.) bodegas.",
     sections: [
       {
         name: "Productos",
@@ -457,14 +457,13 @@ export const APP_MODULE_GROUPS = [
         name: "Lotes y vencimientos",
         path: APP_ROUTES.inventory.batches,
         roles: ["Programador", "Administrador"],
-        status: "planned",
         description:
-          "Próximamente: control de lotes por producto (harinas, lácteos, etc.) con fechas de vencimiento, alertas y consumo preferente FEFO/FIFO.",
+          "Control de lotes por producto con fechas de vencimiento, alertas y baja por caducidad.",
         functions: [
-          { name: "Registrar lote", description: "Código de lote, producto, cantidad y fecha de vencimiento." },
-          { name: "Stock por lote", description: "Disponible por lote además del stock total." },
+          { name: "Registrar lote", description: "Al recibir mercadería: producto, cantidad y fecha de vencimiento. Sube el stock." },
+          { name: "Stock por lote", description: "Cantidad restante por lote además del stock total del producto." },
           { name: "Alertas de vencimiento", description: "Avisos de productos próximos a vencer o vencidos." },
-          { name: "Salida por FEFO/FIFO", description: "Priorizar lotes al vender o consumir en producción." },
+          { name: "Baja por caducidad", description: "Descontar stock con motivo SALIDA_CADUCADO y dejar el lote en historial." },
         ],
       },
     ],

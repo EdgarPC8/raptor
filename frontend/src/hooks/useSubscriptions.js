@@ -2,8 +2,9 @@
  * Suscripción local (backend EdDeli). El gestor solo EMPUJA el entitlement;
  * en runtime EdDeli lee su propio backend — el gestor puede estar apagado.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "../api/axios.js";
+import { socket } from "../api/axios.js";
 import { SHELL_ONLY } from "../config/deployEnv.js";
 
 /**
@@ -33,6 +34,7 @@ const BYPASS_SUBSCRIPTION = {
 };
 
 const CACHE_KEY = "eddeli_entitlement_cache_v2";
+const ENTITLEMENT_EVENT = "eddeli:entitlement-refetch";
 
 function readCachedEntitlement() {
   try {
@@ -63,11 +65,10 @@ function computeExpired(data) {
   return new Date(data.subscription.expires_at) < new Date();
 }
 
-/** Plan usable para entrar al panel (no aplica a /home ni /login). */
+/** Plan usable (mantenimiento de app se maneja aparte con overlay). */
 export function hasActiveSubscription(subscription, expired = false) {
   if (!SUBSCRIPTIONS_ENABLED) return true;
   if (!subscription) return false;
-  if (subscription.maintenance) return false;
   if (expired) return false;
   return Boolean(subscription.subscribed);
 }
@@ -82,7 +83,8 @@ export const useSubscriptions = () => {
     SUBSCRIPTIONS_ENABLED ? computeExpired(cached) : false,
   );
 
-  const fetchSub = async () => {
+  const fetchSub = useCallback(async () => {
+    if (!SUBSCRIPTIONS_ENABLED) return;
     try {
       const { data } = await axios.get("/subscription");
       setSubscription(data);
@@ -91,7 +93,6 @@ export const useSubscriptions = () => {
       setIsLoading(false);
     } catch (err) {
       console.error("Error al cargar suscripción local:", err);
-      // Fallback local: EdDeli no depende del gestor en runtime.
       const fallback = readCachedEntitlement();
       if (fallback) {
         setSubscription(fallback);
@@ -107,17 +108,31 @@ export const useSubscriptions = () => {
       }
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!SUBSCRIPTIONS_ENABLED) return;
     fetchSub();
-    const onFocus = () => {
-      fetchSub();
-    };
+
+    const onFocus = () => fetchSub();
+    const onRefetch = () => fetchSub();
+    const onSocket = () => fetchSub();
+
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, []);
+    window.addEventListener(ENTITLEMENT_EVENT, onRefetch);
+    socket.on("entitlementUpdated", onSocket);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener(ENTITLEMENT_EVENT, onRefetch);
+      socket.off("entitlementUpdated", onSocket);
+    };
+  }, [fetchSub]);
 
   return { isLoading, subscription, expired, refetch: fetchSub };
 };
+
+/** Dispara refetch en todos los hooks useSubscriptions de la pestaña. */
+export function requestEntitlementRefetch() {
+  window.dispatchEvent(new Event(ENTITLEMENT_EVENT));
+}

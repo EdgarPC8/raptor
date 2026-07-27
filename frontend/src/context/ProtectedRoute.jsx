@@ -102,10 +102,7 @@ export default function ProtectedRoute({ requiredRol }) {
   // Base + Sistema (config/módulos/planes): no exige plan.
   if (subscriptionFree) return <Outlet />;
 
-  // Mantenimiento de la app: solo avisa. No cancela ni “quita” la suscripción.
-  if (subscription?.maintenance) {
-    return <Navigate to="/mantenimiento" replace />;
-  }
+  // Mantenimiento de app: lo cubre AppMaintenanceOverlay (sin cambiar URL).
 
   if (
     shouldBlockMaintenancePath(location.pathname, user.loginRol, subModules)

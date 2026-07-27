@@ -18,6 +18,7 @@
     "build:eddeli": "npm run build-eddeli",
     "build:store": "npm run build-store",
     "build:raptor": "npm run build-raptor",
+    "git-push-eddeli": "node scripts/git-push-eddeli.mjs",
     "generate:guest-data": "node scripts/generate-guest-data.mjs",
     "preview": "vite preview --mode eddeli",
     "preview:store": "vite preview --mode store",
