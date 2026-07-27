@@ -31,7 +31,7 @@ const paperSx = {
 
 const defaultProductsStock = { agotados: [], porAgotarse: [] };
 
-const defaultBatchesAlerts = { expired: [], expiring: [], warnDays: 30 };
+const defaultBatchesAlerts = { expired: [], expiring: [], ok: [], warnDays: 30 };
 
 const defaultObligations = {
   summary: { totalReceivable: 0, totalPayable: 0, openCount: 0 },

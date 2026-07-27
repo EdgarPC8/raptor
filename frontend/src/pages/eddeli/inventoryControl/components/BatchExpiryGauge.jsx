@@ -1,34 +1,77 @@
 import { Box, Typography, Skeleton, useTheme } from "@mui/material";
 import { differenceInCalendarDays, parseISO, isValid } from "date-fns";
 
-function daysUntilExpiry(expiresAt) {
-  if (!expiresAt) return null;
-  const d = parseISO(String(expiresAt).slice(0, 10));
-  if (!isValid(d)) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return differenceInCalendarDays(d, today);
+function parseDay(raw) {
+  if (!raw) return null;
+  const d = parseISO(String(raw).slice(0, 10));
+  return isValid(d) ? d : null;
 }
 
-function gaugeMetrics(batch, warnDays = 30) {
-  const days = daysUntilExpiry(batch?.expiresAt);
-  const warn = Math.max(Number(warnDays) || 30, 1);
-  const max = warn;
-  // Días restantes clampados: vencido = 0
-  const remaining = days == null ? 0 : Math.max(0, Math.min(days, max));
+function todayStart() {
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return t;
+}
+
+/**
+ * Vida útil = elaboración→vencimiento, o si no hay elaboración → recepción→vencimiento.
+ * Se divide en 4 partes iguales (gris / verde / amarillo / rojo al acercarse al vencimiento).
+ */
+export function batchLifeMetrics(batch) {
+  const expires = parseDay(batch?.expiresAt);
+  if (!expires) {
+    return {
+      daysRemaining: null,
+      lifeDays: 0,
+      max: 1,
+      remaining: 0,
+      q1: 0.25,
+      q2: 0.5,
+      q3: 0.75,
+      status: "critical",
+      startLabel: null,
+    };
+  }
+
+  const manufactured = parseDay(batch?.manufacturedAt);
+  const received = parseDay(batch?.receivedAt);
+  const start = manufactured || received || todayStart();
+  const startLabel = manufactured ? "elaboración" : received ? "recepción" : "hoy";
+
+  let lifeDays = differenceInCalendarDays(expires, start);
+  if (!Number.isFinite(lifeDays) || lifeDays < 1) lifeDays = 1;
+
+  const daysRemaining = differenceInCalendarDays(expires, todayStart());
+  const max = lifeDays;
+  const remaining = daysRemaining == null ? 0 : Math.max(0, Math.min(daysRemaining, max));
+
+  const q = lifeDays / 4;
+  const q1 = q;
+  const q2 = q * 2;
+  const q3 = q * 3;
+
+  let status = "fresh"; // gris
+  if (daysRemaining == null || daysRemaining < 0 || daysRemaining === 0) status = "critical";
+  else if (daysRemaining <= q1) status = "critical"; // rojo
+  else if (daysRemaining <= q2) status = "warning"; // amarillo
+  else if (daysRemaining <= q3) status = "good"; // verde
+  else status = "fresh"; // gris
+
   return {
-    days,
-    remaining,
-    warn,
+    daysRemaining,
+    lifeDays,
     max,
-    criticalEnd: Math.max(1, Math.round(warn * 0.15)),
-    warningEnd: Math.max(2, Math.round(warn * 0.5)),
-    goodEnd: warn,
+    remaining,
+    q1,
+    q2,
+    q3,
+    status,
+    startLabel,
   };
 }
 
 function valueToAngle(value, max) {
-  const ratio = Math.min(Math.max(value / max, 0), 1);
+  const ratio = Math.min(Math.max(value / Math.max(max, 0.0001), 0), 1);
   return Math.PI * (1 - ratio);
 }
 
@@ -55,15 +98,6 @@ function ringSegment(cx, cy, rInner, rOuter, v0, v1, max) {
   ].join(" ");
 }
 
-function expiryStatus(days) {
-  if (days == null) return "critical";
-  if (days < 0) return "critical";
-  if (days === 0) return "critical";
-  if (days <= 7) return "warning";
-  if (days <= 15) return "caution";
-  return "good";
-}
-
 function formatDaysLabel(days) {
   if (days == null) return "—";
   if (days < 0) return `${Math.abs(days)}d venc.`;
@@ -76,13 +110,10 @@ function truncateName(name, max = 14) {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
-export default function BatchExpiryGauge({ batch, warnDays = 30, compact = false }) {
+export default function BatchExpiryGauge({ batch, compact = false }) {
   const theme = useTheme();
-  const { days, remaining, max, criticalEnd, warningEnd, goodEnd } = gaugeMetrics(
-    batch,
-    warnDays,
-  );
-  const status = expiryStatus(days);
+  const { daysRemaining, remaining, max, q1, q2, q3, status, lifeDays, startLabel } =
+    batchLifeMetrics(batch);
 
   const cx = 100;
   const cy = 108;
@@ -93,14 +124,16 @@ export default function BatchExpiryGauge({ batch, warnDays = 30, compact = false
     critical: theme.palette.error.main,
     warning: theme.palette.warning.main,
     good: theme.palette.success.main,
-    muted: theme.palette.mode === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
+    fresh: theme.palette.mode === "dark" ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.18)",
+    track: theme.palette.mode === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
   };
 
+  // Izquierda (0 días) = rojo … derecha (vida completa) = gris
   const zones = [
-    { from: 0, to: criticalEnd, color: zoneColor.critical },
-    { from: criticalEnd, to: warningEnd, color: zoneColor.warning },
-    { from: warningEnd, to: goodEnd, color: zoneColor.good },
-    { from: goodEnd, to: max, color: zoneColor.muted },
+    { from: 0, to: q1, color: zoneColor.critical },
+    { from: q1, to: q2, color: zoneColor.warning },
+    { from: q2, to: q3, color: zoneColor.good },
+    { from: q3, to: max, color: zoneColor.fresh },
   ];
 
   const needleEnd = pointOnArc(cx, cy, (rInner + rOuter) / 2, remaining, max);
@@ -110,10 +143,21 @@ export default function BatchExpiryGauge({ batch, warnDays = 30, compact = false
 
   const statusColor =
     status === "critical"
-      ? theme.palette.error.main
-      : status === "warning" || status === "caution"
-        ? theme.palette.warning.main
-        : theme.palette.success.main;
+      ? zoneColor.critical
+      : status === "warning"
+        ? zoneColor.warning
+        : status === "good"
+          ? zoneColor.good
+          : theme.palette.text.secondary;
+
+  const statusText =
+    status === "critical"
+      ? "Crítico"
+      : status === "warning"
+        ? "Por vencer"
+        : status === "good"
+          ? "Aceptable"
+          : "Fresco";
 
   return (
     <Box sx={{ textAlign: "center", minWidth: 0, width: "100%" }}>
@@ -129,10 +173,10 @@ export default function BatchExpiryGauge({ batch, warnDays = 30, compact = false
           fontSize: compact ? "0.65rem" : undefined,
         }}
         noWrap
-        title={`${batch?.productName}${batch?.code ? ` · ${batch.code}` : ""} · vence ${batch?.expiresAt || "—"}`}
+        title={`${batch?.productName}${batch?.code ? ` · ${batch.code}` : ""} · vence ${batch?.expiresAt || "—"} · vida ${lifeDays}d (${startLabel || "—"})`}
       >
         {title}
-        {compact ? ` · ${formatDaysLabel(days)}` : ""}
+        {compact ? ` · ${formatDaysLabel(daysRemaining)}` : ""}
       </Typography>
 
       <Box
@@ -146,7 +190,7 @@ export default function BatchExpiryGauge({ batch, warnDays = 30, compact = false
         }}
         aria-label={`Vencimiento ${batch?.expiresAt} de ${batch?.productName}`}
       >
-        <path d={ringSegment(cx, cy, rInner, rOuter, 0, max, max)} fill={zoneColor.muted} />
+        <path d={ringSegment(cx, cy, rInner, rOuter, 0, max, max)} fill={zoneColor.track} />
         {zones.map((z) => {
           if (z.to <= z.from) return null;
           return (
@@ -179,7 +223,9 @@ export default function BatchExpiryGauge({ batch, warnDays = 30, compact = false
           lineHeight: 1.2,
         }}
       >
-        {String(batch?.expiresAt || "").slice(0, 10) || "—"}
+        {compact
+          ? String(batch?.expiresAt || "").slice(0, 10) || "—"
+          : `${statusText} · ${formatDaysLabel(daysRemaining)}`}
       </Typography>
     </Box>
   );

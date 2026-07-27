@@ -24,6 +24,7 @@ import {
 } from "@mui/material";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import EventBusyIcon from "@mui/icons-material/EventBusy";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import TableRowsIcon from "@mui/icons-material/TableRows";
 import CloseIcon from "@mui/icons-material/Close";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
@@ -46,7 +47,7 @@ const BATCH_VIEWS = {
     label: "Por vencer",
     icon: WarningAmberIcon,
     color: "warning",
-    empty: "No hay lotes por vencer en la ventana de alerta.",
+    empty: "No hay lotes en zona amarilla/roja de alerta.",
   },
   expired: {
     id: "expired",
@@ -54,6 +55,13 @@ const BATCH_VIEWS = {
     icon: EventBusyIcon,
     color: "error",
     empty: "No hay lotes vencidos con stock.",
+  },
+  ok: {
+    id: "ok",
+    label: "Vigentes",
+    icon: CheckCircleOutlineIcon,
+    color: "success",
+    empty: "No hay lotes vigentes con stock.",
   },
 };
 
@@ -113,7 +121,9 @@ function BatchAlertsFilterBar({ view, batchesAlerts, onViewChange, sx }) {
               label={
                 v.id === "expired"
                   ? batchesAlerts?.expired?.length ?? 0
-                  : batchesAlerts?.expiring?.length ?? 0
+                  : v.id === "ok"
+                    ? batchesAlerts?.ok?.length ?? 0
+                    : batchesAlerts?.expiring?.length ?? 0
               }
               color={v.color}
             />
@@ -180,7 +190,12 @@ export default function DashboardBatchesPanel({ batchesAlerts }) {
   const currentMeta = BATCH_VIEWS[view];
 
   const rows = useMemo(() => {
-    const list = view === "expired" ? batchesAlerts?.expired : batchesAlerts?.expiring;
+    const list =
+      view === "expired"
+        ? batchesAlerts?.expired
+        : view === "ok"
+          ? batchesAlerts?.ok
+          : batchesAlerts?.expiring;
     return [...(list || [])].sort((a, b) =>
       String(a.expiresAt || "").localeCompare(String(b.expiresAt || "")),
     );
@@ -197,7 +212,10 @@ export default function DashboardBatchesPanel({ batchesAlerts }) {
   }, [rows]);
 
   const hasAnyAlerts =
-    (batchesAlerts?.expired?.length ?? 0) + (batchesAlerts?.expiring?.length ?? 0) > 0;
+    (batchesAlerts?.expired?.length ?? 0) +
+      (batchesAlerts?.expiring?.length ?? 0) +
+      (batchesAlerts?.ok?.length ?? 0) >
+    0;
 
   return (
     <Paper
@@ -299,7 +317,7 @@ export default function DashboardBatchesPanel({ batchesAlerts }) {
                 }}
               >
                 {batch ? (
-                  <BatchExpiryGauge batch={batch} warnDays={warnDays} compact />
+                  <BatchExpiryGauge batch={batch} compact />
                 ) : (
                   <BatchExpiryGaugeSkeleton compact />
                 )}
