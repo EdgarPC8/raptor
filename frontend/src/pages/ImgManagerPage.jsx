@@ -1,13 +1,19 @@
 /**
  * Control de imágenes del servidor (/img). Solo Programador.
+ * Incluye descarga ZIP y subida masiva de carpeta/archivos con
+ * modal de conflictos (reemplazar / omitir).
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import {
   Box,
   Button,
   Chip,
   IconButton,
+  LinearProgress,
+  List,
+  ListItem,
+  ListItemText,
   Stack,
   TextField,
   Tooltip,
@@ -16,17 +22,44 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import DriveFolderUploadIcon from "@mui/icons-material/DriveFolderUpload";
 import DownloadIcon from "@mui/icons-material/Download";
 import TablePro from "../components/Tables/TablePro.jsx";
 import SimpleDialog from "../components/Dialogs/SimpleDialog.jsx";
 import UploadImageForm from "../components/Forms/UploadImageForm.jsx";
 import {
+  checkImagesExistRequest,
   deleteImageRequest,
   downloadFolderZipRequest,
   scanImagesRequest,
+  uploadImageRequest,
 } from "../api/imgRequest.js";
 import { pathImg } from "../api/axios.js";
 import { useAuth } from "../context/AuthContext.jsx";
+
+const IMAGE_EXT = /\.(png|jpe?g|webp|gif|svg)$/i;
+
+/** Normaliza ruta relativa hacia src/img */
+function toRelPath(file, baseFolder = "") {
+  let rel = String(file.webkitRelativePath || file.name || "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "");
+  if (!rel) return "";
+  // Si eligieron la carpeta "img", quitar ese prefijo
+  if (rel.toLowerCase().startsWith("img/")) rel = rel.slice(4);
+  // Archivo suelto → meter bajo la carpeta del filtro actual
+  if (!rel.includes("/") && baseFolder) {
+    rel = `${String(baseFolder).replace(/\/+$/, "")}/${rel}`;
+  }
+  return rel.replace(/^\/+/, "");
+}
+
+function splitRelPath(relPath) {
+  const parts = String(relPath || "").replace(/\\/g, "/").split("/");
+  const name = parts.pop() || "";
+  const folder = parts.join("/");
+  return { folder, name };
+}
 
 export default function ImgManagerPage() {
   const { user, toast } = useAuth();
@@ -38,6 +71,15 @@ export default function ImgManagerPage() {
   const [openDelete, setOpenDelete] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const folderInputRef = useRef(null);
+  const filesInputRef = useRef(null);
+
+  const [conflictOpen, setConflictOpen] = useState(false);
+  const [pendingItems, setPendingItems] = useState([]); // { file, relPath }
+  const [conflictPaths, setConflictPaths] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
 
   const fetchScan = async () => {
     setLoading(true);
@@ -86,6 +128,99 @@ export default function ImgManagerPage() {
     }
   };
 
+  const runBulkUpload = async (items, { replaceExisting }) => {
+    if (!items.length) return;
+    setUploading(true);
+    setUploadProgress({ done: 0, total: items.length });
+    let ok = 0;
+    let fail = 0;
+    let skipped = 0;
+
+    try {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const isConflict = conflictPaths.includes(item.relPath);
+        if (isConflict && !replaceExisting) {
+          skipped += 1;
+          setUploadProgress({ done: i + 1, total: items.length });
+          continue;
+        }
+        try {
+          const { folder: destFolder, name } = splitRelPath(item.relPath);
+          await uploadImageRequest({
+            file: item.file,
+            folder: destFolder,
+            name,
+            replace: isConflict ? true : false,
+          });
+          ok += 1;
+        } catch {
+          fail += 1;
+        }
+        setUploadProgress({ done: i + 1, total: items.length });
+      }
+
+      toast({
+        message: `Subida lista: ${ok} ok, ${skipped} omitidos, ${fail} errores`,
+        variant: fail ? "warning" : "success",
+      });
+      await fetchScan();
+    } finally {
+      setUploading(false);
+      setConflictOpen(false);
+      setPendingItems([]);
+      setConflictPaths([]);
+      setUploadProgress({ done: 0, total: 0 });
+    }
+  };
+
+  const prepareBulkFromFileList = async (fileList) => {
+    const files = Array.from(fileList || []).filter((f) =>
+      IMAGE_EXT.test(f.name),
+    );
+    if (!files.length) {
+      toast({
+        message: "No hay imágenes válidas (.png .jpg .webp .gif .svg)",
+        variant: "warning",
+      });
+      return;
+    }
+
+    const items = [];
+    const seen = new Set();
+    for (const file of files) {
+      const relPath = toRelPath(file, folder);
+      if (!relPath || seen.has(relPath)) continue;
+      seen.add(relPath);
+      items.push({ file, relPath });
+    }
+
+    if (!items.length) {
+      toast({ message: "Sin rutas válidas para subir", variant: "warning" });
+      return;
+    }
+
+    try {
+      const { data } = await checkImagesExistRequest(items.map((i) => i.relPath));
+      const existing = data?.existing || [];
+      setPendingItems(items);
+      setConflictPaths(existing);
+
+      if (existing.length > 0) {
+        setConflictOpen(true);
+      } else {
+        await runBulkUpload(items, { replaceExisting: false });
+      }
+    } catch (error) {
+      toast({
+        message:
+          error?.response?.data?.message ||
+          "No se pudo comprobar archivos existentes",
+        variant: "error",
+      });
+    }
+  };
+
   const columns = useMemo(
     () => [
       {
@@ -121,8 +256,13 @@ export default function ImgManagerPage() {
         ),
       },
     ],
-    []
+    [],
   );
+
+  const progressPct =
+    uploadProgress.total > 0
+      ? Math.round((uploadProgress.done / uploadProgress.total) * 100)
+      : 0;
 
   return (
     <Box>
@@ -130,10 +270,18 @@ export default function ImgManagerPage() {
         Control de imágenes
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Base: <strong>{pathImg}</strong>
+        Base: <strong>{pathImg}</strong> — podés bajar el ZIP o subir tu carpeta{" "}
+        <code>img</code> local al backend.
       </Typography>
 
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }} alignItems="center">
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1}
+        sx={{ mb: 2 }}
+        alignItems="center"
+        flexWrap="wrap"
+        useFlexGap
+      >
         <TextField
           size="small"
           label="Carpeta"
@@ -141,6 +289,7 @@ export default function ImgManagerPage() {
           onChange={(e) => setFolder(e.target.value)}
           placeholder="products, branding…"
           fullWidth
+          sx={{ minWidth: 180, flex: 1 }}
         />
         <TextField
           size="small"
@@ -151,24 +300,102 @@ export default function ImgManagerPage() {
           sx={{ width: 120 }}
         />
         <Tooltip title="Escanear">
-          <IconButton onClick={() => fetchScan()}>
+          <IconButton onClick={() => fetchScan()} disabled={uploading}>
             <RefreshIcon />
           </IconButton>
         </Tooltip>
-        <Button startIcon={<UploadFileIcon />} onClick={() => setOpenUpload(true)}>
-          Subir
+        <Button
+          startIcon={<UploadFileIcon />}
+          onClick={() => setOpenUpload(true)}
+          disabled={uploading}
+        >
+          Subir 1
         </Button>
-        <Button startIcon={<DownloadIcon />} onClick={downloadZip}>
+        <Button
+          startIcon={<DriveFolderUploadIcon />}
+          variant="outlined"
+          disabled={uploading}
+          onClick={() => folderInputRef.current?.click()}
+        >
+          Subir carpeta
+        </Button>
+        <Button
+          startIcon={<UploadFileIcon />}
+          variant="outlined"
+          disabled={uploading}
+          onClick={() => filesInputRef.current?.click()}
+        >
+          Subir archivos
+        </Button>
+        <Button
+          startIcon={<DownloadIcon />}
+          onClick={downloadZip}
+          disabled={uploading}
+        >
           ZIP
         </Button>
       </Stack>
 
+      <input
+        ref={folderInputRef}
+        type="file"
+        hidden
+        multiple
+        webkitdirectory=""
+        directory=""
+        onChange={(e) => {
+          const list = e.target.files;
+          e.target.value = "";
+          void prepareBulkFromFileList(list);
+        }}
+      />
+      <input
+        ref={filesInputRef}
+        type="file"
+        hidden
+        multiple
+        accept="image/*"
+        onChange={(e) => {
+          const list = e.target.files;
+          e.target.value = "";
+          void prepareBulkFromFileList(list);
+        }}
+      />
+
+      {uploading ? (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="body2" sx={{ mb: 0.5 }}>
+            Subiendo {uploadProgress.done}/{uploadProgress.total} ({progressPct}
+            %)
+          </Typography>
+          <LinearProgress variant="determinate" value={progressPct} />
+        </Box>
+      ) : null}
+
       <Chip size="small" label={`Archivos: ${totals?.totalFiles ?? 0}`} sx={{ mb: 1 }} />
-      <Chip size="small" label={`Tamaño: ${totals?.totalSizeHuman ?? "0 B"}`} sx={{ mb: 2, ml: 1 }} />
+      <Chip
+        size="small"
+        label={`Tamaño: ${totals?.totalSizeHuman ?? "0 B"}`}
+        sx={{ mb: 2, ml: 1 }}
+      />
 
-      <TablePro title="Imágenes" rows={rows} columns={columns} showSearch showPagination defaultRowsPerPage={10} loading={loading} />
+      <TablePro
+        title="Imágenes"
+        rows={rows}
+        columns={columns}
+        showSearch
+        showPagination
+        defaultRowsPerPage={10}
+        loading={loading}
+      />
 
-      <SimpleDialog open={openUpload} onClose={() => setOpenUpload(false)} title="Subir imagen" maxWidth="sm" fullWidth>
+      <SimpleDialog
+        open={openUpload}
+        onClose={() => setOpenUpload(false)}
+        title="Subir imagen"
+        maxWidth="sm"
+        fullWidth
+      >
         <UploadImageForm
           defaultFolder={folder}
           onClose={() => setOpenUpload(false)}
@@ -186,6 +413,83 @@ export default function ImgManagerPage() {
         message={`¿Eliminar ${rowToDelete?.relPath}?`}
         onClickAccept={confirmDelete}
       />
+
+      <SimpleDialog
+        open={conflictOpen}
+        onClose={() => {
+          if (uploading) return;
+          setConflictOpen(false);
+          setPendingItems([]);
+          setConflictPaths([]);
+        }}
+        title="Archivos que ya existen"
+        maxWidth="sm"
+        fullWidth
+        disableClose={uploading}
+        hideClose={uploading}
+      >
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          Hay <strong>{conflictPaths.length}</strong> archivo(s) que ya están en
+          el backend. ¿Qué querés hacer con ellos?
+        </Typography>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+          Total a subir: {pendingItems.length} · Nuevos:{" "}
+          {pendingItems.length - conflictPaths.length} · Conflictos:{" "}
+          {conflictPaths.length}
+        </Typography>
+        <List dense sx={{ maxHeight: 220, overflow: "auto", mb: 2, bgcolor: "action.hover", borderRadius: 1 }}>
+          {conflictPaths.slice(0, 40).map((p) => (
+            <ListItem key={p} disableGutters sx={{ px: 1 }}>
+              <ListItemText
+                primary={p}
+                primaryTypographyProps={{ variant: "caption", sx: { wordBreak: "break-all" } }}
+              />
+            </ListItem>
+          ))}
+          {conflictPaths.length > 40 ? (
+            <ListItem>
+              <ListItemText
+                primary={`… y ${conflictPaths.length - 40} más`}
+                primaryTypographyProps={{ variant: "caption" }}
+              />
+            </ListItem>
+          ) : null}
+        </List>
+        {uploading ? (
+          <Box sx={{ mb: 1 }}>
+            <LinearProgress variant="determinate" value={progressPct} />
+            <Typography variant="caption">
+              {uploadProgress.done}/{uploadProgress.total}
+            </Typography>
+          </Box>
+        ) : (
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={() => void runBulkUpload(pendingItems, { replaceExisting: true })}
+            >
+              Reemplazar existentes
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => void runBulkUpload(pendingItems, { replaceExisting: false })}
+            >
+              Omitir existentes
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setConflictOpen(false);
+                setPendingItems([]);
+                setConflictPaths([]);
+              }}
+            >
+              Cancelar
+            </Button>
+          </Stack>
+        )}
+      </SimpleDialog>
     </Box>
   );
 }

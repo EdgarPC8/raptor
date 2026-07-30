@@ -44,12 +44,17 @@ import {
   getActiveShift,
   getShifts,
   openShift,
+  setActiveCashRegister,
 } from "../../api/shiftRequest.js";
 import ShiftProgrammerEditDialog from "./ShiftProgrammerEditDialog.jsx";
 import ProgrammerMovementDateField, {
   movementDateForApi,
 } from "./inventoryControl/components/ProgrammerMovementDateField.jsx";
-import { getAllProductsAll, getStoresRequest } from "../../api/inventoryControlRequest.js";
+import {
+  getAllProductsAll,
+  getStoresRequest,
+  createCashRegisterRequest,
+} from "../../api/inventoryControlRequest.js";
 import { fetchSriBillingSettings } from "../../api/sriBillingRequest.js";
 import OpenShiftStoreDialog from "../../components/OpenShiftStoreDialog.jsx";
 import TourHelpButton from "../../components/TourHelpButton.jsx";
@@ -243,6 +248,10 @@ export default function TurnoPage() {
   const [storeModalOpen, setStoreModalOpen] = useState(false);
   const [pendingStoreId, setPendingStoreId] = useState("");
   const [openDemoDialog, setOpenDemoDialog] = useState(false);
+  const [addRegisterOpen, setAddRegisterOpen] = useState(false);
+  const [newRegisterName, setNewRegisterName] = useState("");
+  const [newRegisterEmission, setNewRegisterEmission] = useState("");
+  const [registerSaving, setRegisterSaving] = useState(false);
   const tourDemoGenRef = useRef(0);
   const activeShiftRef = useRef(null);
   activeShiftRef.current = activeShift;
@@ -353,7 +362,14 @@ export default function TurnoPage() {
       ]);
       setActiveShift(activeRes.data || null);
       setHistory(Array.isArray(histRes.data) ? histRes.data : []);
-      setStores(Array.isArray(storesRes.data) ? storesRes.data : []);
+      const rawStores = Array.isArray(storesRes.data) ? storesRes.data : [];
+      // Solo sucursales propias activas (nunca bodega ni vitrina).
+      const propias = rawStores.filter(
+        (s) =>
+          String(s?.locationKind || "").toLowerCase() === "propia" &&
+          (s?.isActive === true || s?.isActive === 1 || s?.isActive === "1"),
+      );
+      setStores(propias);
       setSriSettings(sriRes);
     } catch (e) {
       void toast?.({
@@ -490,13 +506,21 @@ export default function TurnoPage() {
       });
       return;
     }
-    if (stores.length > 1) {
-      setPendingStoreId(String(stores[0].id));
-      setStoreModalOpen(true);
+    if (!stores.length) {
+      void toast?.({
+        message:
+          "No hay sucursales propias activas. Ve a Locales, crea o edita un local como «Sucursal propia» y actívalo.",
+        variant: "warning",
+      });
       return;
     }
-    const onlyId = stores.length === 1 ? String(stores[0].id) : undefined;
-    await doOpenShift(onlyId);
+    // Una sola propia activa → abrir directo. Varias → elegir.
+    if (stores.length === 1) {
+      await doOpenShift(String(stores[0].id));
+      return;
+    }
+    setPendingStoreId(String(stores[0].id));
+    setStoreModalOpen(true);
   };
 
   const handleCloseShift = async () => {
@@ -537,6 +561,55 @@ export default function TurnoPage() {
     }
   };
 
+  const handleSelectRegister = async (registerId) => {
+    if (!activeShift?.id || !registerId) return;
+    const currentId = activeShift?.activeCashRegisterId ?? activeShift?.activeCashRegister?.id;
+    if (Number(registerId) === Number(currentId)) return;
+    try {
+      setSaving(true);
+      const { data } = await setActiveCashRegister(activeShift.id, Number(registerId));
+      if (data?.shift) setActiveShift(data.shift);
+      else await load();
+      void toast?.({ message: "Caja activa cambiada.", variant: "success" });
+    } catch (e) {
+      void toast?.({
+        message: e?.response?.data?.message || "No se pudo cambiar de caja.",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddRegister = async () => {
+    const storeId = activeShift?.storeId || activeShift?.store?.id;
+    if (!storeId) return;
+    const name = newRegisterName.trim();
+    if (!name) {
+      void toast?.({ message: "Escribe el nombre de la caja.", variant: "warning" });
+      return;
+    }
+    try {
+      setRegisterSaving(true);
+      await createCashRegisterRequest(storeId, {
+        name,
+        emissionPointCode: newRegisterEmission.trim() || undefined,
+      });
+      setAddRegisterOpen(false);
+      setNewRegisterName("");
+      setNewRegisterEmission("");
+      await load();
+      void toast?.({ message: "Caja añadida al local.", variant: "success" });
+    } catch (e) {
+      void toast?.({
+        message: e?.response?.data?.message || "No se pudo crear la caja.",
+        variant: "error",
+      });
+    } finally {
+      setRegisterSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
@@ -552,6 +625,9 @@ export default function TurnoPage() {
   const movementItems = Array.isArray(cashMovements?.items) ? cashMovements.items : [];
   const expectedCash = Number(activeShift?.expectedCashTotal ?? 0);
   const diffPreview = to2(closeTotal - expectedCash);
+  const cashRegisters = activeShift?.cashRegisters || [];
+  const activeRegisterId =
+    activeShift?.activeCashRegisterId ?? activeShift?.activeCashRegister?.id;
 
   const panelSx = { p: 1.5, borderRadius: 1.5, mb: 1.5 };
 
@@ -625,16 +701,25 @@ export default function TurnoPage() {
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
               Se abrirá en <strong>{stores[0].name}</strong> (
               {stores[0].establishmentCode || "001"}-{stores[0].emissionPointCode || "001"}).
-              {sriSettings?.readyForInvoicing
-                ? " Emisor SRI listo."
-                : sriSettings?.hasCertificate
-                  ? " Firma cargada; completa datos SRI si vas a facturar."
-                  : ""}
             </Typography>
           )}
           {stores.length > 1 && (
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-              Después de ingresar el efectivo, al abrir te pediremos en qué sucursal/local.
+              Al abrir te pediremos en qué sucursal propia activa.
+            </Typography>
+          )}
+          {stores.length === 0 && (
+            <Typography variant="caption" color="warning.main" display="block" sx={{ mb: 1 }}>
+              No hay sucursales propias activas. Ve a{" "}
+              <Button
+                component={RouterLink}
+                to={APP_ROUTES.channel.stores}
+                size="small"
+                sx={{ p: 0, minWidth: 0, verticalAlign: "baseline", textTransform: "none" }}
+              >
+                Locales
+              </Button>
+              , tipo «Sucursal propia» y Activo.
             </Typography>
           )}
 
@@ -699,6 +784,63 @@ export default function TurnoPage() {
         </Paper>
       ) : (
         <>
+        {(activeShift.storeId || activeShift.store?.id) && (
+          <Paper variant="panel" sx={panelSx} data-tour="turno-registers">
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              spacing={1}
+              sx={{ mb: 0.75 }}
+              flexWrap="wrap"
+            >
+              <Typography variant="subtitle2" fontWeight={700}>
+                Cajas del local
+              </Typography>
+              {isAdmin && (
+                <Button
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={() => {
+                    setNewRegisterName(`Caja ${(cashRegisters.length || 0) + 1}`);
+                    setNewRegisterEmission(
+                      String((cashRegisters.length || 0) + 1).padStart(3, "0"),
+                    );
+                    setAddRegisterOpen(true);
+                  }}
+                >
+                  Añadir caja
+                </Button>
+              )}
+            </Stack>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              El turno es del local. Elige en qué caja vendes (punto de emisión SRI).
+            </Typography>
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+              {cashRegisters.length === 0 ? (
+                <Typography variant="caption" color="text.secondary">
+                  Aún no hay cajas; se creará Caja 1 al recargar.
+                </Typography>
+              ) : (
+                cashRegisters.map((reg) => {
+                  const selected = Number(reg.id) === Number(activeRegisterId);
+                  return (
+                    <Chip
+                      key={reg.id}
+                      size="small"
+                      color={selected ? "primary" : "default"}
+                      variant={selected ? "filled" : "outlined"}
+                      label={`${reg.name}${reg.emissionPointCode ? ` · ${reg.emissionPointCode}` : ""}`}
+                      onClick={() => void handleSelectRegister(reg.id)}
+                      disabled={saving}
+                      clickable
+                    />
+                  );
+                })
+              )}
+            </Stack>
+          </Paper>
+        )}
         <Paper variant="panel" sx={panelSx} data-tour="turno-movements">
           <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.75 }}>
             <SwapVertIcon sx={{ fontSize: 18 }} color="action" />
@@ -1117,6 +1259,48 @@ export default function TurnoPage() {
         onConfirm={() => void doOpenShift(pendingStoreId)}
         confirming={saving}
       />
+
+      <Dialog
+        open={addRegisterOpen}
+        onClose={() => !registerSaving && setAddRegisterOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 0.5, fontWeight: 800 }}>Nueva caja</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 1 }}>
+            <TextField
+              size="small"
+              label="Nombre"
+              value={newRegisterName}
+              onChange={(e) => setNewRegisterName(e.target.value)}
+              fullWidth
+              autoFocus
+            />
+            <TextField
+              size="small"
+              label="Punto emisión SRI"
+              value={newRegisterEmission}
+              onChange={(e) => setNewRegisterEmission(e.target.value)}
+              helperText="Ej. 001, 002, 003"
+              fullWidth
+            />
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button size="small" disabled={registerSaving} onClick={() => setAddRegisterOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                disabled={registerSaving}
+                onClick={() => void handleAddRegister()}
+              >
+                {registerSaving ? "Guardando…" : "Crear"}
+              </Button>
+            </Stack>
+          </Stack>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={openDemoDialog}

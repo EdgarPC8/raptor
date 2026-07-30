@@ -8,7 +8,7 @@ export function getCajaTourSteps() {
       popover: {
         title: "Punto de venta",
         description:
-          "Aquí cobras ventas del día. El icono verde/rojo indica si hay un turno abierto (obligatorio para cobrar).",
+          "Aquí cobras ventas del día. El icono verde/rojo indica si hay un turno abierto (obligatorio para cobrar). El stock que ves es el del local del turno (no el total de Bodega).",
         side: "bottom",
         align: "start",
       },
@@ -18,7 +18,7 @@ export function getCajaTourSteps() {
       popover: {
         title: "Estado del turno",
         description:
-          "Sin turno abierto no se puede cobrar. Usa el aviso «Abrir turno» o ve a Turno para iniciar la caja.",
+          "Sin turno abierto no se puede cobrar. El stock se descuenta del local donde abriste turno. Si el producto está solo en Bodega, trasládalo primero a la sucursal.",
         side: "bottom",
         align: "start",
       },

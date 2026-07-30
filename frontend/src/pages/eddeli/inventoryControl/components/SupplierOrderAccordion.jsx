@@ -37,6 +37,7 @@ import {
 import SimpleDialog from "../../../../components/Dialogs/SimpleDialog";
 import SearchableSelect from "../../../../components/SearchableSelect";
 import { useAuth } from "../../../../context/AuthContext";
+import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
 import { formatDateTime } from "../../../../helpers/functions.js";
 import DocumentAttachmentIcon from "./DocumentAttachmentIcon";
 import DocumentUploadButton from "./DocumentUploadButton";
@@ -47,7 +48,14 @@ import ProductPriceReference, {
   formatProductPrice,
   formatUnitPrice,
 } from "./ProductPriceReference";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getStoresRequest } from "../../../../api/inventoryControlRequest.js";
+import {
+  locationKindLabel,
+  normalizeLocationKind,
+  sortStoresByKind,
+  storeHoldsInventory,
+} from "../../../../utils/storeLocationKind.js";
 
 function supplierTotal(order) {
   if (order?.totalAmount != null && Number.isFinite(Number(order.totalAmount))) {
@@ -138,6 +146,8 @@ export default function SupplierOrderAccordion({
 }) {
   const theme = useTheme();
   const { user } = useAuth();
+  const { activeApp } = useAppSettings();
+  const multiStockEnabled = activeApp?.multiStockEnabled !== false;
   const isProgramador = user?.loginRol === "Programador";
   const [openDelete, setOpenDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -150,6 +160,11 @@ export default function SupplierOrderAccordion({
   const [payDate, setPayDate] = useState(nowLocalDateTime());
   const [payMethod, setPayMethod] = useState("efectivo");
   const [payNote, setPayNote] = useState("");
+
+  const [receiveOpen, setReceiveOpen] = useState(false);
+  const [receiveStoreId, setReceiveStoreId] = useState("");
+  const [inventoryStores, setInventoryStores] = useState([]);
+  const [storesLoading, setStoresLoading] = useState(false);
 
   const total = supplierTotal(order);
   const paid = supplierPaid(order);
@@ -176,7 +191,79 @@ export default function SupplierOrderAccordion({
     }
   };
 
-  const handleReceived = () => run(markSupplierOrderReceivedRequest(order.id));
+  const handleReceived = () => {
+    if (!multiStockEnabled) {
+      void run(markSupplierOrderReceivedRequest(order.id));
+      return;
+    }
+    setReceiveOpen(true);
+  };
+
+  const loadInventoryStores = async () => {
+    try {
+      setStoresLoading(true);
+      const { data } = await getStoresRequest();
+      const list = sortStoresByKind(
+        (Array.isArray(data) ? data : []).filter(
+          (s) => storeHoldsInventory(s.locationKind) && s.isActive !== false,
+        ),
+      );
+      setInventoryStores(list);
+      const bodega = list.find((s) => normalizeLocationKind(s.locationKind) === "bodega");
+      setReceiveStoreId(bodega ? String(bodega.id) : list[0] ? String(list[0].id) : "");
+    } catch {
+      setInventoryStores([]);
+      setReceiveStoreId("");
+    } finally {
+      setStoresLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (receiveOpen && multiStockEnabled) {
+      void loadInventoryStores();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [receiveOpen, multiStockEnabled]);
+
+  useEffect(() => {
+    if (order?.receivedStoreId && multiStockEnabled && inventoryStores.length === 0) {
+      void loadInventoryStores();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.receivedStoreId, multiStockEnabled]);
+
+  const receivedStoreLabel = useMemo(() => {
+    const sid = order?.receivedStoreId;
+    if (sid == null) return null;
+    const found = inventoryStores.find((s) => Number(s.id) === Number(sid));
+    if (found) return `${found.name} (${locationKindLabel(found.locationKind)})`;
+    return `Local #${sid}`;
+  }, [order?.receivedStoreId, inventoryStores]);
+
+  const handleConfirmReceive = async () => {
+    if (multiStockEnabled && !receiveStoreId) {
+      void toast?.({
+        message: "Elige Bodega o una sucursal para recibir el stock.",
+        variant: "warning",
+      });
+      return;
+    }
+    setBusy(true);
+    try {
+      await toast({
+        promise: markSupplierOrderReceivedRequest(order.id, {
+          ...(multiStockEnabled ? { storeId: Number(receiveStoreId) } : {}),
+        }),
+      });
+      setReceiveOpen(false);
+      await onReload?.();
+    } catch {
+      /* toast */
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const openPayDialog = (full = false) => {
     const rem = remaining > 0 ? remaining : total;
@@ -299,6 +386,54 @@ export default function SupplierOrderAccordion({
       >
         ¿Eliminar el pedido #{order.id} a {order.ERP_supplier?.name || "proveedor"}?
       </SimpleDialog>
+
+      <Dialog
+        open={receiveOpen}
+        onClose={() => !busy && setReceiveOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle sx={{ fontWeight: 700 }}>Recibir pedido #{order.id}</DialogTitle>
+        <DialogContent dividers>
+          <Alert severity="warning" sx={{ py: 0.75, mb: 1.5 }}>
+            Multistock activo: elige <strong>dónde entra</strong> la mercadería (Bodega o sucursal).
+          </Alert>
+          <TextField
+            select
+            fullWidth
+            size="small"
+            label="Recibir en"
+            value={receiveStoreId}
+            onChange={(e) => setReceiveStoreId(e.target.value)}
+            disabled={storesLoading || busy}
+            helperText={
+              storesLoading
+                ? "Cargando locales…"
+                : "Luego puedes traspasar entre locales desde Locales."
+            }
+          >
+            {inventoryStores.map((s) => (
+              <MenuItem key={s.id} value={String(s.id)}>
+                {s.name} ({locationKindLabel(s.locationKind)})
+              </MenuItem>
+            ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1 }}>
+          <Button onClick={() => setReceiveOpen(false)} color="inherit" disabled={busy}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            startIcon={<LocalShippingIcon />}
+            onClick={() => void handleConfirmReceive()}
+            disabled={busy || storesLoading || !receiveStoreId}
+          >
+            Confirmar recepción
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={dateDialogOpen} onClose={() => setDateDialogOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle sx={{ fontWeight: 700 }}>Editar fechas · Pedido #{order.id}</DialogTitle>
@@ -557,6 +692,14 @@ export default function SupplierOrderAccordion({
                   Marcar recibido
                 </Button>
               )}
+              {order.receivedAt && order.receivedStoreId != null ? (
+                <Chip
+                  size="small"
+                  color="secondary"
+                  variant="outlined"
+                  label={`Stock en: ${receivedStoreLabel || `local #${order.receivedStoreId}`}`}
+                />
+              ) : null}
               {!fullyPaid && (
                 <>
                   <Button
@@ -663,7 +806,7 @@ export default function SupplierOrderAccordion({
                   <TextField
                     label="Precio unitario"
                     type="number"
-                    inputProps={{ min: 0, step: "0.01" }}
+                    inputProps={{ min: 0, step: "any" }}
                     size="small"
                     fullWidth
                     value={addDraft.unitPrice}

@@ -31,6 +31,7 @@ import { pathImg, buildImageUrl } from "../../../../api/axios";
 import { mediaStoragePath } from "../../../../utils/mediaPaths.js";
 import toast from "react-hot-toast";
 import { useAuth } from "../../../../context/AuthContext";
+import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
 import {
   formatProductCategoryName,
   productMatchesCategoryFilter,
@@ -56,7 +57,7 @@ function unitAbbrOf(p) {
   );
 }
 
-function ProductCard({ product, onEdit, onDuplicate, onStockAdjusted, pathImgBase }) {
+function ProductCard({ product, onEdit, onDuplicate, onStockAdjusted, pathImgBase, multiStockEnabled }) {
   const { toast: authToast } = useAuth();
   const imgSrc = buildImageUrl(product?.primaryImageUrl);
   const categoryName = formatProductCategoryName(product);
@@ -177,43 +178,45 @@ function ProductCard({ product, onEdit, onDuplicate, onStockAdjusted, pathImgBas
             ${Number(product?.price ?? 0).toFixed(2)}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Actual: <strong>{current}</strong>
+            {multiStockEnabled ? "Total" : "Stock"}: <strong>{current}</strong>
             {abbr ? ` ${abbr}` : ""}
           </Typography>
         </Box>
-        <Box sx={{ mt: 1, display: "flex", gap: 0.5, alignItems: "flex-start" }}>
-          <TextField
-            size="small"
-            fullWidth
-            variant="outlined"
-            label={abbr ? `Stock (${abbr})` : "Nuevo stock"}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                applyStockAdjust();
-              }
-            }}
-            disabled={saving}
-            inputProps={{ inputMode: "decimal" }}
-            helperText="Movimiento ajuste"
-          />
-          <Tooltip title="Guardar ajuste">
-            <span>
-              <IconButton
-                color="primary"
-                size="small"
-                onClick={applyStockAdjust}
-                disabled={saving}
-                aria-label="Guardar ajuste de stock"
-                sx={{ mt: 0.5 }}
-              >
-                <CheckIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Box>
+        {!multiStockEnabled ? (
+          <Box sx={{ mt: 1, display: "flex", gap: 0.5, alignItems: "flex-start" }}>
+            <TextField
+              size="small"
+              fullWidth
+              variant="outlined"
+              label={abbr ? `Stock (${abbr})` : "Nuevo stock"}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  applyStockAdjust();
+                }
+              }}
+              disabled={saving}
+              inputProps={{ inputMode: "decimal" }}
+              helperText="Movimiento ajuste"
+            />
+            <Tooltip title="Guardar ajuste">
+              <span>
+                <IconButton
+                  color="primary"
+                  size="small"
+                  onClick={applyStockAdjust}
+                  disabled={saving}
+                  aria-label="Guardar ajuste de stock"
+                  sx={{ mt: 0.5 }}
+                >
+                  <CheckIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        ) : null}
         <Box sx={{ mt: 1, display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
           {onEdit && (
             <Tooltip title="Editar">
@@ -333,6 +336,8 @@ export default function ProductsGridView({
   pathImgBase = pathImg,
   loading = false,
 }) {
+  const { activeApp } = useAppSettings();
+  const multiStockEnabled = activeApp?.multiStockEnabled !== false;
   const [duplicateProduct, setDuplicateProduct] = useState(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(24);
@@ -376,7 +381,10 @@ export default function ProductsGridView({
   return (
     <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Ordenadas por stock (mayor a menor). Puede ajustar stock con movimiento de ajuste.
+        Ordenadas por stock (mayor a menor).
+        {multiStockEnabled
+          ? " Con multistock activo el total es la suma por local; ajustes en Locales."
+          : " Puede ajustar stock con el check (movimiento de ajuste)."}
       </Typography>
       {loading ? (
         <CardsGridSkeleton count={8} />
@@ -391,6 +399,7 @@ export default function ProductsGridView({
                   onDuplicate={(prod) => setDuplicateProduct(prod)}
                   onStockAdjusted={onReload}
                   pathImgBase={pathImgBase}
+                  multiStockEnabled={multiStockEnabled}
                 />
               </Grid>
             ))}

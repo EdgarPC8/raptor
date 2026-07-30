@@ -2,10 +2,14 @@
 export const PEDIDO_PROVEEDOR_FORM_TOUR_ID = "pedido-proveedor-form";
 
 /**
- * @param {{ runItemsDemo?: () => void | Promise<void>, resetDemo?: () => void }} [hooks]
+ * @param {{
+ *   runItemsDemo?: () => void | Promise<void>,
+ *   resetDemo?: () => void,
+ *   createPackDemo?: () => void,
+ * }} [hooks]
  */
 export function getPedidoProveedorFormTourSteps(hooks = {}) {
-  const { runItemsDemo, resetDemo } = hooks;
+  const { runItemsDemo, resetDemo, createPackDemo } = hooks;
 
   const refreshSoon = (driver, ms = 80) => {
     window.setTimeout(() => {
@@ -23,7 +27,7 @@ export function getPedidoProveedorFormTourSteps(hooks = {}) {
       popover: {
         title: "Pedido a proveedor",
         description:
-          "Registrás una compra: proveedor, productos, cantidades, precios e IVA. Luego podés abonar o marcar recepción desde el calendario.",
+          "Registrás una compra: proveedor, productos, cantidades y precios. Con multistock, al marcar recibido elegís Bodega o sucursal.",
         side: "bottom",
         align: "center",
       },
@@ -52,7 +56,8 @@ export function getPedidoProveedorFormTourSteps(hooks = {}) {
       element: "[data-tour='pedido-prov-line']",
       popover: {
         title: "Cantidad, precio e IVA",
-        description: "Completá la línea y sumala al pedido con +. Podés reordenar ítems después.",
+        description:
+          "El precio unitario admite varios decimales (más exacto al repartir pacas). Sumá la línea con +; queda sin paca hasta que la organices.",
         side: "top",
         align: "start",
       },
@@ -63,11 +68,48 @@ export function getPedidoProveedorFormTourSteps(hooks = {}) {
         void Promise.resolve(runItemsDemo?.()).then(() => refreshSoon(driver, 50));
       },
       popover: {
-        title: "Productos del pedido (demo)",
+        title: "Lista del pedido",
         description:
-          "La lista se va llenando con ítems de ejemplo. Acá ves subtotal, IVA y total antes de guardar.",
+          "Acá ves los productos, subtotal e IVA. Podés arrastrarlos a una paca o dejarlos sueltos.",
         side: "left",
         align: "center",
+      },
+    },
+    {
+      element: "[data-tour='pedido-prov-create-pack']",
+      allowMissing: true,
+      onHighlightStarted: (_el, _step, { driver }) => {
+        createPackDemo?.();
+        refreshSoon(driver, 120);
+      },
+      popover: {
+        title: "Crear paca",
+        description:
+          "Agrupá productos que llegan juntos (misma caja). Los sueltos entran solos a la paca nueva.",
+        side: "left",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='pedido-prov-pack']",
+      allowMissing: true,
+      popover: {
+        title: "Paca (acordeón)",
+        description:
+          "Cada paca se colapsa con la flecha. Usá ↑↓ para ordenar y la papelera para desarmar la paca.",
+        side: "left",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='pedido-prov-pack-meta']",
+      allowMissing: true,
+      popover: {
+        title: "Fechas y valor de la paca",
+        description:
+          "Poné vencimiento/elaboración y el valor total de la paca. El check reparte ese monto en los precios unitarios (con varios decimales).",
+        side: "left",
+        align: "start",
       },
     },
     {
@@ -76,7 +118,7 @@ export function getPedidoProveedorFormTourSteps(hooks = {}) {
       popover: {
         title: "Guardar compra",
         description:
-          "Confirmá el pedido a proveedor. Quedará en el calendario para seguimiento de pago y entrega. En el tutorial no guardamos.",
+          "Confirmá el pedido. Quedará en el calendario para pago y recepción. En el tutorial no guardamos.",
         side: "top",
         align: "end",
       },

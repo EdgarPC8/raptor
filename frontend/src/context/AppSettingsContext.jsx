@@ -71,6 +71,9 @@ function toActiveApp(settings, { offline = false } = {}) {
     showPublicStoresVitrina: unconfigured
       ? false
       : resolved.showPublicStoresVitrina !== false,
+    multiStockEnabled: unconfigured
+      ? true
+      : resolved.multiStockEnabled !== false,
     year: new Date().getFullYear(),
     background: "#F0F9FB",
   };

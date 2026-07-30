@@ -29,7 +29,13 @@ const paperSx = {
   overflowX: "auto",
 };
 
-const defaultProductsStock = { agotados: [], porAgotarse: [] };
+const defaultProductsStock = {
+  agotados: [],
+  porAgotarse: [],
+  critico: [],
+  bajo: [],
+  precaucion: [],
+};
 
 const defaultBatchesAlerts = { expired: [], expiring: [], ok: [], warnDays: 30 };
 

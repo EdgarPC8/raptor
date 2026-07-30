@@ -29,6 +29,10 @@ export const downloadFolderZipRequest = (folder = "") =>
     responseType: "blob",
   });
 
+/** Comprueba qué rutas relativas ya existen en src/img */
+export const checkImagesExistRequest = (paths = []) =>
+  axios.post("/img/check-exists", { paths }, auth());
+
 export const deleteFolderRequest = (folder, { force = false } = {}) =>
   axios.delete(
     `/img/folder?folder=${encodeURIComponent(folder)}&force=${encodeURIComponent(force)}`,

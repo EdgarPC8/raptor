@@ -110,6 +110,8 @@ function hydratePacksAndLots(rawItems) {
         lotCode: "",
         expiresAt: "",
         manufacturedAt: "",
+        totalPrice: "",
+        expanded: true,
       };
       packByKey.set(packKey, pack);
       packs.push(pack);
@@ -166,6 +168,13 @@ function hydratePacksAndLots(rawItems) {
       lotKey,
     };
   });
+
+  for (const pack of packs) {
+    const sum = items
+      .filter((it) => it.packKey === pack.key)
+      .reduce((acc, it) => acc + formatOrderLineTotal(it.quantity, it.unitPrice), 0);
+    pack.totalPrice = sum > 0 ? String(Number(sum.toFixed(2))) : "";
+  }
 
   return { items, packs, lots };
 }
@@ -378,6 +387,8 @@ function SupplierOrderForm(
         lotCode: "",
         expiresAt: "",
         manufacturedAt: "",
+        totalPrice: "",
+        expanded: true,
       },
     ]);
     // Si hay productos sueltos, entran a la paca nueva (así se guardan al editar).
@@ -443,6 +454,64 @@ function SupplierOrderForm(
     );
     setLots((prev) => prev.filter((l) => l.packKey !== packKey));
     setPacks((prev) => prev.filter((p) => p.key !== packKey));
+  };
+
+  const movePack = (packKey, direction) => {
+    setPacks((prev) => {
+      const i = prev.findIndex((p) => p.key === packKey);
+      if (i < 0) return prev;
+      const j = i + direction;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  };
+
+  /** Reparte el valor total de la paca en los P. unit. de sus productos. */
+  const applyPackTotal = (packKey, rawTotal) => {
+    const total = Number(String(rawTotal ?? "").replace(",", "."));
+    if (!Number.isFinite(total) || total < 0) {
+      toast({ message: "Indicá un valor de paca válido (≥ 0).", variant: "warning" });
+      return;
+    }
+    setPacks((prev) =>
+      prev.map((p) => (p.key === packKey ? { ...p, totalPrice: String(total) } : p)),
+    );
+    setItems((prev) => {
+      const packItems = prev.filter((it) => it.packKey === packKey);
+      const rows = packItems.map((it) => ({
+        lineId: it.lineId,
+        qty: Number(it.quantity),
+        line: formatOrderLineTotal(it.quantity, it.unitPrice),
+      }));
+      const sumQty = rows.reduce((a, r) => a + (r.qty > 0 ? r.qty : 0), 0);
+      const sumLine = rows.reduce((a, r) => a + (r.line > 0 ? r.line : 0), 0);
+      if (!(sumQty > 0)) {
+        toast({
+          message: "La paca no tiene cantidades para repartir el valor.",
+          variant: "warning",
+        });
+        return prev;
+      }
+      return prev.map((it) => {
+        if (it.packKey !== packKey) return it;
+        const qty = Number(it.quantity);
+        if (!(qty > 0)) return it;
+        let newUnit;
+        if (sumLine > 1e-9) {
+          const line = formatOrderLineTotal(it.quantity, it.unitPrice);
+          newUnit = (total * (line / sumLine)) / qty;
+        } else {
+          newUnit = total / sumQty;
+        }
+        return { ...it, unitPrice: Number(newUnit.toFixed(8)) };
+      });
+    });
+    toast({
+      message: "Valor de la paca aplicado a los precios unitarios.",
+      variant: "success",
+    });
   };
 
   const createLot = (packKey) => {
@@ -698,8 +767,14 @@ function SupplierOrderForm(
       tourGenRef.current += 1;
       if (!isEditing) {
         setItems((prev) => prev.filter((it) => !it._tourDemo));
+        setPacks([]);
+        setLots([]);
         setSelectedProduct("");
       }
+    },
+    createPackDemo() {
+      if (isEditing) return;
+      createPack();
     },
   }));
 
@@ -793,7 +868,7 @@ function SupplierOrderForm(
                 label="Precio unit."
                 type="number"
                 InputLabelProps={{ shrink: true }}
-                inputProps={{ min: 0, step: "0.001" }}
+                inputProps={{ min: 0, step: "any" }}
                 {...register("unitPrice")}
               />
             </Grid>
@@ -885,6 +960,8 @@ function SupplierOrderForm(
               onCreatePack={createPack}
               onUpdatePack={updatePack}
               onRemovePack={removePack}
+              onMovePack={movePack}
+              onApplyPackTotal={applyPackTotal}
               onCreateLot={createLot}
               onUpdateLot={updateLot}
               onRemoveLot={removeLot}

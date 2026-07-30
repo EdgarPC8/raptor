@@ -8,17 +8,15 @@ export function formatProductPrice(amount) {
 }
 
 /**
- * Precio UNITARIO con hasta 3 decimales (ej. $0.125).
- * Los totales de dinero se siguen mostrando con 2 decimales (formatProductPrice),
- * pero el precio por unidad admite 3 decimales para que la multiplicación cuadre
- * (10 × $0.125 = $1.25).
+ * Precio UNITARIO con hasta 8 decimales (reparto exacto de pacas / costos).
+ * Los totales de línea se muestran con formatProductPrice (2 decimales de moneda).
  */
 export function formatUnitPrice(amount) {
   return new Intl.NumberFormat("es-EC", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
-    maximumFractionDigits: 3,
+    maximumFractionDigits: 8,
   }).format(Number(amount || 0));
 }
 

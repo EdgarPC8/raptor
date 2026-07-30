@@ -97,6 +97,7 @@ export default function AppSettingsPage() {
         showPublicCatalog: settings.showPublicCatalog !== false,
         showPublicStoresPropia: settings.showPublicStoresPropia !== false,
         showPublicStoresVitrina: settings.showPublicStoresVitrina !== false,
+        multiStockEnabled: settings.multiStockEnabled !== false,
       });
     }
   }, [settings]);
@@ -528,6 +529,38 @@ export default function AppSettingsPage() {
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: "action.hover", mt: 1 }}>
                   <AppTimeClockPanel timezone={form.timezone} />
                 </Paper>
+              </Box>
+
+              <Divider />
+              <Box data-tour="config-multistock">
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Inventario
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: -0.5, mb: 0.5 }}>
+                  Multistock: stock por Bodega y sucursales (traspasos). Sin multistock: stock
+                  general editable en Productos.
+                </Typography>
+                <FormGroup>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={Boolean(form.multiStockEnabled)}
+                        onChange={onToggle("multiStockEnabled")}
+                      />
+                    }
+                    label="Activar multistock (stock por local)"
+                  />
+                </FormGroup>
+                {form.multiStockEnabled ? (
+                  <Alert severity="info" sx={{ py: 0.5, mt: 0.5 }}>
+                    En Productos el stock se muestra como suma. Ajustes y traspasos se hacen en
+                    Locales.
+                  </Alert>
+                ) : (
+                  <Alert severity="warning" sx={{ py: 0.5, mt: 0.5 }}>
+                    Modo clásico: en Productos puedes editar el stock con el check de ajuste.
+                  </Alert>
+                )}
               </Box>
 
               <Divider />

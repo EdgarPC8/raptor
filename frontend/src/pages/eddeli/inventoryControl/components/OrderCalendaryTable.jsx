@@ -4,6 +4,7 @@ import {
   Accordion, AccordionSummary, AccordionDetails, Divider,
   useTheme, CircularProgress, ToggleButton, ToggleButtonGroup,
   Chip, LinearProgress, Stack,
+  Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Alert,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 
@@ -29,6 +30,7 @@ import PaymentsIcon from '@mui/icons-material/Payments';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import TodayIcon from '@mui/icons-material/Today';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import TuneIcon from '@mui/icons-material/Tune';
 
 import {
   updateOrderItemRequest,
@@ -40,9 +42,21 @@ import {
   getAllCustomersRequest,
   addOrderItemToOrderRequest,
 } from '../../../../api/ordersRequest';
-import { getAllProductsAll } from '../../../../api/inventoryControlRequest';
+import {
+  getAllProductsAll,
+  getStoresRequest,
+  getStoreStocksRequest,
+  registerMovement,
+} from '../../../../api/inventoryControlRequest';
 import { useAuth } from '../../../../context/AuthContext';
+import { useAppSettings } from '../../../../context/AppSettingsContext.jsx';
 import { formatDateTime } from '../../../../helpers/functions';
+import {
+  locationKindLabel,
+  normalizeLocationKind,
+  sortStoresByKind,
+  storeHoldsInventory,
+} from '../../../../utils/storeLocationKind.js';
 
 const ORDER_DATE_FMT = 'dd/MM/yyyy HH:mm:ss';
 
@@ -343,6 +357,8 @@ export default forwardRef(function OrderCalendarView({
   const [payCustomerOrder, setPayCustomerOrder] = useState(null);
 
   const { user, toast: toastAuth } = useAuth();
+  const { activeApp } = useAppSettings();
+  const multiStockEnabled = activeApp?.multiStockEnabled !== false;
 
   const applyItemFromResponse = (response, itemId) => {
     const raw = response?.data?.item;
@@ -364,6 +380,8 @@ export default forwardRef(function OrderCalendarView({
   };
 
   const canManageOrders = ['Administrador', 'Programador'].includes(user?.loginRol);
+  /** Ajuste de stock con movimiento `ajuste`: solo Programador y Administrador */
+  const canAdjustStock = canManageOrders;
 
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -371,6 +389,19 @@ export default forwardRef(function OrderCalendarView({
   const [addLineDraft, setAddLineDraft] = useState({});
   const [printOpen, setPrintOpen] = useState(false);
   const [printReceipt, setPrintReceipt] = useState(null);
+
+  const [deliverOpen, setDeliverOpen] = useState(false);
+  const [deliverItem, setDeliverItem] = useState(null);
+  const [deliverStoreId, setDeliverStoreId] = useState('');
+  const [inventoryStores, setInventoryStores] = useState([]);
+  const [storeStockAvail, setStoreStockAvail] = useState(null);
+  const [deliverBusy, setDeliverBusy] = useState(false);
+
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustItem, setAdjustItem] = useState(null);
+  const [adjustStock, setAdjustStock] = useState('');
+  const [adjustStoreId, setAdjustStoreId] = useState('');
+  const [adjustBusy, setAdjustBusy] = useState(false);
 
   const handlePrevMonth = () => setCurrentDate((prev) => addMonths(prev, -1));
   const handleNextMonth = () => setCurrentDate((prev) => addMonths(prev, 1));
@@ -421,10 +452,168 @@ export default forwardRef(function OrderCalendarView({
       return orderDate ? isSameDay(orderDate, date) : false;
     });
 
-  const handleDeliver = async (itemId) => {
-    await runMutation(markItemAsDeliveredRequest(itemId), async (res) => {
-      if (!applyItemFromResponse(res, itemId)) await onReload?.();
-    });
+  const loadInventoryStores = useCallback(async () => {
+    try {
+      const { data } = await getStoresRequest();
+      const list = sortStoresByKind(
+        (Array.isArray(data) ? data : []).filter(
+          (s) => storeHoldsInventory(s.locationKind) && s.isActive !== false,
+        ),
+      );
+      setInventoryStores(list);
+      const bodega = list.find((s) => normalizeLocationKind(s.locationKind) === 'bodega');
+      const defaultId = bodega ? String(bodega.id) : list[0] ? String(list[0].id) : '';
+      return { list, defaultId };
+    } catch {
+      setInventoryStores([]);
+      return { list: [], defaultId: '' };
+    }
+  }, []);
+
+  const handleDeliver = async (item) => {
+    const itemId = typeof item === 'object' ? item?.id : item;
+    if (!itemId) return;
+    if (!multiStockEnabled) {
+      await runMutation(markItemAsDeliveredRequest(itemId), async (res) => {
+        if (!applyItemFromResponse(res, itemId)) await onReload?.();
+      });
+      return;
+    }
+    const row =
+      typeof item === 'object' && item?.id
+        ? item
+        : null;
+    setDeliverItem(row || { id: itemId });
+    setDeliverOpen(true);
+    const { defaultId } = await loadInventoryStores();
+    setDeliverStoreId(defaultId);
+    setStoreStockAvail(null);
+  };
+
+  useEffect(() => {
+    if (!deliverOpen || !deliverStoreId || !deliverItem?.productId) {
+      setStoreStockAvail(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await getStoreStocksRequest(Number(deliverStoreId));
+        const map = data?.byProductId || {};
+        const pid = Number(deliverItem.productId);
+        const avail = Number(map[pid] ?? map[String(pid)] ?? 0);
+        if (!cancelled) setStoreStockAvail(Number.isFinite(avail) ? avail : 0);
+      } catch {
+        if (!cancelled) setStoreStockAvail(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deliverOpen, deliverStoreId, deliverItem?.productId]);
+
+  const confirmDeliver = async () => {
+    if (!deliverItem?.id) return;
+    if (multiStockEnabled && !deliverStoreId) {
+      toastAuth({ message: 'Elige Bodega o sucursal de donde sale el stock.', variant: 'warning' });
+      return;
+    }
+    setDeliverBusy(true);
+    try {
+      await runMutation(
+        markItemAsDeliveredRequest(deliverItem.id, {
+          ...(multiStockEnabled ? { storeId: Number(deliverStoreId) } : {}),
+        }),
+        async (res) => {
+          setDeliverOpen(false);
+          setDeliverItem(null);
+          if (!applyItemFromResponse(res, deliverItem.id)) await onReload?.();
+        },
+      );
+    } finally {
+      setDeliverBusy(false);
+    }
+  };
+
+  const resolveItemProductId = (item) =>
+    Number(item?.productId ?? item?.ERP_inventory_product?.id) || null;
+
+  const openStockAdjust = async (item) => {
+    if (!canAdjustStock) return;
+    const productId = resolveItemProductId(item);
+    if (!productId) {
+      toastAuth({ message: 'No se pudo identificar el producto del ítem.', variant: 'warning' });
+      return;
+    }
+    const row = { ...item, productId };
+    setAdjustItem(row);
+    const product = products.find((p) => Number(p.id) === Number(productId));
+    setAdjustStock(String(product?.stock ?? item?.ERP_inventory_product?.stock ?? ''));
+    setAdjustOpen(true);
+    if (multiStockEnabled) {
+      const { defaultId } = await loadInventoryStores();
+      setAdjustStoreId(defaultId);
+      if (defaultId) {
+        try {
+          const { data } = await getStoreStocksRequest(Number(defaultId));
+          const map = data?.byProductId || {};
+          const avail = Number(map[productId] ?? map[String(productId)] ?? 0);
+          setAdjustStock(String(Number.isFinite(avail) ? avail : 0));
+        } catch {
+          /* keep product stock */
+        }
+      }
+    } else {
+      setAdjustStoreId('');
+    }
+  };
+
+  const confirmStockAdjust = async () => {
+    const productId = resolveItemProductId(adjustItem);
+    if (!productId) return;
+    const nuevo = Number(String(adjustStock).replace(',', '.'));
+    if (!Number.isFinite(nuevo) || nuevo < 0) {
+      toastAuth({ message: 'Ingresa un stock válido (≥ 0).', variant: 'warning' });
+      return;
+    }
+    if (multiStockEnabled && !adjustStoreId) {
+      toastAuth({ message: 'Elige el local del ajuste.', variant: 'warning' });
+      return;
+    }
+    const name =
+      adjustItem?.ERP_inventory_product?.name ||
+      products.find((p) => Number(p.id) === Number(productId))?.name ||
+      `#${productId}`;
+    setAdjustBusy(true);
+    try {
+      await runMutation(
+        registerMovement({
+          productId: Number(productId),
+          type: 'ajuste',
+          reason: 'AJUSTE_INVENTARIO',
+          quantity: nuevo,
+          description: `Ajuste desde pedidos · ${name} (ítem #${adjustItem.id})`,
+          price: null,
+          referenceType: 'order_item',
+          referenceId: adjustItem.id,
+          ...(multiStockEnabled ? { storeId: Number(adjustStoreId) } : {}),
+        }),
+        async () => {
+          setAdjustOpen(false);
+          setAdjustItem(null);
+          // refrescar catálogo local de productos
+          try {
+            const { data } = await getAllProductsAll();
+            setProducts(Array.isArray(data) ? data : data?.products || []);
+          } catch {
+            /* ignore */
+          }
+          await onReload?.();
+        },
+      );
+    } finally {
+      setAdjustBusy(false);
+    }
   };
 
   const handlePaid = async (itemId) => {
@@ -1450,17 +1639,38 @@ export default forwardRef(function OrderCalendarView({
                                     )}
                                   </Box>
 
-                                  {canManageOrders && !isEditing && (
-                                    <Tooltip title="Eliminar ítem">
-                                      <IconButton
-                                        size="small"
-                                        color="error"
-                                        onClick={() => openItemDialog(item)}
-                                        sx={{ mt: -0.25 }}
-                                      >
-                                        <DeleteOutlineIcon fontSize="small" />
-                                      </IconButton>
-                                    </Tooltip>
+                                  {!isEditing && (
+                                    <Stack direction="row" alignItems="center" spacing={0.25} sx={{ mt: -0.25, flexShrink: 0 }}>
+                                      {canAdjustStock && (
+                                        <Tooltip title="Ajustar stock (movimiento de ajuste)">
+                                          <IconButton
+                                            size="small"
+                                            color="secondary"
+                                            onClick={() => void openStockAdjust(item)}
+                                            aria-label="Ajustar stock"
+                                            sx={{
+                                              bgcolor: (t) => alpha(t.palette.secondary.main, 0.12),
+                                              '&:hover': {
+                                                bgcolor: (t) => alpha(t.palette.secondary.main, 0.22),
+                                              },
+                                            }}
+                                          >
+                                            <TuneIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                      {canManageOrders && (
+                                        <Tooltip title="Eliminar ítem">
+                                          <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => openItemDialog(item)}
+                                          >
+                                            <DeleteOutlineIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </Stack>
                                   )}
                                 </Box>
 
@@ -1505,7 +1715,7 @@ export default forwardRef(function OrderCalendarView({
                                           variant="outlined"
                                           color="info"
                                           startIcon={<LocalShippingIcon sx={{ fontSize: '1rem !important' }} />}
-                                          onClick={() => handleDeliver(itemId)}
+                                          onClick={() => handleDeliver(item)}
                                           sx={{ minHeight: 26, py: 0.25, fontSize: '0.72rem', borderRadius: 1.5 }}
                                         >
                                           Entregar
@@ -1829,6 +2039,136 @@ export default forwardRef(function OrderCalendarView({
       onPaid={() => onReload?.()}
       toast={toastAuth}
     />
+
+    <Dialog
+      open={deliverOpen}
+      onClose={() => !deliverBusy && setDeliverOpen(false)}
+      fullWidth
+      maxWidth="xs"
+    >
+      <DialogTitle sx={{ fontWeight: 700 }}>
+        Entregar ítem #{deliverItem?.id}
+      </DialogTitle>
+      <DialogContent dividers>
+        <Alert severity="warning" sx={{ py: 0.75, mb: 1.5 }}>
+          Multistock activo: elige <strong>desde dónde sale</strong> el stock (Bodega o sucursal).
+        </Alert>
+        <Typography variant="body2" sx={{ mb: 1.25 }}>
+          {deliverItem?.ERP_inventory_product?.name || `Producto #${deliverItem?.productId || '—'}`}
+          {deliverItem?.quantity != null ? ` · qty ${deliverItem.quantity}` : ''}
+        </Typography>
+        <TextField
+          select
+          fullWidth
+          size="small"
+          label="Salida desde"
+          value={deliverStoreId}
+          onChange={(e) => setDeliverStoreId(e.target.value)}
+          disabled={deliverBusy}
+          helperText={
+            storeStockAvail != null
+              ? `Disponible en este local: ${storeStockAvail}`
+              : 'Stock del local al confirmar'
+          }
+        >
+          {inventoryStores.map((s) => (
+            <MenuItem key={s.id} value={String(s.id)}>
+              {s.name} ({locationKindLabel(s.locationKind)})
+            </MenuItem>
+          ))}
+        </TextField>
+      </DialogContent>
+      <DialogActions sx={{ px: 2, py: 1 }}>
+        <Button onClick={() => setDeliverOpen(false)} disabled={deliverBusy} color="inherit">
+          Cancelar
+        </Button>
+        <Button
+          variant="contained"
+          color="info"
+          startIcon={<LocalShippingIcon />}
+          disabled={deliverBusy || !deliverStoreId}
+          onClick={() => void confirmDeliver()}
+        >
+          Confirmar entrega
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    <Dialog
+      open={adjustOpen}
+      onClose={() => !adjustBusy && setAdjustOpen(false)}
+      fullWidth
+      maxWidth="xs"
+    >
+      <DialogTitle sx={{ fontWeight: 700 }}>Ajuste de stock</DialogTitle>
+      <DialogContent dividers>
+        <Alert severity="info" sx={{ py: 0.75, mb: 1.5 }}>
+          Rol Programador / Administrador: se crea un movimiento de inventario tipo{' '}
+          <strong>ajuste</strong>
+          {multiStockEnabled ? ' en el local elegido' : ' sobre el stock general'}.
+        </Alert>
+        <Typography variant="body2" sx={{ mb: 1.25 }}>
+          {adjustItem?.ERP_inventory_product?.name ||
+            products.find((p) => Number(p.id) === Number(adjustItem?.productId))?.name ||
+            `Producto #${adjustItem?.productId || '—'}`}
+        </Typography>
+        {multiStockEnabled ? (
+          <TextField
+            select
+            fullWidth
+            size="small"
+            label="Local"
+            value={adjustStoreId}
+            onChange={async (e) => {
+              const sid = e.target.value;
+              setAdjustStoreId(sid);
+              if (!sid || !adjustItem?.productId) return;
+              try {
+                const { data } = await getStoreStocksRequest(Number(sid));
+                const map = data?.byProductId || {};
+                const pid = Number(adjustItem.productId);
+                const avail = Number(map[pid] ?? map[String(pid)] ?? 0);
+                setAdjustStock(String(Number.isFinite(avail) ? avail : 0));
+              } catch {
+                /* keep */
+              }
+            }}
+            disabled={adjustBusy}
+            sx={{ mb: 1.5 }}
+          >
+            {inventoryStores.map((s) => (
+              <MenuItem key={s.id} value={String(s.id)}>
+                {s.name} ({locationKindLabel(s.locationKind)})
+              </MenuItem>
+            ))}
+          </TextField>
+        ) : null}
+        <TextField
+          fullWidth
+          size="small"
+          type="number"
+          label={multiStockEnabled ? 'Nuevo stock en este local' : 'Nuevo stock'}
+          value={adjustStock}
+          onChange={(e) => setAdjustStock(e.target.value)}
+          inputProps={{ min: 0, step: 'any' }}
+          disabled={adjustBusy}
+        />
+      </DialogContent>
+      <DialogActions sx={{ px: 2, py: 1 }}>
+        <Button onClick={() => setAdjustOpen(false)} disabled={adjustBusy} color="inherit">
+          Cancelar
+        </Button>
+        <Button
+          variant="contained"
+          color="secondary"
+          startIcon={<TuneIcon />}
+          disabled={adjustBusy}
+          onClick={() => void confirmStockAdjust()}
+        >
+          Registrar ajuste
+        </Button>
+      </DialogActions>
+    </Dialog>
     </>
   );
 });

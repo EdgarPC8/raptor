@@ -27,6 +27,8 @@ import {
   InputAdornment,
   Chip,
   Alert,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
@@ -40,6 +42,10 @@ import {
   VisibilityOff,
   RemoveCircleOutline,
   Search,
+  Storefront,
+  ReceiptLong,
+  Place,
+  Image as ImageIcon,
 } from "@mui/icons-material";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 import TablePro from "../../../components/Tables/TablePro";
@@ -56,18 +62,26 @@ import {
   addProductsToStoreRequest,
   removeProductFromStoreRequest,
   toggleStoreProductRequest,
-  getFinalProductsRequest,
+  getAllProductsAll,
 } from "../../../api/inventoryControlRequest";
 
 import { pathImg, buildImageUrl } from "../../../api/axios";
 import { mediaStoragePath } from "../../../utils/mediaPaths.js";
 import { useAuth } from "../../../context/AuthContext";
 import Cropper from "react-easy-crop";
+import SearchableSelect from "../../../components/SearchableSelect.jsx";
 import {
   locationKindLabel,
   normalizeLocationKind,
   sortStoresByKind,
+  storeHoldsInventory,
 } from "../../../utils/storeLocationKind.js";
+import TourHelpButton from "../../../components/TourHelpButton.jsx";
+import { usePageTour } from "../../../hooks/usePageTour.js";
+import { LOCALES_TOUR_ID, getLocalesTourSteps } from "../../../tours/localesTour.js";
+import StoreStockOrganizeDialog, {
+  StoreStockManager,
+} from "./StoreStockOrganizeDialog.jsx";
 
 /* ===========================
    Helpers de imagen / crop
@@ -476,28 +490,92 @@ function MapPreview({ latitude, longitude, address, city, province, height = 220
 }
 
 /* ===========================
-   StoreProductsDialog
+   Productos del local (buscador + enlaces)
 =========================== */
-function StoreProductsDialog({ open, onClose, store }) {
+function normalizeProductList(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.products)) return data.products;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.rows)) return data.rows;
+  return [];
+}
+
+function productPrice(p) {
+  const n = Number(p?.price);
+  return Number.isFinite(n) ? n : null;
+}
+
+function productStock(p) {
+  const n = Number(p?.stock);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatMoneyShort(n) {
+  if (n == null) return "—";
+  return `$${Number(n).toFixed(2)}`;
+}
+
+const linkerFieldSx = {
+  m: 0,
+  "& .MuiInputBase-root": { fontSize: "0.82rem" },
+  "& .MuiInputLabel-root": { fontSize: "0.78rem" },
+};
+
+function StoreProductsLinker({ storeId, pendingIds = [], onPendingChange, compact = false }) {
   const { toast: toastAuth } = useAuth();
   const [loading, setLoading] = useState(false);
   const [links, setLinks] = useState([]);
-  const [searchAdd, setSearchAdd] = useState("");
-  const [options, setOptions] = useState([]);
-  const [sel, setSel] = useState([]);
-  const [busyAdd, setBusyAdd] = useState(false);
+  const [catalog, setCatalog] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [pickId, setPickId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [filterAssigned, setFilterAssigned] = useState("");
+
+  const assignedIds = useMemo(() => {
+    if (storeId) return new Set(links.map((l) => Number(l.productId)));
+    return new Set((pendingIds || []).map(Number));
+  }, [storeId, links, pendingIds]);
+
+  const pickOptions = useMemo(() => {
+    return catalog.filter((p) => {
+      if (p?.isActive === false) return false;
+      const t = String(p?.type || "").toLowerCase();
+      if (t && t !== "final") return false;
+      return !assignedIds.has(Number(p.id));
+    });
+  }, [catalog, assignedIds]);
+
+  const pendingProducts = useMemo(() => {
+    const map = new Map(catalog.map((p) => [Number(p.id), p]));
+    return (pendingIds || []).map((id) => map.get(Number(id))).filter(Boolean);
+  }, [catalog, pendingIds]);
+
+  const loadCatalog = async () => {
+    try {
+      setCatalogLoading(true);
+      const { data } = await getAllProductsAll();
+      setCatalog(normalizeProductList(data));
+    } catch {
+      setCatalog([]);
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
 
   const fetchLinks = async () => {
-    if (!store) return;
+    if (!storeId) {
+      setLinks([]);
+      return;
+    }
     try {
       setLoading(true);
-      const { data } = await getStoreProductsRequest(store.id, { activeOnly: false });
+      const { data } = await getStoreProductsRequest(storeId, { activeOnly: false });
       setLinks(Array.isArray(data) ? data : []);
     } catch (err) {
       toastAuth({
         promise: Promise.reject(err),
         onError: (res) => ({
-          title: "Productos por tienda",
+          title: "Productos",
           description: res?.response?.data?.message || "No se pudo cargar",
         }),
       });
@@ -506,236 +584,276 @@ function StoreProductsDialog({ open, onClose, store }) {
     }
   };
 
-  const fetchOptions = async () => {
-    try {
-      const { data } = await getFinalProductsRequest({ q: searchAdd || "" });
-      const assignedIds = new Set(links.map((l) => l.productId));
-      const opts = (Array.isArray(data) ? data : []).filter((p) => !assignedIds.has(p.id));
-      setOptions(opts);
-    } catch {
-      setOptions([]);
-    }
-  };
+  useEffect(() => {
+    void loadCatalog();
+  }, []);
 
   useEffect(() => {
-    if (open) {
-      fetchLinks();
-      setSel([]);
-      setSearchAdd("");
-      setOptions([]);
-    } else {
-      setLinks([]);
-      setSel([]);
-      setSearchAdd("");
-      setOptions([]);
+    void fetchLinks();
+    setPickId("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
+  const addProduct = async (productId) => {
+    const id = Number(productId);
+    if (!Number.isFinite(id) || assignedIds.has(id)) return;
+    setPickId("");
+    if (!storeId) {
+      onPendingChange?.([...(pendingIds || []), id]);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, store?.id]);
-
-  useEffect(() => {
-    if (!open) return;
-    const t = setTimeout(fetchOptions, 250);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchAdd, links, open]);
-
-  const toggleSel = (pid) =>
-    setSel((prev) => (prev.includes(pid) ? prev.filter((x) => x !== pid) : [...prev, pid]));
-
-  const addSelected = async () => {
-    if (!sel.length || !store) return;
     try {
-      setBusyAdd(true);
-      await addProductsToStoreRequest(store.id, sel);
+      setBusy(true);
+      await addProductsToStoreRequest(storeId, [id]);
       await fetchLinks();
-      setSel([]);
     } catch (err) {
       toastAuth({
         promise: Promise.reject(err),
         onError: (res) => ({
-          title: "Asignar productos",
+          title: "Asignar producto",
           description: res?.response?.data?.message || "No se pudo asignar",
         }),
       });
     } finally {
-      setBusyAdd(false);
+      setBusy(false);
     }
   };
 
-  const toggleVisibility = async (productId, current) => {
-    if (!store) return;
+  const removeProduct = async (productId) => {
+    const id = Number(productId);
+    if (!storeId) {
+      onPendingChange?.((pendingIds || []).filter((x) => Number(x) !== id));
+      return;
+    }
     try {
-      await toggleStoreProductRequest(store.id, productId, !current);
+      await removeProductFromStoreRequest(storeId, id);
+      setLinks((prev) => prev.filter((r) => Number(r.productId) !== id));
+    } catch {}
+  };
+
+  const toggleVisibility = async (productId, current) => {
+    if (!storeId) return;
+    try {
+      await toggleStoreProductRequest(storeId, productId, !current);
       setLinks((prev) =>
-        prev.map((r) => (r.productId === productId ? { ...r, isActive: !current } : r))
+        prev.map((r) => (r.productId === productId ? { ...r, isActive: !current } : r)),
       );
     } catch {}
   };
 
-  const removeLink = async (productId) => {
-    if (!store) return;
-    try {
-      await removeProductFromStoreRequest(store.id, productId);
-      setLinks((prev) => prev.filter((r) => r.productId !== productId));
-    } catch {}
-  };
+  const assignedRows = storeId
+    ? links.filter((r) => {
+        const q = filterAssigned.trim().toLowerCase();
+        if (!q) return true;
+        return String(r.product?.name || "").toLowerCase().includes(q);
+      })
+    : pendingProducts.filter((p) => {
+        const q = filterAssigned.trim().toLowerCase();
+        if (!q) return true;
+        return String(p.name || "").toLowerCase().includes(q);
+      });
 
+  const listMaxH = compact ? 180 : 280;
+  const colSpan = storeId ? 5 : 4;
+
+  return (
+    <Stack spacing={1.25}>
+      {!storeId && (
+        <Alert severity="info" sx={{ py: 0.25, "& .MuiAlert-message": { fontSize: "0.75rem" } }}>
+          Puedes ir eligiendo productos ahora; se enlazarán al crear el local.
+        </Alert>
+      )}
+
+      <SearchableSelect
+        label="Buscar producto para añadir"
+        placeholder="Nombre…"
+        items={pickOptions}
+        value={pickId}
+        onChange={(id) => {
+          if (id === "" || id == null) {
+            setPickId("");
+            return;
+          }
+          void addProduct(id);
+        }}
+        loading={catalogLoading || busy}
+        clearInputOnSelect
+        getOptionLabel={(p) => p?.name || ""}
+        getSearchText={(p) =>
+          `${p?.name || ""} ${p?.barcode || ""} ${p?.sku || ""} ${formatMoneyShort(productPrice(p))} stock ${productStock(p) ?? ""}`
+        }
+        renderOption={(props, p) => {
+          const { key, ...rest } = props;
+          const img = p.primaryImageUrl ? `${pathImg}${p.primaryImageUrl}` : null;
+          const stock = productStock(p);
+          const price = productPrice(p);
+          return (
+            <li key={key} {...rest}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ width: "100%", py: 0.25 }}>
+                {img ? (
+                  <img
+                    src={img}
+                    alt=""
+                    style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover" }}
+                    onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                  />
+                ) : (
+                  <Box sx={{ width: 32, height: 32, bgcolor: "action.hover", borderRadius: 1, flexShrink: 0 }} />
+                )}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" noWrap fontWeight={600}>
+                    {p.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Stock {stock != null ? stock : "—"} · {formatMoneyShort(price)}
+                  </Typography>
+                </Box>
+              </Stack>
+            </li>
+          );
+        }}
+      />
+
+      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+        <Typography variant="subtitle2" fontWeight={700}>
+          Enlazados ({storeId ? links.length : (pendingIds || []).length})
+        </Typography>
+        <TextField
+          size="small"
+          placeholder="Filtrar…"
+          value={filterAssigned}
+          onChange={(e) => setFilterAssigned(e.target.value)}
+          sx={{ ...linkerFieldSx, maxWidth: 160 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+      </Stack>
+
+      <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+        <Box sx={{ maxHeight: listMaxH, overflow: "auto" }}>
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell>Producto</TableCell>
+                <TableCell align="right">Stock</TableCell>
+                <TableCell align="right">Precio</TableCell>
+                {storeId ? <TableCell align="center">Visible</TableCell> : null}
+                <TableCell align="center" width={48} />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={colSpan} align="center" sx={{ py: 2 }}>
+                    <CircularProgress size={22} />
+                  </TableCell>
+                </TableRow>
+              ) : assignedRows.length ? (
+                storeId
+                  ? assignedRows.map((r) => {
+                      const p = r.product || {};
+                      const img = p.primaryImageUrl ? `${pathImg}${p.primaryImageUrl}` : null;
+                      return (
+                        <TableRow key={r.linkId || r.productId} hover>
+                          <TableCell>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              {img ? (
+                                <img
+                                  src={img}
+                                  alt={p.name}
+                                  style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover" }}
+                                  onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                                />
+                              ) : (
+                                <Box sx={{ width: 32, height: 32, bgcolor: "action.hover", borderRadius: 1 }} />
+                              )}
+                              <Typography variant="body2" noWrap sx={{ maxWidth: 220 }}>
+                                {p.name || `#${r.productId}`}
+                              </Typography>
+                            </Stack>
+                          </TableCell>
+                          <TableCell align="right">{productStock(p) != null ? productStock(p) : "—"}</TableCell>
+                          <TableCell align="right">{formatMoneyShort(productPrice(p))}</TableCell>
+                          <TableCell align="center">
+                            <Tooltip title={r.isActive ? "Ocultar" : "Mostrar"}>
+                              <IconButton size="small" onClick={() => toggleVisibility(r.productId, r.isActive)}>
+                                {r.isActive ? <Visibility fontSize="small" /> : <VisibilityOff fontSize="small" />}
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Quitar">
+                              <IconButton color="error" size="small" onClick={() => void removeProduct(r.productId)}>
+                                <RemoveCircleOutline fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  : assignedRows.map((p) => {
+                      const img = p.primaryImageUrl ? `${pathImg}${p.primaryImageUrl}` : null;
+                      return (
+                        <TableRow key={p.id} hover>
+                          <TableCell>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              {img ? (
+                                <img
+                                  src={img}
+                                  alt={p.name}
+                                  style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover" }}
+                                  onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                                />
+                              ) : (
+                                <Box sx={{ width: 32, height: 32, bgcolor: "action.hover", borderRadius: 1 }} />
+                              )}
+                              <Typography variant="body2">{p.name}</Typography>
+                            </Stack>
+                          </TableCell>
+                          <TableCell align="right">{productStock(p) != null ? productStock(p) : "—"}</TableCell>
+                          <TableCell align="right">{formatMoneyShort(productPrice(p))}</TableCell>
+                          <TableCell align="center">
+                            <IconButton color="error" size="small" onClick={() => void removeProduct(p.id)}>
+                              <RemoveCircleOutline fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={colSpan} align="center" sx={{ py: 2 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {catalogLoading
+                        ? "Cargando catálogo…"
+                        : "Sin productos. Búscalos arriba para añadir."}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Box>
+      </Paper>
+    </Stack>
+  );
+}
+
+/* ===========================
+   StoreProductsDialog
+=========================== */
+function StoreProductsDialog({ open, onClose, store }) {
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>Productos de: {store?.name || "—"}</DialogTitle>
       <DialogContent dividers>
-        <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Agregar productos
-          </Typography>
-
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems="center">
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="Buscar productos finales..."
-              value={searchAdd}
-              onChange={(e) => setSearchAdd(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <Button variant="contained" onClick={addSelected} disabled={!sel.length || busyAdd}>
-              Agregar ({sel.length})
-            </Button>
-          </Stack>
-
-          <Box sx={{ mt: 1, maxHeight: 220, overflow: "auto" }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox" />
-                  <TableCell>Producto</TableCell>
-                  <TableCell align="right">Precio</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {options.map((p) => {
-                  const checked = sel.includes(p.id);
-                  const img = p.primaryImageUrl ? `${pathImg}${p.primaryImageUrl}` : null;
-                  return (
-                    <TableRow key={p.id} hover>
-                      <TableCell padding="checkbox">
-                        <Checkbox checked={checked} onChange={() => toggleSel(p.id)} size="small" />
-                      </TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          {img ? (
-                            <img
-                              src={img}
-                              alt={p.name}
-                              style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover" }}
-                              onError={(e) => (e.currentTarget.style.visibility = "hidden")}
-                            />
-                          ) : (
-                            <Box sx={{ width: 40, height: 40, bgcolor: "action.hover", borderRadius: 1 }} />
-                          )}
-                          <Typography variant="body2">{p.name}</Typography>
-                        </Stack>
-                      </TableCell>
-                      <TableCell align="right">
-                        {typeof p.price === "number" ? `$${Number(p.price).toFixed(2)}` : "—"}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {!options.length && (
-                  <TableRow>
-                    <TableCell colSpan={3} align="center" sx={{ py: 2 }}>
-                      {searchAdd ? "Sin resultados" : "Escribe para buscar productos…"}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </Box>
-        </Paper>
-
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          Asignados ({links.length})
-        </Typography>
-
-        <Paper variant="outlined">
-          <Box sx={{ maxHeight: 320, overflow: "auto" }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Producto</TableCell>
-                  <TableCell align="right">Precio</TableCell>
-                  <TableCell align="center">Visible</TableCell>
-                  <TableCell align="center">Quitar</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center">
-                      <CircularProgress size={22} />
-                    </TableCell>
-                  </TableRow>
-                ) : links.length ? (
-                  links.map((r) => {
-                    const p = r.product || {};
-                    const img = p.primaryImageUrl ? `${pathImg}${p.primaryImageUrl}` : null;
-                    return (
-                      <TableRow key={r.linkId || r.productId} hover>
-                        <TableCell>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            {img ? (
-                              <img
-                                src={img}
-                                alt={p.name}
-                                style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover" }}
-                                onError={(e) => (e.currentTarget.style.visibility = "hidden")}
-                              />
-                            ) : (
-                              <Box sx={{ width: 40, height: 40, bgcolor: "action.hover", borderRadius: 1 }} />
-                            )}
-                            <Typography variant="body2">{p.name}</Typography>
-                          </Stack>
-                        </TableCell>
-                        <TableCell align="right">
-                          {typeof p.price === "number" ? `$${Number(p.price).toFixed(2)}` : "—"}
-                        </TableCell>
-                        <TableCell align="center">
-                          <Tooltip title={r.isActive ? "Ocultar" : "Mostrar"}>
-                            <IconButton size="small" onClick={() => toggleVisibility(r.productId, r.isActive)}>
-                              {r.isActive ? <Visibility /> : <VisibilityOff />}
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell align="center">
-                          <Tooltip title="Quitar de la tienda">
-                            <IconButton color="error" size="small" onClick={() => removeLink(r.productId)}>
-                              <RemoveCircleOutline />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center" sx={{ py: 2 }}>
-                      No hay productos asignados.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </Box>
-        </Paper>
+        {open && store?.id ? <StoreProductsLinker storeId={store.id} compact={false} /> : null}
       </DialogContent>
-
       <DialogActions>
         <Button onClick={onClose}>Cerrar</Button>
       </DialogActions>
@@ -744,10 +862,33 @@ function StoreProductsDialog({ open, onClose, store }) {
 }
 
 /* ===========================
-   Formulario de Store
+   Formulario de Store (pestañas)
 =========================== */
-function StoreForm({ value, onChange }) {
+const storeFieldSx = {
+  m: 0,
+  "& .MuiInputBase-root": { fontSize: "0.82rem" },
+  "& .MuiInputLabel-root": { fontSize: "0.78rem" },
+  "& .MuiFormHelperText-root": { fontSize: "0.68rem", mt: 0.25 },
+};
+
+function StoreFormTabPanel({ value, index, children }) {
+  if (value !== index) return null;
+  return (
+    <Box
+      role="tabpanel"
+      sx={{ pt: 1.5, minHeight: 280 }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+function StoreForm({ value, onChange, inventoryStores = [] }) {
   const set = (k, v) => onChange({ ...value, [k]: v });
+  const isPropia = (value.locationKind || "vitrina") === "propia";
+  const isBodega = (value.locationKind || "vitrina") === "bodega";
+  const holdsInv = storeHoldsInventory(value.locationKind);
+  const [tab, setTab] = useState(0);
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -794,6 +935,10 @@ function StoreForm({ value, onChange }) {
     };
   }, [previewUrl, imageSrc]);
 
+  useEffect(() => {
+    if (!isPropia && tab === 1) setTab(0);
+  }, [isPropia, tab]);
+
   const previewSrc = previewUrl || buildImageUrl(value?.imageUrl) || null;
 
   const [mapDialogOpen, setMapDialogOpen] = useState(false);
@@ -804,239 +949,375 @@ function StoreForm({ value, onChange }) {
   };
 
   return (
-    <DialogContent dividers>
-      <Stack spacing={2}>
-        <TextField
-          label="Nombre del local"
-          value={value.name || ""}
-          onChange={(e) => set("name", e.target.value)}
-          required
-          fullWidth
+    <Box sx={{ mt: -0.5 }}>
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{
+          minHeight: 40,
+          borderBottom: 1,
+          borderColor: "divider",
+          "& .MuiTab-root": {
+            minHeight: 40,
+            py: 0.75,
+            px: 1.25,
+            fontSize: "0.78rem",
+            textTransform: "none",
+            fontWeight: 600,
+          },
+        }}
+      >
+        <Tab icon={<Storefront sx={{ fontSize: 16 }} />} iconPosition="start" label="General" />
+        <Tab
+          icon={<ReceiptLong sx={{ fontSize: 16 }} />}
+          iconPosition="start"
+          label="SRI / Caja"
+          disabled={!isPropia}
         />
-
-        <TextField
-          select
-          label="Tipo de local"
-          value={value.locationKind || "vitrina"}
-          onChange={(e) => set("locationKind", e.target.value)}
-          fullWidth
-          helperText={
-            value.locationKind === "propia"
-              ? "Sucursal propia: punto de venta tuyo (caja + códigos SRI 001, 002…)."
-              : "Vitrina: local ajeno donde entregas producto para que vendan (sin abrir caja)."
-          }
-        >
-          <MenuItem value="propia">Sucursal propia — punto de venta mío</MenuItem>
-          <MenuItem value="vitrina">Vitrina — entrega para que vendan</MenuItem>
-        </TextField>
-
-        <TextField
-          label="Dirección"
-          value={value.address || ""}
-          onChange={(e) => set("address", e.target.value)}
-          required
-          fullWidth
+        <Tab icon={<Place sx={{ fontSize: 16 }} />} iconPosition="start" label="Ubicación" />
+        <Tab icon={<ImageIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="Imagen" />
+        <Tab
+          icon={<InventoryIcon sx={{ fontSize: 16 }} />}
+          iconPosition="start"
+          label={holdsInv ? "Stock / productos" : "Productos"}
         />
+      </Tabs>
 
-        {value.locationKind === "propia" && (
-          <>
-            <Typography variant="subtitle2" fontWeight={700}>
-              Emisión (SRI / caja)
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Cada sucursal propia usa su establecimiento. Ej. local A = 001, local B = 002.
-            </Typography>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+      <StoreFormTabPanel value={tab} index={0}>
+        <Stack spacing={1.25}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+            <TextField
+              size="small"
+              label="Nombre"
+              value={value.name || ""}
+              onChange={(e) => set("name", e.target.value)}
+              required
+              fullWidth
+              sx={storeFieldSx}
+            />
+            <TextField
+              size="small"
+              select
+              label="Tipo"
+              value={value.locationKind || "vitrina"}
+              onChange={(e) => set("locationKind", e.target.value)}
+              fullWidth
+              sx={{ ...storeFieldSx, maxWidth: { sm: 220 } }}
+            >
+              <MenuItem value="propia">Sucursal propia</MenuItem>
+              <MenuItem value="bodega">Bodega</MenuItem>
+              <MenuItem value="vitrina">Vitrina</MenuItem>
+            </TextField>
+          </Stack>
+
+          <Alert
+            severity={isPropia ? "info" : isBodega ? "warning" : "success"}
+            sx={{ py: 0.25, px: 1.25, "& .MuiAlert-message": { fontSize: "0.75rem" } }}
+          >
+            {isPropia
+              ? "Punto de venta tuyo: turno, cajas, códigos SRI y stock del local."
+              : isBodega
+                ? "Almacén: tiene stock, no abre turno de caja. Desde aquí trasladas a sucursales."
+                : "Local ajeno: entregas producto para que vendan (sin caja POS ni stock inventariable)."}
+          </Alert>
+
+          <TextField
+            size="small"
+            label="Dirección"
+            value={value.address || ""}
+            onChange={(e) => set("address", e.target.value)}
+            required
+            fullWidth
+            sx={storeFieldSx}
+          />
+
+          <TextField
+            size="small"
+            label="Descripción"
+            value={value.description || ""}
+            onChange={(e) => set("description", e.target.value)}
+            multiline
+            minRows={2}
+            fullWidth
+            sx={storeFieldSx}
+          />
+
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+            <TextField
+              size="small"
+              label="Teléfono"
+              value={value.phone || ""}
+              onChange={(e) => set("phone", e.target.value)}
+              fullWidth
+              sx={storeFieldSx}
+            />
+            <TextField
+              size="small"
+              label="Email"
+              value={value.email || ""}
+              onChange={(e) => set("email", e.target.value)}
+              type="email"
+              fullWidth
+              sx={storeFieldSx}
+            />
+          </Stack>
+
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+            <TextField
+              size="small"
+              label="Ciudad"
+              value={value.city || ""}
+              onChange={(e) => set("city", e.target.value)}
+              fullWidth
+              sx={storeFieldSx}
+            />
+            <TextField
+              size="small"
+              label="Provincia"
+              value={value.province || ""}
+              onChange={(e) => set("province", e.target.value)}
+              fullWidth
+              sx={storeFieldSx}
+            />
+            <TextField
+              size="small"
+              label="Orden"
+              type="number"
+              value={value.position ?? 0}
+              onChange={(e) => set("position", Number(e.target.value || 0))}
+              sx={{ ...storeFieldSx, maxWidth: { sm: 100 } }}
+            />
+          </Stack>
+
+          <FormControlLabel
+            sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: "0.82rem" } }}
+            control={
+              <Switch
+                size="small"
+                checked={Boolean(value.isActive)}
+                onChange={(e) => set("isActive", e.target.checked)}
+              />
+            }
+            label="Activo (visible en catálogo / POS)"
+          />
+        </Stack>
+      </StoreFormTabPanel>
+
+      <StoreFormTabPanel value={tab} index={1}>
+        <Stack spacing={1.25}>
+          <Typography variant="caption" color="text.secondary">
+            Cada sucursal propia usa su establecimiento. Ej. local A = 001, local B = 002. Las cajas
+            del local pueden tener puntos de emisión distintos (001, 002…).
+          </Typography>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+            <TextField
+              size="small"
+              label="Establecimiento"
+              value={value.establishmentCode || "001"}
+              onChange={(e) => set("establishmentCode", e.target.value)}
+              fullWidth
+              inputProps={{ maxLength: 3 }}
+              helperText="Código SRI del local"
+              sx={storeFieldSx}
+            />
+            <TextField
+              size="small"
+              label="Punto de emisión (por defecto)"
+              value={value.emissionPointCode || "001"}
+              onChange={(e) => set("emissionPointCode", e.target.value)}
+              fullWidth
+              inputProps={{ maxLength: 3 }}
+              helperText="Base para Caja 1"
+              sx={storeFieldSx}
+            />
+          </Stack>
+          <Alert severity="info" sx={{ py: 0.25, "& .MuiAlert-message": { fontSize: "0.75rem" } }}>
+            Tras crear el local, en Turno puedes añadir más cajas (Caja 2, 3…) con su propio punto de
+            emisión.
+          </Alert>
+        </Stack>
+      </StoreFormTabPanel>
+
+      <StoreFormTabPanel value={tab} index={2}>
+        <Stack spacing={1.25}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} alignItems={{ sm: "flex-start" }}>
+            <TextField
+              size="small"
+              label="Latitud"
+              type="number"
+              value={value.latitude ?? ""}
+              onChange={(e) => set("latitude", e.target.value === "" ? "" : Number(e.target.value))}
+              fullWidth
+              inputProps={{ step: "any" }}
+              sx={storeFieldSx}
+            />
+            <TextField
+              size="small"
+              label="Longitud"
+              type="number"
+              value={value.longitude ?? ""}
+              onChange={(e) => set("longitude", e.target.value === "" ? "" : Number(e.target.value))}
+              fullWidth
+              inputProps={{ step: "any" }}
+              sx={storeFieldSx}
+            />
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<MapIcon />}
+              onClick={() => setMapDialogOpen(true)}
+              sx={{ flexShrink: 0, whiteSpace: "nowrap", mt: { sm: 0.25 } }}
+            >
+              Maps
+            </Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary">
+            Opcional. Si no pones coordenadas, el mapa usará la dirección.
+          </Typography>
+          <MapPreview
+            latitude={typeof value.latitude === "number" ? value.latitude : null}
+            longitude={typeof value.longitude === "number" ? value.longitude : null}
+            address={value.address}
+            city={value.city}
+            province={value.province}
+          />
+        </Stack>
+      </StoreFormTabPanel>
+
+      <StoreFormTabPanel value={tab} index={3}>
+        <Stack spacing={1.25}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} alignItems="flex-start">
+            <Box
+              sx={{
+                width: { xs: "100%", sm: 168 },
+                height: 126,
+                borderRadius: 1.5,
+                border: "1px dashed",
+                borderColor: "divider",
+                bgcolor: "action.hover",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+                flexShrink: 0,
+              }}
+            >
+              {previewSrc ? (
+                <img
+                  key={previewSrc}
+                  src={previewSrc}
+                  alt="preview"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                />
+              ) : (
+                <Typography variant="caption" color="text.secondary">
+                  Sin imagen
+                </Typography>
+              )}
+            </Box>
+
+            <Stack spacing={1} sx={{ flex: 1, width: "100%" }}>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <input type="file" accept="image/*" hidden ref={fileRef} onChange={handleFileChange} />
+                <Button size="small" variant="outlined" onClick={handleChooseFile}>
+                  {value.imageUrl || previewSrc ? "Cambiar…" : "Elegir imagen…"}
+                </Button>
+                <TextField
+                  size="small"
+                  label="Aspecto"
+                  value={aspectKey}
+                  onChange={(e) => setAspectKey(e.target.value)}
+                  select
+                  sx={{ ...storeFieldSx, minWidth: 110 }}
+                >
+                  <MenuItem value="free">Libre</MenuItem>
+                  <MenuItem value="1:1">1:1</MenuItem>
+                  <MenuItem value="4:3">4:3</MenuItem>
+                  <MenuItem value="16:9">16:9</MenuItem>
+                </TextField>
+              </Stack>
+              {!!selectedFile && (
+                <Typography variant="caption" color="text.secondary">
+                  {selectedFile.name}
+                </Typography>
+              )}
               <TextField
-                label="Establecimiento"
-                value={value.establishmentCode || "001"}
-                onChange={(e) => set("establishmentCode", e.target.value)}
+                size="small"
+                label={`Carpeta (ej. ${mediaStoragePath("stores")})`}
+                value={value.imageSubfolder || ""}
+                onChange={(e) => set("imageSubfolder", e.target.value)}
                 fullWidth
-                inputProps={{ maxLength: 3 }}
-                helperText="Ej. 001, 002"
+                sx={storeFieldSx}
               />
               <TextField
-                label="Punto de emisión"
-                value={value.emissionPointCode || "001"}
-                onChange={(e) => set("emissionPointCode", e.target.value)}
+                size="small"
+                label="Nombre de archivo (sin extensión)"
+                value={value.customFileName || ""}
+                onChange={(e) => set("customFileName", e.target.value)}
                 fullWidth
-                inputProps={{ maxLength: 3 }}
-                helperText="Ej. 001"
+                placeholder="tienda_centro"
+                sx={storeFieldSx}
+              />
+              <FormControlLabel
+                sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: "0.78rem" } }}
+                control={
+                  <Switch
+                    size="small"
+                    checked={Boolean(value.moveImage)}
+                    onChange={(e) => set("moveImage", e.target.checked)}
+                  />
+                }
+                label="Mover imagen actual (si no subo una nueva)"
               />
             </Stack>
-          </>
+          </Stack>
+        </Stack>
+      </StoreFormTabPanel>
+
+      <StoreFormTabPanel value={tab} index={4}>
+        {holdsInv && value?.id ? (
+          <StoreStockManager
+            key={`stock-${value.id}`}
+            store={value}
+            inventoryStores={inventoryStores}
+            embedded
+            productsSlot={
+              <StoreProductsLinker
+                storeId={value.id}
+                pendingIds={value?.pendingProductIds || []}
+                onPendingChange={(ids) => set("pendingProductIds", ids)}
+                compact={false}
+              />
+            }
+          />
+        ) : (
+          <StoreProductsLinker
+            storeId={value?.id || null}
+            pendingIds={value?.pendingProductIds || []}
+            onPendingChange={(ids) => set("pendingProductIds", ids)}
+            compact
+          />
         )}
+      </StoreFormTabPanel>
 
-        <TextField
-          label="Descripción"
-          value={value.description || ""}
-          onChange={(e) => set("description", e.target.value)}
-          multiline
-          minRows={2}
-          fullWidth
-        />
+      <CropperDialog
+        open={cropOpen}
+        imageSrc={imageSrc}
+        aspect={ASPECTS[aspectKey]}
+        onClose={handleCropCancel}
+        onConfirm={handleCropConfirm}
+      />
 
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-          <TextField label="Teléfono" value={value.phone || ""} onChange={(e) => set("phone", e.target.value)} fullWidth />
-          <TextField label="Email" value={value.email || ""} onChange={(e) => set("email", e.target.value)} type="email" fullWidth />
-        </Stack>
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-          <TextField label="Ciudad" value={value.city || ""} onChange={(e) => set("city", e.target.value)} fullWidth />
-          <TextField label="Provincia" value={value.province || ""} onChange={(e) => set("province", e.target.value)} fullWidth />
-        </Stack>
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-          <TextField
-            label="Latitud"
-            type="number"
-            value={value.latitude ?? ""}
-            onChange={(e) => set("latitude", e.target.value === "" ? "" : Number(e.target.value))}
-            fullWidth
-            inputProps={{ step: "any" }}
-          />
-          <TextField
-            label="Longitud"
-            type="number"
-            value={value.longitude ?? ""}
-            onChange={(e) => set("longitude", e.target.value === "" ? "" : Number(e.target.value))}
-            fullWidth
-            inputProps={{ step: "any" }}
-          />
-        </Stack>
-
-        <Stack direction="row" spacing={1} flexWrap="wrap">
-          <Button variant="outlined" startIcon={<MapIcon />} onClick={() => setMapDialogOpen(true)}>
-            Elegir desde Google Maps
-          </Button>
-          <Typography variant="body2" sx={{ alignSelf: "center" }} color="text.secondary">
-            Opcional. Si no pones coords, se usará la dirección para el mapa.
-          </Typography>
-        </Stack>
-
-        <MapPreview
-          latitude={typeof value.latitude === "number" ? value.latitude : null}
-          longitude={typeof value.longitude === "number" ? value.longitude : null}
-          address={value.address}
-          city={value.city}
-          province={value.province}
-        />
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center">
-          <TextField
-            label="Posición"
-            type="number"
-            value={value.position ?? 0}
-            onChange={(e) => set("position", Number(e.target.value || 0))}
-            fullWidth
-          />
-          <FormControlLabel
-            control={<Switch checked={Boolean(value.isActive)} onChange={(e) => set("isActive", e.target.checked)} />}
-            label="Activo (visible)"
-          />
-        </Stack>
-
-        <TextField
-          label="Relación de aspecto"
-          value={aspectKey}
-          onChange={(e) => setAspectKey(e.target.value)}
-          select
-          fullWidth
-        >
-          <MenuItem value="free">Libre</MenuItem>
-          <MenuItem value="1:1">1:1</MenuItem>
-          <MenuItem value="4:3">4:3</MenuItem>
-          <MenuItem value="16:9">16:9</MenuItem>
-        </TextField>
-{/* ✅ Carpeta destino */}
-<TextField
-  label={`Carpeta destino (ej: "${mediaStoragePath("stores")}")`}
-  value={value.imageSubfolder || ""}
-  onChange={(e) => set("imageSubfolder", e.target.value)}
-  fullWidth
-  helperText='Se guardará dentro de src/img/<carpeta>. No uses "..".'
-/>
-
-{/* ✅ Nombre archivo (sin extensión) */}
-<TextField
-  label='Nombre de imagen (sin extensión)'
-  value={value.customFileName || ""}
-  onChange={(e) => set("customFileName", e.target.value)}
-  fullWidth
-  placeholder='Ej: tienda_quilanga'
-  helperText='Si subes archivo, se renombra. Si no subes y activas "Mover", se mueve la imagen actual.'
-/>
-
-<FormControlLabel
-  control={
-    <Switch
-      checked={Boolean(value.moveImage)}
-      onChange={(e) => set("moveImage", e.target.checked)}
-    />
-  }
-  label="Mover imagen actual (si no subo una nueva)"
-/>
-
-
-
-        <input type="file" accept="image/*" hidden ref={fileRef} onChange={handleFileChange} />
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center">
-          <Button onClick={handleChooseFile} variant="outlined">
-            {value.imageUrl ? "Cambiar imagen…" : "Elegir imagen…"}
-          </Button>
-          {!!selectedFile && (
-            <Typography variant="body2" color="text.secondary">
-              {selectedFile.name}
-            </Typography>
-          )}
-        </Stack>
-
-        {previewSrc ? (
-          <Box
-            sx={{
-              mt: 1,
-              border: "1px dashed",
-              borderColor: "divider",
-              p: 1,
-              borderRadius: 1,
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              flexWrap: "wrap",
-            }}
-          >
-            <img
-              key={previewSrc}
-              src={previewSrc}
-              alt="preview"
-              style={{ width: 160, height: 120, objectFit: "cover", borderRadius: 8 }}
-              onError={(e) => (e.currentTarget.style.visibility = "hidden")}
-            />
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {selectedFile ? "Vista previa (recortada)" : "Imagen actual"}
-              </Typography>
-            </Box>
-          </Box>
-        ) : null}
-
-        <CropperDialog
-          open={cropOpen}
-          imageSrc={imageSrc}
-          aspect={ASPECTS[aspectKey]}
-          onClose={handleCropCancel}
-          onConfirm={handleCropConfirm}
-        />
-
-        <MapPickDialog
-          open={mapDialogOpen}
-          onClose={() => setMapDialogOpen(false)}
-          onPick={handlePickCoords}
-          addressText={[value.address, value.city, value.province].filter(Boolean).join(", ")}
-        />
-      </Stack>
-    </DialogContent>
+      <MapPickDialog
+        open={mapDialogOpen}
+        onClose={() => setMapDialogOpen(false)}
+        onPick={handlePickCoords}
+        addressText={[value.address, value.city, value.province].filter(Boolean).join(", ")}
+      />
+    </Box>
   );
 }
 
@@ -1045,10 +1326,14 @@ function StoreForm({ value, onChange }) {
 =========================== */
 function StoresPage() {
   const [rows, setRows] = useState([]);
-  const [kindFilter, setKindFilter] = useState("all"); // all | propia | vitrina
+  const [kindFilter, setKindFilter] = useState("all"); // all | propia | bodega | vitrina
   const [loading, setLoading] = useState(false);
   const [sriSettings, setSriSettings] = useState(null);
   const { toast: toastAuth } = useAuth();
+  const { startTour } = usePageTour({
+    tourId: LOCALES_TOUR_ID,
+    getSteps: getLocalesTourSteps,
+  });
 
   const [openDelete, setOpenDelete] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
@@ -1078,6 +1363,8 @@ function StoresPage() {
 
   const [storeForProducts, setStoreForProducts] = useState(null);
   const [openProducts, setOpenProducts] = useState(false);
+  const [storeForStock, setStoreForStock] = useState(null);
+  const [openStock, setOpenStock] = useState(false);
 
   const titleDialog = useMemo(
     () => (isEditing ? "Editar sucursal / local" : "Agregar sucursal / local"),
@@ -1087,11 +1374,14 @@ function StoresPage() {
   const kindCounts = useMemo(() => {
     let propia = 0;
     let vitrina = 0;
+    let bodega = 0;
     for (const r of rows) {
-      if (normalizeLocationKind(r.locationKind) === "propia") propia += 1;
+      const k = normalizeLocationKind(r.locationKind);
+      if (k === "propia") propia += 1;
+      else if (k === "bodega") bodega += 1;
       else vitrina += 1;
     }
-    return { all: rows.length, propia, vitrina };
+    return { all: rows.length, propia, vitrina, bodega };
   }, [rows]);
 
   const visibleRows = useMemo(() => {
@@ -1152,6 +1442,7 @@ function StoresPage() {
       customFileName: "",
       imageSubfolder: mediaStoragePath("stores"),
       moveImage: false,
+      pendingProductIds: [],
     });
     setOpenForm(true);
   };
@@ -1171,7 +1462,7 @@ function StoresPage() {
       longitude: typeof row.longitude === "number" ? row.longitude : row.longitude ?? "",
       position: Number.isFinite(row.position) ? row.position : 0,
       isActive: Boolean(row.isActive),
-      locationKind: row.locationKind === "propia" ? "propia" : "vitrina",
+      locationKind: normalizeLocationKind(row.locationKind),
       establishmentCode: row.establishmentCode || "001",
       emissionPointCode: row.emissionPointCode || "001",
       imageUrl: row.imageUrl || "",
@@ -1183,6 +1474,7 @@ function StoresPage() {
         ? row.imageUrl.split("/").pop().replace(/\.[^.]+$/, "")
         : "",
       moveImage: false,
+      pendingProductIds: [],
     });
     setOpenForm(true);
   };
@@ -1209,7 +1501,7 @@ function StoresPage() {
 
     fd.append("position", String(Number.isFinite(formValue.position) ? formValue.position : 0));
     fd.append("isActive", String(Boolean(formValue.isActive)));
-    fd.append("locationKind", formValue.locationKind === "propia" ? "propia" : "vitrina");
+    fd.append("locationKind", normalizeLocationKind(formValue.locationKind));
     fd.append("establishmentCode", String(formValue.establishmentCode || "001").trim());
     fd.append("emissionPointCode", String(formValue.emissionPointCode || "001").trim());
 
@@ -1227,6 +1519,9 @@ function StoresPage() {
       fd.append("imageUrl", formValue.imageUrl || "");
     }
 
+    const pendingToLink = [...(formValue.pendingProductIds || [])];
+    const creating = !(isEditing && formValue.id);
+
     const promise =
       isEditing && formValue.id
         ? updateStoreRequest(formValue.id, fd)
@@ -1234,7 +1529,17 @@ function StoresPage() {
 
     return toastAuth({
       promise,
-      onSuccess: async () => {
+      onSuccess: async (res) => {
+        if (creating && pendingToLink.length) {
+          const createdId = res?.data?.store?.id;
+          if (createdId) {
+            try {
+              await addProductsToStoreRequest(createdId, pendingToLink);
+            } catch {
+              /* local created; productos pueden fallar aparte */
+            }
+          }
+        }
         setOpenForm(false);
         await fetchRows();
         return {
@@ -1274,6 +1579,16 @@ function StoresPage() {
     setStoreForProducts(row);
     setOpenProducts(true);
   };
+
+  const openStockDialog = (row) => {
+    setStoreForStock(row);
+    setOpenStock(true);
+  };
+
+  const inventoryStores = useMemo(
+    () => (rows || []).filter((s) => storeHoldsInventory(s.locationKind)),
+    [rows],
+  );
 
   const columns = [
     {
@@ -1317,19 +1632,19 @@ function StoresPage() {
       label: "Tipo",
       id: "locationKind",
       width: 130,
-      render: (row) =>
-        row.locationKind === "propia" ? (
-          <Chip size="small" color="primary" label="Sucursal propia" />
-        ) : (
-          <Chip size="small" variant="outlined" label="Vitrina" />
-        ),
+      render: (row) => {
+        const k = normalizeLocationKind(row.locationKind);
+        if (k === "propia") return <Chip size="small" color="primary" label="Sucursal propia" />;
+        if (k === "bodega") return <Chip size="small" color="secondary" label="Bodega" />;
+        return <Chip size="small" variant="outlined" label="Vitrina" />;
+      },
     },
     {
       label: "Emisión",
       id: "emission",
       width: 100,
       render: (row) =>
-        row.locationKind === "propia"
+        normalizeLocationKind(row.locationKind) === "propia"
           ? `${row.establishmentCode || "001"}-${row.emissionPointCode || "001"}`
           : "—",
     },
@@ -1338,7 +1653,7 @@ function StoresPage() {
       id: "sriStatus",
       width: 150,
       render: (row) => {
-        if (row.locationKind !== "propia") {
+        if (normalizeLocationKind(row.locationKind) !== "propia") {
           return <Chip size="small" variant="outlined" label="No aplica" />;
         }
         const st = storeSriStatus(row, sriSettings);
@@ -1357,52 +1672,96 @@ function StoresPage() {
     {
       label: "Acciones",
       id: "actions",
-      width: 190,
-      render: (row) => (
-        <>
-          <Tooltip title="Productos">
-            <IconButton onClick={() => openProductsDialog(row)}>
-              <InventoryIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Editar">
-            <IconButton onClick={() => handleOpenEdit(row)}>
-              <Edit />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Eliminar">
-            <IconButton onClick={() => handleConfirmDelete(row)}>
-              <Delete />
-            </IconButton>
-          </Tooltip>
-        </>
-      ),
+      width: 230,
+      render: (row) => {
+        const holdsInv = storeHoldsInventory(row.locationKind);
+        return (
+          <>
+            {holdsInv ? (
+              <Tooltip title="Stock y traspasos">
+                <IconButton
+                  data-tour="locales-stock-action"
+                  onClick={() => openStockDialog(row)}
+                >
+                  <InventoryIcon />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip title="Productos">
+                <IconButton onClick={() => openProductsDialog(row)}>
+                  <InventoryIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Tooltip title="Editar">
+              <IconButton onClick={() => handleOpenEdit(row)}>
+                <Edit />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Eliminar">
+              <IconButton onClick={() => handleConfirmDelete(row)}>
+                <Delete />
+              </IconButton>
+            </Tooltip>
+          </>
+        );
+      },
     },
   ];
 
   return (
     <Container sx={{ py: 2 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" gap={1}>
+      <Stack
+        data-tour="locales-header"
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        sx={{ mb: 1 }}
+        flexWrap="wrap"
+        gap={1}
+      >
         <Box>
-          <Typography variant="h6" fontWeight={800}>
-            Sucursales / locales
-          </Typography>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Typography variant="h6" fontWeight={800}>
+              Sucursales / locales
+            </Typography>
+            <TourHelpButton onClick={startTour} title="Ver tutorial de locales y stock" />
+          </Stack>
           <Typography variant="body2" color="text.secondary">
-            <strong>Sucursal propia</strong>: tu panadería (caja + SRI).{" "}
-            <strong>Vitrina</strong>: entregas producto para que otros vendan.
+            <strong>Sucursal propia</strong>: vende + turno. <strong>Bodega</strong>: almacén de
+            stock. <strong>Vitrina</strong>: entrega ajena (sin inventario).
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<Add />} onClick={handleOpenCreate}>
+        <Button
+          data-tour="locales-add"
+          variant="contained"
+          startIcon={<Add />}
+          onClick={handleOpenCreate}
+        >
           Agregar local
         </Button>
       </Stack>
 
-      <Alert severity="info" sx={{ mb: 2, py: 0.75 }}>
-        Al abrir turno solo aparecen las <strong>sucursales propias</strong>. Las vitrinas siguen
-        sirviendo para surtido y mapa público, sin abrir caja ahí.
+      <Alert data-tour="locales-alert-stock" severity="warning" sx={{ mb: 1.5, py: 0.75 }}>
+        El stock general es la <strong>suma por local</strong>. Tras reiniciar el backend, el stock
+        actual migra a <strong>Bodega</strong>. Usa el ícono de inventario en cada sucursal/bodega
+        para ver la tabla y hacer <strong>traspasos</strong>. Sin stock en el local del turno, Caja
+        no cobra.
       </Alert>
 
-      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+      <Alert severity="info" sx={{ mb: 2, py: 0.75 }}>
+        Al abrir turno solo aparecen las <strong>sucursales propias</strong>. Bodega no abre caja.
+        Las vitrinas siguen para surtido/mapa público.
+      </Alert>
+
+      <Stack
+        data-tour="locales-kind-filters"
+        direction="row"
+        spacing={0.75}
+        flexWrap="wrap"
+        useFlexGap
+        sx={{ mb: 2 }}
+      >
         <Chip
           clickable
           size="small"
@@ -1419,6 +1778,15 @@ function StoresPage() {
           variant={kindFilter === "propia" ? "filled" : "outlined"}
           label={`${locationKindLabel("propia")} (${kindCounts.propia})`}
           onClick={() => setKindFilter("propia")}
+          sx={{ fontWeight: 700 }}
+        />
+        <Chip
+          clickable
+          size="small"
+          color={kindFilter === "bodega" ? "primary" : "default"}
+          variant={kindFilter === "bodega" ? "filled" : "outlined"}
+          label={`${locationKindLabel("bodega")} (${kindCounts.bodega || 0})`}
+          onClick={() => setKindFilter("bodega")}
           sx={{ fontWeight: 700 }}
         />
         <Chip
@@ -1453,16 +1821,31 @@ function StoresPage() {
         title={
           kindFilter === "propia"
             ? "Sucursales propias"
-            : kindFilter === "vitrina"
-              ? "Vitrinas"
-              : "Sucursales propias y vitrinas"
+            : kindFilter === "bodega"
+              ? "Bodega"
+              : kindFilter === "vitrina"
+                ? "Vitrinas"
+                : "Todos los locales"
         }
       />
 
       {/* Form create/edit */}
-      <SimpleDialog open={openForm} onClose={() => setOpenForm(false)} tittle={titleDialog}>
-        <StoreForm value={formValue} onChange={setFormValue} />
-        <DialogActions sx={{ px: 3, pb: 2 }}>
+      <SimpleDialog
+        open={openForm}
+        onClose={() => setOpenForm(false)}
+        tittle={titleDialog}
+        maxWidth={
+          storeHoldsInventory(formValue.locationKind) && formValue.id ? "lg" : "md"
+        }
+        fullWidth
+        contentSx={{ pt: 0.5, pb: 1 }}
+      >
+        <StoreForm
+          value={formValue}
+          onChange={setFormValue}
+          inventoryStores={inventoryStores}
+        />
+        <DialogActions sx={{ px: 0, pt: 1.5, pb: 0.5 }}>
           <Button onClick={() => setOpenForm(false)}>Cancelar</Button>
           <Button variant="contained" onClick={handleSubmitForm}>
             {isEditing ? "Guardar cambios" : "Crear"}
@@ -1470,11 +1853,24 @@ function StoresPage() {
         </DialogActions>
       </SimpleDialog>
 
-      {/* Productos por tienda */}
+      {/* Productos por tienda (vitrinas) */}
       <StoreProductsDialog
         open={openProducts}
         onClose={() => setOpenProducts(false)}
         store={storeForProducts}
+      />
+
+      {/* Stock + traspasos (propia / bodega) */}
+      <StoreStockOrganizeDialog
+        open={openStock}
+        onClose={() => setOpenStock(false)}
+        store={storeForStock}
+        inventoryStores={inventoryStores}
+        productsSlot={
+          openStock && storeForStock?.id ? (
+            <StoreProductsLinker storeId={storeForStock.id} compact={false} />
+          ) : null
+        }
       />
 
       {/* Confirmación de borrado */}

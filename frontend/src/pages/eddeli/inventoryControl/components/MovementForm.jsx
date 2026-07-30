@@ -36,10 +36,12 @@ import TuneIcon from "@mui/icons-material/Tune";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
 import UnarchiveIcon from "@mui/icons-material/Unarchive";
 import { useForm } from "react-hook-form";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useAuth } from "../../../../context/AuthContext";
+import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
 import {
   getAllProductsAll,
+  getStoresRequest,
   openPresentationMovementRequest,
   registerMovement,
   registerMovementsBatchRequest,
@@ -73,6 +75,12 @@ import {
 import AttachmentField from "./AttachmentField.jsx";
 import { uploadMovementVoucher } from "../../../../api/documentRequest.js";
 import { formatProductPrice } from "./ProductPriceReference.jsx";
+import {
+  locationKindLabel,
+  normalizeLocationKind,
+  sortStoresByKind,
+  storeHoldsInventory,
+} from "../../../../utils/storeLocationKind.js";
 
 const BATCH_TYPES = new Set(["entrada", "salida", "ajuste"]);
 
@@ -124,6 +132,8 @@ function MovementForm({
 }) {
   const theme = useTheme();
   const { toast: toastAuth, user } = useAuth();
+  const { activeApp } = useAppSettings();
+  const multiStockEnabled = activeApp?.multiStockEnabled !== false;
   const isProgrammer = user?.loginRol === "Programador";
   const isEdit = Boolean(movementToEdit?.id);
 
@@ -149,10 +159,75 @@ function MovementForm({
   const [ivaRate, setIvaRate] = useState(15);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [products, setProducts] = useState(() => productOptions || []);
+  const [inventoryStores, setInventoryStores] = useState([]);
+  /** Local destino/origen de la línea que se está armando (multistock). */
+  const [draftStoreId, setDraftStoreId] = useState("");
 
   useEffect(() => {
     setProducts(productOptions || []);
   }, [productOptions]);
+
+  const loadInventoryStores = useCallback(async () => {
+    try {
+      const { data } = await getStoresRequest();
+      const list = sortStoresByKind(
+        (Array.isArray(data) ? data : []).filter(
+          (s) => storeHoldsInventory(s.locationKind) && s.isActive !== false,
+        ),
+      );
+      setInventoryStores(list);
+      const bodega = list.find((s) => normalizeLocationKind(s.locationKind) === "bodega");
+      const defaultId = bodega ? String(bodega.id) : list[0] ? String(list[0].id) : "";
+      setDraftStoreId((prev) => prev || defaultId);
+      return { list, defaultId };
+    } catch {
+      setInventoryStores([]);
+      return { list: [], defaultId: "" };
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!multiStockEnabled || isEdit) return;
+    void loadInventoryStores();
+  }, [multiStockEnabled, isEdit, loadInventoryStores]);
+
+  const storeLabelById = useCallback(
+    (storeId) => {
+      if (storeId == null || storeId === "") return "Sin local";
+      const s = inventoryStores.find((x) => Number(x.id) === Number(storeId));
+      if (!s) return `Local #${storeId}`;
+      return `${s.name} (${locationKindLabel(s.locationKind)})`;
+    },
+    [inventoryStores],
+  );
+
+  /** Líneas del carrito agrupadas por local (para ver “qué va a cada lugar”). */
+  const cartGroups = useMemo(() => {
+    if (!multiStockEnabled || cart.length === 0) {
+      return [{ storeId: "", label: null, lines: cart }];
+    }
+    const map = new Map();
+    for (const line of cart) {
+      const key = line.storeId != null && line.storeId !== "" ? String(line.storeId) : "";
+      if (!map.has(key)) {
+        map.set(key, {
+          storeId: key,
+          label: storeLabelById(key),
+          lines: [],
+        });
+      }
+      map.get(key).lines.push(line);
+    }
+    // Orden: según orden de locales conocidos, luego sin local
+    const ordered = [];
+    for (const s of inventoryStores) {
+      const key = String(s.id);
+      if (map.has(key)) ordered.push(map.get(key));
+      map.delete(key);
+    }
+    for (const g of map.values()) ordered.push(g);
+    return ordered;
+  }, [cart, multiStockEnabled, inventoryStores, storeLabelById]);
 
   const selectedProductId = watch("productId");
   const selectedType = watch("type");
@@ -423,6 +498,7 @@ function MovementForm({
       price: type === "ajuste" || !needsPriceLine ? null : lineTotal,
       referenceType: formData.referenceType || null,
       referenceId: formData.referenceId ? Number(formData.referenceId) : null,
+      ...(multiStockEnabled && draftStoreId ? { storeId: Number(draftStoreId) } : {}),
       unitPriceInput: unitPriceInput ?? "",
       shouldMultiply,
       hasIva,
@@ -432,6 +508,8 @@ function MovementForm({
         typeLabel: typeLabel(type),
         reasonLabel: type === "ajuste" ? "Ajuste" : reasonLabel(type, reason),
         priceDisplay: lineTotal,
+        storeId: multiStockEnabled && draftStoreId ? Number(draftStoreId) : null,
+        storeLabel: multiStockEnabled ? storeLabelById(draftStoreId) : null,
       },
     };
   };
@@ -443,6 +521,13 @@ function MovementForm({
   };
 
   const addCurrentLineToCart = (formData) => {
+    if (multiStockEnabled && !draftStoreId) {
+      toastAuth({
+        message: "Elige Bodega o sucursal a donde va / de donde sale este producto.",
+        variant: "warning",
+      });
+      return;
+    }
     const product = productById.get(Number(formData.productId));
     const productIva = Number(product?.taxRate) || 0;
     if (productIva > 0) setIvaRate(productIva);
@@ -456,6 +541,8 @@ function MovementForm({
         ...apiLine,
         ..._meta,
         hasIva: productIva > 0,
+        storeId: _meta.storeId,
+        storeLabel: _meta.storeLabel,
       },
     ]);
     clearLineFields();
@@ -469,6 +556,14 @@ function MovementForm({
     setCart((prev) =>
       prev.map((line) => {
         if (line.id !== id) return line;
+        if (field === "storeId") {
+          const sid = rawValue === "" ? "" : String(rawValue);
+          return {
+            ...line,
+            storeId: sid ? Number(sid) : null,
+            storeLabel: storeLabelById(sid),
+          };
+        }
         const value = rawValue === "" ? "" : Number(rawValue);
         return { ...line, [field]: value };
       }),
@@ -564,6 +659,9 @@ function MovementForm({
           price: line.type === "ajuste" || !needsPriceLine ? null : total,
           referenceType: line.referenceType || null,
           referenceId: line.referenceId || null,
+          ...(multiStockEnabled && line.storeId != null
+            ? { storeId: Number(line.storeId) }
+            : {}),
         };
       });
 
@@ -573,6 +671,25 @@ function MovementForm({
           variant: "warning",
         });
         return;
+      }
+
+      if (multiStockEnabled) {
+        if (itemsToSave.length > 0) {
+          const missingStore = itemsToSave.some((it) => !it.storeId);
+          if (missingStore) {
+            toastAuth({
+              message: "Cada línea debe tener Bodega o sucursal (dónde entra / sale el stock).",
+              variant: "warning",
+            });
+            return;
+          }
+        } else if (!draftStoreId) {
+          toastAuth({
+            message: "Elige Bodega o sucursal para este movimiento.",
+            variant: "warning",
+          });
+          return;
+        }
       }
 
       const invalidPriced = itemsToSave.some((it) => {
@@ -651,8 +768,19 @@ function MovementForm({
             : Number(totalToSave),
       referenceType: formData.referenceType || null,
       referenceId: formData.referenceId ? Number(formData.referenceId) : null,
+      ...(multiStockEnabled && !isEdit && draftStoreId
+        ? { storeId: Number(draftStoreId) }
+        : {}),
       ...(dateApi ? { date: dateApi } : {}),
     };
+
+    if (multiStockEnabled && !isEdit && !draftStoreId && BATCH_TYPES.has(formData.type)) {
+      toastAuth({
+        message: "Elige Bodega o sucursal para este movimiento.",
+        variant: "warning",
+      });
+      return;
+    }
 
     const savePromise = isEdit
       ? updateMovement(movementToEdit.id, {
@@ -994,6 +1122,30 @@ function MovementForm({
                   </Typography>
                 )}
 
+                {multiStockEnabled && !isEdit && (isBatchType || BATCH_TYPES.has(selectedType)) && (
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label={
+                      selectedType === "salida"
+                        ? "Sale desde (local)"
+                        : selectedType === "ajuste"
+                          ? "Local del ajuste"
+                          : "Entra en (local)"
+                    }
+                    value={draftStoreId}
+                    onChange={(e) => setDraftStoreId(e.target.value)}
+                    helperText="Multistock: cada producto puede ir a Bodega o a otra sucursal."
+                  >
+                    {inventoryStores.map((s) => (
+                      <MenuItem key={s.id} value={String(s.id)}>
+                        {s.name} ({locationKindLabel(s.locationKind)})
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )}
+
                 {showMotivo && (
                   <TextField
                     label="Motivo"
@@ -1155,14 +1307,36 @@ function MovementForm({
                     </Stack>
                     {cart.length === 0 ? (
                       <Typography variant="body2" color="text.secondary" sx={{ px: 0.5, py: 1 }}>
-                        Añade líneas con el botón de abajo. Luego guarda todo de una vez.
+                        {multiStockEnabled
+                          ? "Añade líneas eligiendo a qué local va cada producto. Se agrupan por destino."
+                          : "Añade líneas con el botón de abajo. Luego guarda todo de una vez."}
                       </Typography>
                     ) : (
-                      <Stack spacing={0.75}>
-                        {cart.map((line, idx) => {
-                          const lineTotal = lineTotalWithIva(line, ivaRate);
-                          const showLinePrice = showPriceField(line.type, line.reason);
-                          return (
+                      <Stack spacing={1}>
+                        {cartGroups.map((group) => (
+                          <Box key={group.storeId || "none"}>
+                            {multiStockEnabled && group.label ? (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  display: "block",
+                                  fontWeight: 800,
+                                  color: "text.secondary",
+                                  px: 0.5,
+                                  mb: 0.5,
+                                  textTransform: "uppercase",
+                                  letterSpacing: 0.4,
+                                }}
+                              >
+                                {group.label} · {group.lines.length}
+                              </Typography>
+                            ) : null}
+                            <Stack spacing={0.75}>
+                              {group.lines.map((line) => {
+                                const idx = cart.findIndex((l) => l.id === line.id);
+                                const lineTotal = lineTotalWithIva(line, ivaRate);
+                                const showLinePrice = showPriceField(line.type, line.reason);
+                                return (
                             <Box
                               key={line.id}
                               sx={{
@@ -1202,6 +1376,24 @@ function MovementForm({
                                   {line.typeLabel} · {line.reasonLabel}
                                 </Typography>
                               </Typography>
+                              {multiStockEnabled ? (
+                                <TextField
+                                  select
+                                  size="small"
+                                  label="Local"
+                                  value={line.storeId != null ? String(line.storeId) : ""}
+                                  onChange={(e) =>
+                                    updateCartField(line.id, "storeId", e.target.value)
+                                  }
+                                  sx={{ minWidth: 140, flex: "1 1 140px" }}
+                                >
+                                  {inventoryStores.map((s) => (
+                                    <MenuItem key={s.id} value={String(s.id)}>
+                                      {s.name} ({locationKindLabel(s.locationKind)})
+                                    </MenuItem>
+                                  ))}
+                                </TextField>
+                              ) : null}
                               <TextField
                                 label="Cant."
                                 type="number"
@@ -1260,8 +1452,11 @@ function MovementForm({
                                 </>
                               ) : null}
                             </Box>
-                          );
-                        })}
+                                );
+                              })}
+                            </Stack>
+                          </Box>
+                        ))}
                         {cart.some((l) => showPriceField(l.type, l.reason)) ? (
                           <Box sx={{ pt: 0.5, borderTop: 1, borderColor: "divider" }}>
                             <Box sx={{ display: "flex", justifyContent: "space-between" }}>

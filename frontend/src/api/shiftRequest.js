@@ -29,6 +29,15 @@ export const closeShift = (id, payload) => {
   return axios.post(`/shifts/${id}/close`, payload, auth());
 };
 
+export const setActiveCashRegister = (shiftId, cashRegisterId) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.patch(
+    `/shifts/${shiftId}/active-register`,
+    { cashRegisterId },
+    auth(),
+  );
+};
+
 export const getShiftMovements = (shiftId) => {
   if (isGuestDataMode()) return guestOk([]);
   return axios.get(`/shifts/${shiftId}/movements`, auth());

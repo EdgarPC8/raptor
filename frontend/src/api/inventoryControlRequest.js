@@ -1,5 +1,5 @@
 import axios, { jwt } from './axios.js';
-import { isGuestDataMode, guestFrom, guestDenied } from '../mocks/guest/guestApi.js';
+import { isGuestDataMode, guestFrom, guestDenied, guestOk } from '../mocks/guest/guestApi.js';
 
 
 export const getPopularProducts = (params = {}) =>
@@ -588,10 +588,9 @@ export const toggleStoreProductRequest = (storeId, productId, isActive) =>
   );
 
 // Catálogo de productos finales para el selector
-export const getFinalProductsRequest = (params) =>
+export const getFinalProductsRequest = (params = {}) =>
   axios.get("/inventory/products", {
-    // el backend debe soportar filtros: type='final', q
-    params: { type: "final", isActive: true, ...params },
+    params: { type: "final", isActive: true, all: "true", ...params },
     headers: { Authorization: jwt() },
   });
   // Obtener lista de stores
@@ -625,3 +624,58 @@ export const deleteStoreRequest = (id) =>
     headers: { Authorization: jwt() },
   });
 
+/** Cajas POS de un local propio */
+export const getCashRegistersRequest = (storeId, params = {}) => {
+  if (isGuestDataMode()) return guestOk([]);
+  return axios.get(`/inventory/stores/${storeId}/registers`, {
+    params,
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const createCashRegisterRequest = (storeId, payload) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.post(`/inventory/stores/${storeId}/registers`, payload, {
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const updateCashRegisterRequest = (id, payload) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.put(`/inventory/registers/${id}`, payload, {
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const deactivateCashRegisterRequest = (id) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.delete(`/inventory/registers/${id}`, {
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const getBodegaInfoRequest = () => {
+  if (isGuestDataMode()) return guestOk(null);
+  return axios.get("/inventory/bodega", { headers: { Authorization: jwt() } });
+};
+
+export const getStoreStocksRequest = (storeId) => {
+  if (isGuestDataMode()) return guestOk({ stocks: [], byProductId: {} });
+  return axios.get(`/inventory/stores/${storeId}/stocks`, {
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const transferStoreStockRequest = (payload) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.post("/inventory/store-stocks/transfer", payload, {
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const getProductStoreStocksRequest = (productId) => {
+  if (isGuestDataMode()) return guestOk({ storeStocks: [] });
+  return axios.get(`/inventory/products/${productId}/store-stocks`, {
+    headers: { Authorization: jwt() },
+  });
+};

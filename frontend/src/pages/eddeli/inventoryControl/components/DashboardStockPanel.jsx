@@ -27,6 +27,8 @@ import {
 import { alpha } from "@mui/material/styles";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import ReportGmailerrorredIcon from "@mui/icons-material/ReportGmailerrorred";
 import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
 import CloseIcon from "@mui/icons-material/Close";
@@ -34,24 +36,47 @@ import TableRowsIcon from "@mui/icons-material/TableRows";
 import { money } from "../collections/helpers.js";
 import { patchProductStockRequest } from "../../../../api/inventoryControlRequest.js";
 import { useAuth } from "../../../../context/AuthContext.jsx";
+import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
 import ChartBlockHeader from "../../../../components/Charts/ChartBlockHeader";
-import StockGauge, { StockGaugeSkeleton } from "./StockGauge.jsx";
+import StockGauge, { StockGaugeSkeleton, classifyStockLevel } from "./StockGauge.jsx";
 import { dashboardTwinPanelSx, DASHBOARD_TWIN_PANEL_BODY_HEIGHT } from "./dashboardTwinPanelLayout.js";
 
 const STOCK_VIEWS = {
-  low: {
-    id: "low",
-    label: "Por agotarse",
-    icon: WarningAmberIcon,
-    color: "warning",
-    empty: "No hay productos cerca del stock mínimo.",
-  },
   out: {
     id: "out",
     label: "Agotados",
     icon: Inventory2Icon,
     color: "error",
+    chipSx: undefined,
     empty: "No hay productos agotados.",
+    listKey: "agotados",
+  },
+  critical: {
+    id: "critical",
+    label: "≤ mínimo",
+    icon: ErrorOutlineIcon,
+    color: "error",
+    chipSx: undefined,
+    empty: "No hay productos en o bajo el mínimo.",
+    listKey: "critico",
+  },
+  low: {
+    id: "low",
+    label: "Bajo",
+    icon: ReportGmailerrorredIcon,
+    color: "warning",
+    chipSx: { bgcolor: "#ed6c02", color: "#fff", "& .MuiChip-label": { color: "#fff" } },
+    empty: "No hay productos en zona naranja (mín. → 1.5×mín.).",
+    listKey: "bajo",
+  },
+  caution: {
+    id: "caution",
+    label: "Precaución",
+    icon: WarningAmberIcon,
+    color: "warning",
+    chipSx: { bgcolor: "#f9a825", color: "rgba(0,0,0,0.87)" },
+    empty: "No hay productos en zona amarilla (1.5×mín. → 2×mín.).",
+    listKey: "precaucion",
   },
 };
 
@@ -71,10 +96,11 @@ const TYPE_LABEL = {
 const GAUGE_SLOT_COUNT = 8;
 
 function classifyProduct(p) {
-  const stock = Number(p.stock ?? 0);
-  const min = Number(p.minStock ?? 0);
-  if (stock <= 0) return "out";
-  if (stock > 0 && stock <= min) return "low";
+  const level = classifyStockLevel(p.stock, p.minStock);
+  if (Number(p.stock ?? 0) <= 0) return "out";
+  if (level === "critical") return "critical";
+  if (level === "orange") return "low";
+  if (level === "yellow") return "caution";
   return null;
 }
 
@@ -86,16 +112,35 @@ function sortProducts(list, view) {
   return arr.sort((a, b) => a.stock - b.stock || a.minStock - b.minStock);
 }
 
+function listForView(productsStock, viewId) {
+  const meta = STOCK_VIEWS[viewId];
+  if (!meta) return [];
+  if (viewId === "critical") {
+    return productsStock?.critico ?? productsStock?.porAgotarse ?? [];
+  }
+  return productsStock?.[meta.listKey] ?? [];
+}
+
 function mergeUpdatedProduct(productsStock, updated) {
   const removeFrom = (arr) => (arr || []).filter((p) => p.id !== updated.id);
   let agotados = removeFrom(productsStock.agotados);
-  let porAgotarse = removeFrom(productsStock.porAgotarse);
+  let critico = removeFrom(productsStock.critico ?? productsStock.porAgotarse);
+  let bajo = removeFrom(productsStock.bajo);
+  let precaucion = removeFrom(productsStock.precaucion);
   const bucket = classifyProduct(updated);
 
   if (bucket === "out") agotados = sortProducts([...agotados, updated], "out");
-  if (bucket === "low") porAgotarse = sortProducts([...porAgotarse, updated], "low");
+  if (bucket === "critical") critico = sortProducts([...critico, updated], "critical");
+  if (bucket === "low") bajo = sortProducts([...bajo, updated], "low");
+  if (bucket === "caution") precaucion = sortProducts([...precaucion, updated], "caution");
 
-  return { agotados, porAgotarse };
+  return {
+    agotados,
+    critico,
+    porAgotarse: critico,
+    bajo,
+    precaucion,
+  };
 }
 
 function filterByType(list, productType) {
@@ -103,15 +148,27 @@ function filterByType(list, productType) {
   return (list || []).filter((p) => p.type === productType);
 }
 
+function stockChipColor(view) {
+  if (view === "out" || view === "critical") return "error";
+  if (view === "low" || view === "caution") return "warning";
+  return "default";
+}
+
+function stockChipSx(view) {
+  if (view === "low") return { bgcolor: "#ed6c02", color: "#fff" };
+  if (view === "caution") return { bgcolor: "#f9a825", color: "rgba(0,0,0,0.87)" };
+  return undefined;
+}
+
 const compactToggleSx = {
   textTransform: "none",
-  px: 0.65,
-  py: 0.3,
-  fontSize: "0.68rem",
-  lineHeight: 1.2,
+  px: 0.45,
+  py: 0.25,
+  fontSize: "0.62rem",
+  lineHeight: 1.15,
   minWidth: 0,
-  "& .MuiSvgIcon-root": { fontSize: "0.85rem", mr: 0.35 },
-  "& .MuiChip-root": { height: 16, fontSize: "0.62rem", ml: 0.4, "& .MuiChip-label": { px: 0.5 } },
+  "& .MuiSvgIcon-root": { fontSize: "0.8rem", mr: 0.25 },
+  "& .MuiChip-root": { height: 15, fontSize: "0.58rem", ml: 0.3, "& .MuiChip-label": { px: 0.4 } },
 };
 
 function StockAlertsFilterBar({
@@ -147,12 +204,9 @@ function StockAlertsFilterBar({
             {v.label}
             <Chip
               size="small"
-              label={
-                v.id === "out"
-                  ? productsStock?.agotados?.length ?? 0
-                  : productsStock?.porAgotarse?.length ?? 0
-              }
+              label={listForView(productsStock, v.id).length}
               color={v.color}
+              sx={v.chipSx}
             />
           </ToggleButton>
         ))}
@@ -190,6 +244,7 @@ function StockAlertsTable({
   onSaveEdit,
   onDraftChange,
   emptyMessage,
+  multiStockEnabled = true,
 }) {
   return (
     <Table size="small">
@@ -198,7 +253,7 @@ function StockAlertsTable({
           <TableCell>Producto</TableCell>
           <TableCell>Tipo</TableCell>
           <TableCell align="right">Precio</TableCell>
-          <TableCell align="right">Stock</TableCell>
+          <TableCell align="right">{multiStockEnabled ? "Stock (suma)" : "Stock"}</TableCell>
           <TableCell align="right">Mín.</TableCell>
           {isProgrammer && <TableCell align="right">Acciones</TableCell>}
         </TableRow>
@@ -225,7 +280,7 @@ function StockAlertsTable({
               </TableCell>
               <TableCell align="right">{money(row.price)}</TableCell>
               <TableCell align="right">
-                {isEditing ? (
+                {isEditing && !multiStockEnabled ? (
                   <TextField
                     size="small"
                     type="number"
@@ -237,8 +292,9 @@ function StockAlertsTable({
                 ) : (
                   <Chip
                     size="small"
-                    color={view === "out" ? "error" : "warning"}
+                    color={stockChipColor(view)}
                     label={row.stock}
+                    sx={stockChipSx(view)}
                   />
                 )}
               </TableCell>
@@ -279,7 +335,7 @@ function StockAlertsTable({
                       </Tooltip>
                     </>
                   ) : (
-                    <Tooltip title="Editar stock (sin movimiento; queda en logs)">
+                    <Tooltip title={multiStockEnabled ? "Editar stock mínimo" : "Editar stock (sin movimiento; queda en logs)"}>
                       <IconButton size="small" onClick={() => onStartEdit(row)}>
                         <EditIcon fontSize="small" />
                       </IconButton>
@@ -307,8 +363,10 @@ function StockAlertsTable({
 export default function DashboardStockPanel({ productsStock, onStockUpdated }) {
   const theme = useTheme();
   const { user, toast } = useAuth();
+  const { activeApp } = useAppSettings();
+  const multiStockEnabled = activeApp?.multiStockEnabled !== false;
   const isProgrammer = user?.loginRol === "Programador";
-  const [view, setView] = useState("low");
+  const [view, setView] = useState("critical");
   const [productType, setProductType] = useState("all");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
@@ -317,10 +375,9 @@ export default function DashboardStockPanel({ productsStock, onStockUpdated }) {
   const [saving, setSaving] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  const currentMeta = STOCK_VIEWS[view];
+  const currentMeta = STOCK_VIEWS[view] || STOCK_VIEWS.critical;
   const baseRows = useMemo(() => {
-    const list = view === "out" ? productsStock?.agotados : productsStock?.porAgotarse;
-    return sortProducts(list, view);
+    return sortProducts(listForView(productsStock, view), view);
   }, [productsStock, view]);
 
   const rows = useMemo(
@@ -362,16 +419,19 @@ export default function DashboardStockPanel({ productsStock, onStockUpdated }) {
   const saveEdit = async (row) => {
     try {
       setSaving(true);
+      const payload = multiStockEnabled
+        ? { minStock: Number(draft.minStock) }
+        : {
+            stock: Number(draft.stock),
+            minStock: Number(draft.minStock),
+          };
       const res = await toast({
-        promise: patchProductStockRequest(row.id, {
-          stock: Number(draft.stock),
-          minStock: Number(draft.minStock),
-        }),
-        successMessage: "Stock actualizado",
+        promise: patchProductStockRequest(row.id, payload),
+        successMessage: multiStockEnabled ? "Stock mínimo actualizado" : "Stock actualizado",
       });
       const updated = res?.data?.product ?? {
         ...row,
-        stock: Number(draft.stock),
+        ...(multiStockEnabled ? {} : { stock: Number(draft.stock) }),
         minStock: Number(draft.minStock),
       };
       onStockUpdated?.(mergeUpdatedProduct(productsStock, updated));
@@ -396,7 +456,11 @@ export default function DashboardStockPanel({ productsStock, onStockUpdated }) {
   };
 
   const hasAnyAlerts =
-    (productsStock?.agotados?.length ?? 0) + (productsStock?.porAgotarse?.length ?? 0) > 0;
+    (productsStock?.agotados?.length ?? 0) +
+      (productsStock?.critico?.length ?? productsStock?.porAgotarse?.length ?? 0) +
+      (productsStock?.bajo?.length ?? 0) +
+      (productsStock?.precaucion?.length ?? 0) >
+    0;
 
   return (
     <Paper variant="panel" sx={{ p: { xs: 1.25, sm: 1.5 }, borderRadius: 2, minWidth: 0, width: "100%", display: "flex", flexDirection: "column", ...dashboardTwinPanelSx }}>
@@ -540,6 +604,7 @@ export default function DashboardStockPanel({ productsStock, onStockUpdated }) {
               onSaveEdit={saveEdit}
               onDraftChange={setDraft}
               emptyMessage={currentMeta.empty}
+              multiStockEnabled={multiStockEnabled}
             />
           </Box>
           <TablePagination

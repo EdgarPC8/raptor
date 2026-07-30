@@ -49,8 +49,11 @@ import {
   formatProductCategoryName,
   productMatchesCategoryFilter,
 } from "../../../utils/categoryUtils.js";
+import { useAppSettings } from "../../../context/AppSettingsContext.jsx";
 
 function ProductsPage() {
+  const { activeApp } = useAppSettings();
+  const multiStockEnabled = activeApp?.multiStockEnabled !== false;
   const [data, setData] = useState([]);
   const [open, setOpen] = useState(false);
   const [dataToDelete, setDataToDelete] = useState({});
@@ -228,7 +231,7 @@ function ProductsPage() {
       render: (row) => `$${Number(row.price ?? 0).toFixed(2)}`,
     },
     {
-      label: "Stock",
+      label: multiStockEnabled ? "Stock (suma)" : "Stock",
       id: "stock",
       width: 90,
     },

@@ -207,6 +207,7 @@ function OrderPage() {
       getPedidoProveedorFormTourSteps({
         runItemsDemo: () => supplierFormTourRef.current?.runItemsDemo?.(),
         resetDemo: () => supplierFormTourRef.current?.resetDemo?.(),
+        createPackDemo: () => supplierFormTourRef.current?.createPackDemo?.(),
       }),
     [],
   );

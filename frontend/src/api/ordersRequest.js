@@ -66,8 +66,8 @@ export const addOrderItemToOrderRequest = async (orderId, data) =>
     headers: { Authorization: jwt() },
   });
 // ✅ Marcar ítem como entregado
-export const markItemAsDeliveredRequest = async (itemId) =>
-  await axios.put(`/orders/order-items/${itemId}/mark-delivered`, {}, {
+export const markItemAsDeliveredRequest = async (itemId, data = {}) =>
+  await axios.put(`/orders/order-items/${itemId}/mark-delivered`, data, {
     headers: { Authorization: jwt() },
   });
 

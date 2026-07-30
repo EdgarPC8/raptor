@@ -1,16 +1,33 @@
 import { Box, Typography, Skeleton, useTheme } from '@mui/material';
 
+/**
+ * Bandas respecto al mínimo M:
+ * rojo 0–M · naranja M–1.5M · amarillo 1.5M–2M · verde >2M
+ */
+export function classifyStockLevel(stockRaw, minRaw) {
+  const stock = Number(stockRaw ?? 0);
+  const min = Number(minRaw ?? 0);
+  if (stock <= 0) return 'critical';
+  if (!(min > 0)) return 'good';
+  if (stock <= min) return 'critical';
+  if (stock <= min * 1.5) return 'orange';
+  if (stock <= min * 2) return 'yellow';
+  return 'good';
+}
+
 function gaugeMetrics(product) {
   const stock = Number(product?.stock ?? 0);
-  const min = Math.max(Number(product?.minStock ?? 0), 0.001);
-  const max = Math.max(min * 5, stock * 1.25, min + 1);
+  const minRaw = Number(product?.minStock ?? 0);
+  const min = Math.max(minRaw, 0.001);
+  const max = Math.max(min * 2.5, stock * 1.15, min + 1);
   return {
     stock,
     min,
+    minRaw,
     max,
-    criticalEnd: min,
-    warningEnd: min * 2,
-    goodEnd: min * 3,
+    redEnd: min,
+    orangeEnd: min * 1.5,
+    yellowEnd: min * 2,
   };
 }
 
@@ -44,29 +61,23 @@ function ringSegment(cx, cy, rInner, rOuter, v0, v1, max) {
   ].join(' ');
 }
 
-function stockStatus(stock, min) {
-  if (stock <= 0) return 'critical';
-  if (stock <= min) return 'warning';
-  if (stock <= min * 2) return 'caution';
-  return 'good';
-}
-
 const STATUS_LABEL = {
   critical: 'Crítico',
-  warning: 'Por agotarse',
-  caution: 'Bajo',
+  orange: 'Bajo',
+  yellow: 'Precaución',
   good: 'Adecuado',
 };
 
 export function getStockStatus(product) {
-  const { stock, min } = gaugeMetrics(product);
-  return stockStatus(stock, min);
+  const stock = Number(product?.stock ?? 0);
+  const min = Number(product?.minStock ?? 0);
+  return classifyStockLevel(stock, min);
 }
 
 export default function StockGauge({ product, compact = false }) {
   const theme = useTheme();
-  const { stock, min, max, criticalEnd, warningEnd, goodEnd } = gaugeMetrics(product);
-  const status = stockStatus(stock, min);
+  const { stock, min, max, redEnd, orangeEnd, yellowEnd } = gaugeMetrics(product);
+  const status = classifyStockLevel(stock, Number(product?.minStock ?? 0));
 
   const cx = 100;
   const cy = 108;
@@ -75,30 +86,31 @@ export default function StockGauge({ product, compact = false }) {
 
   const zoneColor = {
     critical: theme.palette.error.main,
-    warning: theme.palette.warning.main,
+    orange: '#ed6c02',
+    yellow: '#f9a825',
     good: theme.palette.success.main,
     muted: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
   };
 
   const zones = [
-    { from: 0, to: criticalEnd, color: zoneColor.critical },
-    { from: criticalEnd, to: warningEnd, color: zoneColor.warning },
-    { from: warningEnd, to: goodEnd, color: zoneColor.good },
-    { from: goodEnd, to: max, color: zoneColor.muted },
+    { from: 0, to: redEnd, color: zoneColor.critical },
+    { from: redEnd, to: orangeEnd, color: zoneColor.orange },
+    { from: orangeEnd, to: yellowEnd, color: zoneColor.yellow },
+    { from: yellowEnd, to: max, color: zoneColor.good },
   ];
 
   const needleEnd = pointOnArc(cx, cy, (rInner + rOuter) / 2, stock, max);
   const allTicks = [
     { value: 0, label: '0' },
-    { value: criticalEnd, label: formatTick(criticalEnd) },
-    { value: warningEnd, label: formatTick(warningEnd) },
-    { value: goodEnd, label: formatTick(goodEnd) },
+    { value: redEnd, label: formatTick(redEnd) },
+    { value: orangeEnd, label: formatTick(orangeEnd) },
+    { value: yellowEnd, label: formatTick(yellowEnd) },
     { value: max, label: formatTick(max) },
   ];
   const ticks = compact
     ? [
         { value: 0, label: '0' },
-        { value: criticalEnd, label: formatTick(criticalEnd) },
+        { value: redEnd, label: formatTick(redEnd) },
         { value: max, label: formatTick(max) },
       ]
     : allTicks;
@@ -109,10 +121,12 @@ export default function StockGauge({ product, compact = false }) {
 
   const statusColor =
     status === 'critical'
-      ? theme.palette.error.main
-      : status === 'warning' || status === 'caution'
-        ? theme.palette.warning.main
-        : theme.palette.success.main;
+      ? zoneColor.critical
+      : status === 'orange'
+        ? zoneColor.orange
+        : status === 'yellow'
+          ? zoneColor.yellow
+          : zoneColor.good;
 
   return (
     <Box sx={{ textAlign: 'center', minWidth: 0, width: '100%' }}>
@@ -145,7 +159,6 @@ export default function StockGauge({ product, compact = false }) {
         }}
         aria-label={`Stock ${stock} de ${product?.name}`}
       >
-        {/* Pista de fondo completa */}
         <path
           d={ringSegment(cx, cy, rInner, rOuter, 0, max, max)}
           fill={zoneColor.muted}

@@ -44,9 +44,10 @@ import {
   getAllProducts,
   registerMovement,
   getTierGroups,
+  getStoreStocksRequest,
 } from "../../api/inventoryControlRequest.js";
 import { getAllCustomersRequest, posCheckoutRequest } from "../../api/ordersRequest.js";
-import { getActiveShift } from "../../api/shiftRequest.js";
+import { getActiveShift, setActiveCashRegister } from "../../api/shiftRequest.js";
 import { fetchSriBillingSettings } from "../../api/sriBillingRequest.js";
 import { emitSriInvoice } from "../../api/sriInvoicesRequest.js";
 import CajaCustomerFormDialog from "./CajaCustomerFormDialog.jsx";
@@ -322,10 +323,27 @@ export default function CajaPage() {
     }
     const nextCustomers =
       customersRes.status === "fulfilled" ? customersRes.value.data || [] : [];
+    const nextShift = shiftRes.status === "fulfilled" ? shiftRes.value.data : null;
+
+    // Stock visible en caja = cantidad del local del turno (no el total general).
+    if (nextShift?.storeId && nextProducts.length) {
+      try {
+        const { data: stockBody } = await getStoreStocksRequest(nextShift.storeId);
+        const byId = stockBody?.byProductId || {};
+        nextProducts = nextProducts.map((p) => ({
+          ...p,
+          stockTotal: Number(p.stock ?? 0),
+          stock: Number(byId[p.id] ?? byId[String(p.id)] ?? 0),
+        }));
+      } catch {
+        /* si falla, se deja stock general */
+      }
+    }
+
     setProducts(nextProducts);
     setCustomers(nextCustomers);
     setTierGroups(nextTierGroups);
-    setActiveShift(shiftRes.status === "fulfilled" ? shiftRes.value.data : null);
+    setActiveShift(nextShift);
     if (sriRes.status === "fulfilled") {
       setSriSettings(sriRes.value || null);
     }
@@ -842,6 +860,14 @@ export default function CajaPage() {
       void toast?.({ message: "Cantidad inválida.", variant: "warning" });
       return;
     }
+    const stockStoreId = activeShift?.storeId || activeShift?.store?.id;
+    if (!stockStoreId) {
+      void toast?.({
+        message: "El turno no tiene local. Abre turno en una sucursal propia.",
+        variant: "warning",
+      });
+      return;
+    }
     try {
       setSaving(true);
       await registerMovement({
@@ -851,8 +877,9 @@ export default function CajaPage() {
         quantity: q,
         description: quickDownNote || "Salida rápida desde caja",
         price: null,
+        storeId: Number(stockStoreId),
       });
-      void toast?.({ message: "Listo: stock en sistema rebajado.", variant: "success" });
+      void toast?.({ message: "Listo: stock del local rebajado.", variant: "success" });
       setQuickDownOpen(false);
       setQuickDownProductId("");
       setQuickDownQty("");
@@ -889,6 +916,10 @@ export default function CajaPage() {
       saleType: isCreditSale ? "credito" : "contado",
       paymentMethod: payMethod,
       documentType: storedDocType,
+      cashRegisterId:
+        activeShift?.activeCashRegisterId ??
+        activeShift?.activeCashRegister?.id ??
+        undefined,
       items: cartSnapshot.map((row) => ({
         productId: Number(row.productId),
         quantity: Number(row.quantity),
@@ -976,12 +1007,20 @@ export default function CajaPage() {
 
   const handleConfirmStockAdjustAndCheckout = async () => {
     if (!pendingCheckout) return;
+    const stockStoreId = activeShift?.storeId || activeShift?.store?.id;
+    if (!stockStoreId) {
+      void toast?.({
+        message: "El turno no tiene local. Abre turno en una sucursal propia.",
+        variant: "warning",
+      });
+      return;
+    }
     for (const issue of stockIssues) {
       const raw = String(stockAdjustQty[issue.productId] ?? "").trim().replace(",", ".");
       const adj = Number(raw);
       if (!Number.isFinite(adj) || adj < issue.deficit) {
         void toast?.({
-          message: `“${issue.name}”: sistema ${issue.systemStock}, carrito ${issue.requested}. Pon al menos +${issue.deficit} en “Entrada”.`,
+          message: `“${issue.name}”: local ${issue.systemStock}, carrito ${issue.requested}. Pon al menos +${issue.deficit} en “Entrada”.`,
           variant: "warning",
         });
         return;
@@ -998,9 +1037,10 @@ export default function CajaPage() {
           type: "entrada",
           reason: "ENTRADA_OTRA",
           quantity: adj,
-          description: adjustmentNote || "Entrada desde caja (ajuste de stock)",
+          description: adjustmentNote || "Entrada desde caja (ajuste de stock del local)",
           price: null,
           referenceType: "caja_stock_adjust",
+          storeId: Number(stockStoreId),
         });
         stockPatches.set(
           Number(issue.productId),
@@ -1025,7 +1065,7 @@ export default function CajaPage() {
         });
         setStockAdjustQty(init);
         void toast?.({
-          message: "Aún no alcanza: sube la entrada o baja cantidades en el carrito.",
+          message: "Aún no alcanza en este local: sube la entrada o baja cantidades en el carrito.",
           variant: "warning",
         });
         return;
@@ -1270,24 +1310,74 @@ export default function CajaPage() {
       </Stack>
 
       {activeShift === undefined ? null : !activeShift ? (
-        <Alert severity="warning" sx={{ mb: 1 }}>
-          No hay turno abierto.{" "}
-          <Button component={RouterLink} to={APP_ROUTES.operation.shifts} size="small" sx={{ ml: 0.5 }}>
-            Abrir turno
-          </Button>{" "}
-          para registrar ventas en caja.
-        </Alert>
+        showOpenShiftBanner ? (
+          <Alert
+            severity="warning"
+            sx={{ mb: 1 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                component={RouterLink}
+                to={APP_ROUTES.operation.shifts}
+              >
+                Abrir turno
+              </Button>
+            }
+          >
+            Abre un turno en el local para vender en caja.
+          </Alert>
+        ) : null
       ) : showOpenShiftBanner ? (
-        <Alert severity="success" sx={{ mb: 1 }}>
-          Turno abierto
-          {activeShift.store?.name
-            ? ` · ${activeShift.store.name}`
-            : activeShift.establishmentCode
-              ? ` · ${activeShift.establishmentCode}-${activeShift.emissionPointCode}`
+        <Stack spacing={0.75} sx={{ mb: 1 }}>
+          <Alert severity="success">
+            Turno abierto
+            {activeShift.store?.name
+              ? ` · ${activeShift.store.name}`
+              : activeShift.establishmentCode
+                ? ` · ${activeShift.establishmentCode}-${activeShift.emissionPointCode}`
+                : ""}
+            {activeShift.activeCashRegister?.name
+              ? ` · ${activeShift.activeCashRegister.name}`
               : ""}
-          {" · "}capital inicial {formatMoney(activeShift.openingCashTotal)} · efectivo esperado
-          ahora {formatMoney(activeShift.expectedCashTotal)}
-        </Alert>
+            {" · "}capital inicial {formatMoney(activeShift.openingCashTotal)} · efectivo esperado
+            ahora {formatMoney(activeShift.expectedCashTotal)}
+          </Alert>
+          {Array.isArray(activeShift.cashRegisters) && activeShift.cashRegisters.length > 1 ? (
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap alignItems="center">
+              <Typography variant="caption" color="text.secondary">
+                Caja:
+              </Typography>
+              {activeShift.cashRegisters.map((reg) => {
+                const selected =
+                  Number(reg.id) ===
+                  Number(
+                    activeShift.activeCashRegisterId ?? activeShift.activeCashRegister?.id,
+                  );
+                return (
+                  <Chip
+                    key={reg.id}
+                    size="small"
+                    color={selected ? "primary" : "default"}
+                    variant={selected ? "filled" : "outlined"}
+                    label={reg.name}
+                    clickable
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          const { data } = await setActiveCashRegister(activeShift.id, reg.id);
+                          if (data?.shift) setActiveShift(data.shift);
+                        } catch {
+                          /* ignore */
+                        }
+                      })();
+                    }}
+                  />
+                );
+              })}
+            </Stack>
+          ) : null}
+        </Stack>
       ) : null}
 
       <Grid container spacing={1.5}>
@@ -1897,18 +1987,21 @@ export default function CajaPage() {
 
       <Dialog open={stockDialogOpen} onClose={closeStockDialog} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontSize: "1rem", py: 1.5 }}>
-          Sistema con menos stock que el carrito
+          Este local tiene menos stock que el carrito
         </DialogTitle>
         <DialogContent dividers sx={{ pt: 1 }}>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-            Suma unidades al inventario del sistema y cobra (movimiento con marca de revisión).
+            La entrada se suma al stock de{" "}
+            <strong>{activeShift?.store?.name || "este local"}</strong> (no a Bodega) y luego se
+            cobra. Si el producto está en Bodega, conviene trasladarlo; aquí es un ajuste rápido
+            con marca de revisión.
           </Typography>
           <TableContainer sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, mb: 1.5 }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell>Producto</TableCell>
-                  <TableCell align="right">Sis.</TableCell>
+                  <TableCell align="right">Local</TableCell>
                   <TableCell align="right">Carrito</TableCell>
                   <TableCell align="right">Mín.</TableCell>
                   <TableCell align="right">Entrada</TableCell>
@@ -1965,10 +2058,12 @@ export default function CajaPage() {
       </Dialog>
 
       <Dialog open={quickDownOpen} onClose={() => !saving && setQuickDownOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontSize: "1rem", py: 1.5 }}>Bajar stock en sistema</DialogTitle>
+        <DialogTitle sx={{ fontSize: "1rem", py: 1.5 }}>Bajar stock del local</DialogTitle>
         <DialogContent dividers sx={{ pt: 1 }}>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-            Si el sistema marca de más (robo, merma, error de carga), rebaja aquí antes o después de vender.
+            Rebaja el stock de{" "}
+            <strong>{activeShift?.store?.name || "este local"}</strong> (merma, error de carga,
+            etc.).
           </Typography>
           <SearchableSelect
             fullWidth
@@ -1978,13 +2073,13 @@ export default function CajaPage() {
             value={quickDownProductId}
             onChange={setQuickDownProductId}
             getOptionLabel={(item) =>
-              `${item.name || "—"} · sis. ${item.stock ?? 0}${item.baseUnit?.abbreviation ? ` ${item.baseUnit.abbreviation}` : ""}`
+              `${item.name || "—"} · local ${item.stock ?? 0}${item.baseUnit?.abbreviation ? ` ${item.baseUnit.abbreviation}` : ""}`
             }
             getOptionValue={(item) => String(item.id)}
           />
           {quickDownProductId ? (
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5, mb: 1 }}>
-              Stock en sistema ahora: {quickDownProduct?.stock ?? "—"}
+              Stock en este local ahora: {quickDownProduct?.stock ?? "—"}
             </Typography>
           ) : null}
           <TextField

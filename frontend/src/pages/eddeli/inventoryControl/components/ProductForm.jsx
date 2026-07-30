@@ -24,6 +24,7 @@ import {
 import Cropper from "react-easy-crop";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../../../../context/AuthContext";
+import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
 import SearchableSelect from "../../../../components/SearchableSelect.jsx";
 import {
   getAssignableCategories,
@@ -262,10 +263,12 @@ function CropperDialog({
 
 /* ===================== FORM DE PRODUCTO ===================== */
 function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
+  const { toast: toastAuth } = useAuth();
+  const { activeApp } = useAppSettings();
+  const multiStockEnabled = activeApp?.multiStockEnabled !== false;
   const { handleSubmit, register, reset, setValue, watch } = useForm({
     defaultValues: PRODUCT_FORM_DEFAULTS,
   });
-  const { toast: toastAuth } = useAuth();
   const [usbScanMode, setUsbScanMode] = useState(false);
 
   const [categories, setCategories] = useState([]);
@@ -491,6 +494,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
     if (data.categoryId) fd.append("categoryId", String(data.categoryId));
 
     PRODUCT_NUMERIC_FIELDS.forEach((field) => {
+      if (field === "stock" && multiStockEnabled && isEditing) return;
       fd.append(field, String(toNumOrZero(data[field])));
     });
   
@@ -772,14 +776,21 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
         </Grid>
         <Grid item xs={4} sm={3}>
           <TextField
-            label="Stock actual"
+            label={multiStockEnabled && isEditing ? "Stock total (suma)" : "Stock actual"}
             type="number"
             size="small"
             fullWidth
             variant="standard"
             margin="dense"
-            inputProps={{ min: 0 }}
+            inputProps={{ min: 0, readOnly: Boolean(multiStockEnabled && isEditing) }}
             placeholder="0"
+            helperText={
+              multiStockEnabled
+                ? isEditing
+                  ? "Suma por locales. Ajustá en Locales."
+                  : "Al crear entra a Bodega (multistock)."
+                : undefined
+            }
             {...register("stock")}
           />
         </Grid>
