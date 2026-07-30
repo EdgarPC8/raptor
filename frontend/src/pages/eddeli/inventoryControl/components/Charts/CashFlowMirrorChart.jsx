@@ -65,6 +65,7 @@ export default function CashFlowMirrorChart({ focus = null, onClearFocus }) {
   const [modalLoading, setModalLoading] = useState(false);
   const [modalDetail, setModalDetail] = useState(null);
   const [modalPeriod, setModalPeriod] = useState(null);
+  const [modalMirrorSummary, setModalMirrorSummary] = useState(null);
 
   const activeGranularity = focus?.granularity ?? granularity;
 
@@ -158,6 +159,12 @@ export default function CashFlowMirrorChart({ focus = null, onClearFocus }) {
       if (!period) return;
 
       setModalPeriod(period);
+      setModalMirrorSummary({
+        income: row.income,
+        expenseTotal: row.expenseTotal,
+        netBalance: row.netBalance,
+        marginPct: row.marginPct,
+      });
       setModalDetail(null);
       setModalOpen(true);
       setModalLoading(true);
@@ -190,6 +197,7 @@ export default function CashFlowMirrorChart({ focus = null, onClearFocus }) {
     setModalOpen(false);
     setModalDetail(null);
     setModalPeriod(null);
+    setModalMirrorSummary(null);
     setModalLoading(false);
   }, []);
 
@@ -369,6 +377,8 @@ export default function CashFlowMirrorChart({ focus = null, onClearFocus }) {
         onClose={handleCloseModal}
         moneyFmt={moneyFmtDetail}
         colors={chartColors}
+        viewMode="cashflow"
+        mirrorSummary={modalMirrorSummary}
       />
     </Box>
   );

@@ -340,25 +340,62 @@ export default function CalendarDayDetailDialog({
   viewMode = 'all',
   periodGranularity = 'day',
   periodLabel = null,
+  /** Totales del gráfico “Flujo” (tooltip) para alinear chips con la barra clicada */
+  mirrorSummary = null,
 }) {
   const theme = useTheme();
   const isIncomeView = viewMode === 'income';
+  const isCashflowView = viewMode === 'cashflow';
+  const usesIncomeSplitTabs = isIncomeView || isCashflowView;
+  const hideOperationalMetrics = isIncomeView || isCashflowView;
   const [tab, setTab] = useState(TABS.orders);
   const [filter, setFilter] = useState('');
 
   useEffect(() => {
     if (open) {
-      setTab(isIncomeView ? TABS.posSales : TABS.orders);
+      setTab(usesIncomeSplitTabs ? TABS.posSales : TABS.orders);
       setFilter('');
     }
-  }, [open, date, isIncomeView]);
+  }, [open, date, usesIncomeSplitTabs]);
 
   const dayIncomeTotal = useMemo(() => {
+    if (Array.isArray(detail?.incomes)) {
+      return Number(
+        detail.incomes.reduce((s, i) => s + Number(i.amount ?? 0), 0).toFixed(2)
+      );
+    }
+    if (mirrorSummary?.income != null) return Number(Number(mirrorSummary.income).toFixed(2));
     if (!detail?.totals) return 0;
     return Number(
       (Number(detail.totals.posIncomeAmount ?? 0) + Number(detail.totals.collectedAmount ?? 0)).toFixed(2)
     );
-  }, [detail]);
+  }, [detail, mirrorSummary]);
+
+  const dayExpenseTotal = useMemo(() => {
+    if (Array.isArray(detail?.expenses)) {
+      return Number(
+        detail.expenses.reduce((s, e) => s + Number(e.amount ?? 0), 0).toFixed(2)
+      );
+    }
+    if (mirrorSummary?.expenseTotal != null) return Number(Number(mirrorSummary.expenseTotal).toFixed(2));
+    return Number(Number(detail?.totals?.expensesAmount ?? 0).toFixed(2));
+  }, [detail, mirrorSummary]);
+
+  const dayNetBalance = useMemo(() => {
+    if (Array.isArray(detail?.incomes) || Array.isArray(detail?.expenses)) {
+      return Number((dayIncomeTotal - dayExpenseTotal).toFixed(2));
+    }
+    if (mirrorSummary?.netBalance != null) return Number(Number(mirrorSummary.netBalance).toFixed(2));
+    return Number((dayIncomeTotal - dayExpenseTotal).toFixed(2));
+  }, [detail, mirrorSummary, dayIncomeTotal, dayExpenseTotal]);
+
+  const dayMarginPct = useMemo(() => {
+    if (Array.isArray(detail?.incomes) || Array.isArray(detail?.expenses)) {
+      return dayIncomeTotal > 0 ? Number(((dayNetBalance / dayIncomeTotal) * 100).toFixed(1)) : 0;
+    }
+    if (mirrorSummary?.marginPct != null) return Number(Number(mirrorSummary.marginPct).toFixed(1));
+    return dayIncomeTotal > 0 ? Number(((dayNetBalance / dayIncomeTotal) * 100).toFixed(1)) : 0;
+  }, [detail, mirrorSummary, dayIncomeTotal, dayNetBalance]);
 
   const cajaIncomes = useMemo(() => {
     if (!detail?.incomes) return [];
@@ -385,9 +422,9 @@ export default function CalendarDayDetailDialog({
   const filteredIncomes = useMemo(() => {
     if (!detail) return [];
     if (usesIncomeRows) {
-      const base = isIncomeView && tab === TABS.posSales
+      const base = usesIncomeSplitTabs && tab === TABS.posSales
         ? cajaIncomes
-        : isIncomeView && tab === TABS.collections
+        : usesIncomeSplitTabs && tab === TABS.collections
           ? cobroIncomes
           : detail.incomes;
       return filterByText(base, filter, [
@@ -402,7 +439,7 @@ export default function CalendarDayDetailDialog({
       filter,
       [(g) => g.customer],
     );
-  }, [detail, filter, usesIncomeRows, isIncomeView, tab, cajaIncomes, cobroIncomes]);
+  }, [detail, filter, usesIncomeRows, usesIncomeSplitTabs, tab, cajaIncomes, cobroIncomes]);
 
   const filteredOrders = useMemo(
     () => filterByText(groupedOrders, filter, [(g) => g.customer]),
@@ -507,6 +544,13 @@ export default function CalendarDayDetailDialog({
       <DialogContent dividers sx={{ pt: 1.5, minHeight: 280 }}>
         {loading ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 6, gap: 2 }}>
+            {isCashflowView && mirrorSummary && (
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1, justifyContent: 'center' }}>
+                <Chip size="small" label={`Ingresos: ${moneyFmt(dayIncomeTotal)}`} sx={{ fontWeight: 700 }} />
+                <Chip size="small" label={`Gastos: ${moneyFmt(dayExpenseTotal)}`} sx={{ fontWeight: 700 }} />
+                <Chip size="small" color={dayNetBalance >= 0 ? 'success' : 'error'} label={`Balance: ${moneyFmt(dayNetBalance)}`} sx={{ fontWeight: 700 }} />
+              </Stack>
+            )}
             <CircularProgress size={36} />
             <Typography variant="body2" color="text.secondary">
               {loadingMessage}
@@ -517,7 +561,49 @@ export default function CalendarDayDetailDialog({
         ) : (
           <>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
-          {!isIncomeView && (
+          {isCashflowView && (
+            <>
+              <Chip
+                icon={<PaymentsIcon />}
+                label={`Ingresos: ${moneyFmt(dayIncomeTotal)}`}
+                size="small"
+                sx={{ bgcolor: alpha(colors.incomeTotal ?? colors.collected, 0.15), color: colors.incomeTotal ?? colors.collected, fontWeight: 700 }}
+              />
+              <Chip
+                icon={<MoneyOffIcon />}
+                label={`Gastos: ${moneyFmt(dayExpenseTotal)}`}
+                size="small"
+                sx={{ bgcolor: alpha(colors.expense, 0.15), color: colors.expense, fontWeight: 700 }}
+              />
+              <Chip
+                label={`Balance: ${moneyFmt(dayNetBalance)}`}
+                size="small"
+                color={dayNetBalance >= 0 ? 'success' : 'error'}
+                sx={{ fontWeight: 700 }}
+              />
+              <Chip
+                label={`Margen: ${dayMarginPct.toFixed(1)}%`}
+                size="small"
+                variant="outlined"
+                sx={{ fontWeight: 700 }}
+              />
+              <Chip
+                icon={<PointOfSaleIcon />}
+                label={`Caja ($): ${moneyFmt(detail.totals?.posIncomeAmount ?? 0)}`}
+                size="small"
+                variant="outlined"
+                sx={{ color: colors.posSales, fontWeight: 600 }}
+              />
+              <Chip
+                icon={<PaymentsIcon />}
+                label={`Cobros: ${moneyFmt(detail.totals?.collectedAmount ?? 0)}`}
+                size="small"
+                variant="outlined"
+                sx={{ color: colors.collected, fontWeight: 600 }}
+              />
+            </>
+          )}
+          {!hideOperationalMetrics && (
             <Chip
               icon={<ShoppingCartIcon />}
               label={`Pedidos: ${moneyFmt(detail.totals?.ordersAmount ?? 0)}`}
@@ -525,7 +611,7 @@ export default function CalendarDayDetailDialog({
               sx={{ bgcolor: alpha(colors.orderMoney, 0.15), color: colors.orderMoney, fontWeight: 700 }}
             />
           )}
-          {!isIncomeView && (
+          {!hideOperationalMetrics && (
             <Chip
               icon={<PointOfSaleIcon />}
               label={`Caja operativa (fecha pedido): ${moneyFmt(detail.totals?.posSalesAmount ?? 0)}`}
@@ -533,18 +619,22 @@ export default function CalendarDayDetailDialog({
               sx={{ bgcolor: alpha(colors.posSales, 0.15), color: colors.posSales, fontWeight: 700 }}
             />
           )}
-          <Chip
-            icon={<PointOfSaleIcon />}
-            label={`Caja (entrada $): ${moneyFmt(detail.totals?.posIncomeAmount ?? 0)}`}
-            size="small"
-            sx={{ bgcolor: alpha(colors.posSales, 0.15), color: colors.posSales, fontWeight: 700 }}
-          />
-          <Chip
-            icon={<PaymentsIcon />}
-            label={`Cobros pedidos: ${moneyFmt(detail.totals?.collectedAmount ?? 0)}`}
-            size="small"
-            sx={{ bgcolor: alpha(colors.collected, 0.15), color: colors.collected, fontWeight: 700 }}
-          />
+          {!isCashflowView && (
+            <Chip
+              icon={<PointOfSaleIcon />}
+              label={`Caja (entrada $): ${moneyFmt(detail.totals?.posIncomeAmount ?? 0)}`}
+              size="small"
+              sx={{ bgcolor: alpha(colors.posSales, 0.15), color: colors.posSales, fontWeight: 700 }}
+            />
+          )}
+          {!isCashflowView && (
+            <Chip
+              icon={<PaymentsIcon />}
+              label={`Cobros pedidos: ${moneyFmt(detail.totals?.collectedAmount ?? 0)}`}
+              size="small"
+              sx={{ bgcolor: alpha(colors.collected, 0.15), color: colors.collected, fontWeight: 700 }}
+            />
+          )}
           {isIncomeView && (
             <Chip
               icon={<PaymentsIcon />}
@@ -553,7 +643,7 @@ export default function CalendarDayDetailDialog({
               sx={{ bgcolor: alpha(colors.incomeTotal ?? colors.collected, 0.15), color: colors.incomeTotal ?? colors.collected, fontWeight: 700 }}
             />
           )}
-          {!isIncomeView && (
+          {!hideOperationalMetrics && (
             <Chip
               icon={<MoneyOffIcon />}
               label={`Gastos: ${moneyFmt(detail.totals?.expensesAmount ?? 0)}`}
@@ -569,22 +659,30 @@ export default function CalendarDayDetailDialog({
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 700 }}>Semana</TableCell>
-                  {!isIncomeView && <TableCell align="right" sx={{ fontWeight: 700 }}>Pedidos</TableCell>}
-                  {!isIncomeView && <TableCell align="right" sx={{ fontWeight: 700 }}>Caja op.</TableCell>}
+                  {!hideOperationalMetrics && <TableCell align="right" sx={{ fontWeight: 700 }}>Pedidos</TableCell>}
+                  {!hideOperationalMetrics && <TableCell align="right" sx={{ fontWeight: 700 }}>Caja op.</TableCell>}
                   <TableCell align="right" sx={{ fontWeight: 700 }}>Caja ($)</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>Cobros</TableCell>
+                  {isCashflowView && <TableCell align="right" sx={{ fontWeight: 700 }}>Ingresos</TableCell>}
                   {!isIncomeView && <TableCell align="right" sx={{ fontWeight: 700 }}>Gastos</TableCell>}
+                  {isCashflowView && <TableCell align="right" sx={{ fontWeight: 700 }}>Balance</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {weeklyRows.map((row) => (
                   <TableRow key={row.key}>
                     <TableCell>{row.label}</TableCell>
-                    {!isIncomeView && <TableCell align="right">{moneyFmt(row.ordersAmount)}</TableCell>}
-                    {!isIncomeView && <TableCell align="right">{moneyFmt(row.posSalesAmount)}</TableCell>}
+                    {!hideOperationalMetrics && <TableCell align="right">{moneyFmt(row.ordersAmount)}</TableCell>}
+                    {!hideOperationalMetrics && <TableCell align="right">{moneyFmt(row.posSalesAmount)}</TableCell>}
                     <TableCell align="right">{moneyFmt(row.posIncomeAmount ?? 0)}</TableCell>
                     <TableCell align="right">{moneyFmt(row.collectedAmount)}</TableCell>
+                    {isCashflowView && <TableCell align="right">{moneyFmt(row.incomeTotal)}</TableCell>}
                     {!isIncomeView && <TableCell align="right">{moneyFmt(row.expensesAmount)}</TableCell>}
+                    {isCashflowView && (
+                      <TableCell align="right">
+                        {moneyFmt(Number((row.incomeTotal - Number(row.expensesAmount ?? 0)).toFixed(2)))}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -598,22 +696,30 @@ export default function CalendarDayDetailDialog({
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 700 }}>Día</TableCell>
-                  {!isIncomeView && <TableCell align="right" sx={{ fontWeight: 700 }}>Pedidos</TableCell>}
-                  {!isIncomeView && <TableCell align="right" sx={{ fontWeight: 700 }}>Caja op.</TableCell>}
+                  {!hideOperationalMetrics && <TableCell align="right" sx={{ fontWeight: 700 }}>Pedidos</TableCell>}
+                  {!hideOperationalMetrics && <TableCell align="right" sx={{ fontWeight: 700 }}>Caja op.</TableCell>}
                   <TableCell align="right" sx={{ fontWeight: 700 }}>Caja ($)</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>Cobros</TableCell>
+                  {isCashflowView && <TableCell align="right" sx={{ fontWeight: 700 }}>Ingresos</TableCell>}
                   {!isIncomeView && <TableCell align="right" sx={{ fontWeight: 700 }}>Gastos</TableCell>}
+                  {isCashflowView && <TableCell align="right" sx={{ fontWeight: 700 }}>Balance</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {dailyRows.map((row) => (
                   <TableRow key={row.key}>
                     <TableCell sx={{ textTransform: 'capitalize' }}>{row.label}</TableCell>
-                    {!isIncomeView && <TableCell align="right">{moneyFmt(row.ordersAmount)}</TableCell>}
-                    {!isIncomeView && <TableCell align="right">{moneyFmt(row.posSalesAmount)}</TableCell>}
+                    {!hideOperationalMetrics && <TableCell align="right">{moneyFmt(row.ordersAmount)}</TableCell>}
+                    {!hideOperationalMetrics && <TableCell align="right">{moneyFmt(row.posSalesAmount)}</TableCell>}
                     <TableCell align="right">{moneyFmt(row.posIncomeAmount ?? 0)}</TableCell>
                     <TableCell align="right">{moneyFmt(row.collectedAmount)}</TableCell>
+                    {isCashflowView && <TableCell align="right">{moneyFmt(row.incomeTotal)}</TableCell>}
                     {!isIncomeView && <TableCell align="right">{moneyFmt(row.expensesAmount)}</TableCell>}
+                    {isCashflowView && (
+                      <TableCell align="right">
+                        {moneyFmt(Number((row.incomeTotal - Number(row.expensesAmount ?? 0)).toFixed(2)))}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -631,7 +737,7 @@ export default function CalendarDayDetailDialog({
           scrollButtons="auto"
           sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
         >
-          {!isIncomeView && (
+          {!hideOperationalMetrics && (
             <Tab
               value={TABS.orders}
               icon={<ShoppingCartIcon fontSize="small" />}
@@ -644,7 +750,7 @@ export default function CalendarDayDetailDialog({
             icon={<PointOfSaleIcon fontSize="small" />}
             iconPosition="start"
             label={
-              isIncomeView && usesIncomeRows
+              usesIncomeSplitTabs && usesIncomeRows
                 ? `Caja (${cajaIncomes.length})`
                 : `Caja (${detail.posSales?.length ?? 0})`
             }
@@ -654,7 +760,7 @@ export default function CalendarDayDetailDialog({
             icon={<PaymentsIcon fontSize="small" />}
             iconPosition="start"
             label={
-              isIncomeView && usesIncomeRows
+              usesIncomeSplitTabs && usesIncomeRows
                 ? `Cobros (${cobroIncomes.length})`
                 : `Ingresos (${usesIncomeRows ? (detail.incomes?.length ?? 0) : (detail.abonos?.length ?? 0) + (detail.directPayments?.length ?? 0)})`
             }
@@ -706,7 +812,7 @@ export default function CalendarDayDetailDialog({
 
         {tab === TABS.posSales && (
           <>
-            {isIncomeView && usesIncomeRows ? (
+            {usesIncomeSplitTabs && usesIncomeRows ? (
               !cajaIncomes.length ? (
                 <EmptyTab message="No hay ingresos de caja en esta fecha." />
               ) : filteredIncomes.length === 0 ? (
@@ -759,8 +865,8 @@ export default function CalendarDayDetailDialog({
         {tab === TABS.collections && (
           <>
             {usesIncomeRows ? (
-              (isIncomeView ? !cobroIncomes.length : !detail.incomes.length) ? (
-                <EmptyTab message={isIncomeView ? 'No hay cobros de pedidos en esta fecha.' : 'No hay ingresos en esta fecha.'} />
+              (usesIncomeSplitTabs ? !cobroIncomes.length : !detail.incomes.length) ? (
+                <EmptyTab message={usesIncomeSplitTabs ? 'No hay cobros de pedidos en esta fecha.' : 'No hay ingresos en esta fecha.'} />
               ) : filteredIncomes.length === 0 ? (
                 <EmptyTab message="Ningún ingreso coincide con el filtro." />
               ) : (
