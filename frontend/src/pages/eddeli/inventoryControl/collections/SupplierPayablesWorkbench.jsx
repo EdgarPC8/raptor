@@ -33,7 +33,6 @@ import {
   getSupplierPayablesWorkbenchRequest,
   paySupplierOrderRequest,
   deleteSupplierOrderPaymentRequest,
-  updateSupplierOrderRequest,
   createSupplierPackRequest,
   updateSupplierPackRequest,
   dissolveSupplierPackRequest,
@@ -45,7 +44,9 @@ import {
   nowLocalDateTime,
   toNum,
 } from "./helpers.js";
-import SupplierPendingSummaryPanel from "./SupplierPendingSummaryPanel.jsx";
+import SupplierPendingViewTab from "./SupplierPendingViewTab.jsx";
+import SupplierOrderForm from "../components/SupplierOrderForm.jsx";
+import SimpleDialog from "../../../../components/Dialogs/SimpleDialog.jsx";
 import EditNoteIcon from "@mui/icons-material/EditNote";
 import CallSplitIcon from "@mui/icons-material/CallSplit";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -57,7 +58,6 @@ import { alpha } from "@mui/material/styles";
 export default function SupplierPayablesWorkbench() {
   const isMobile = useMediaQuery("(max-width:900px)");
   const { toast: toastAuth, user } = useAuth();
-  const isProgrammer = user?.loginRol === "Programador";
   const canManagePacks = ["Programador", "Administrador"].includes(user?.loginRol);
 
   const [suppliers, setSuppliers] = useState([]);
@@ -70,7 +70,10 @@ export default function SupplierPayablesWorkbench() {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
-  const [mainTab, setMainTab] = useState(0); // 0 pendiente · 1 grupos · 2 pacas
+  const [mainTab, setMainTab] = useState(0); // 0 vista · 1 pagados · 2 grupos · 3 pacas · 4 detalle
+
+  const [editOrderOpen, setEditOrderOpen] = useState(false);
+  const [orderToEdit, setOrderToEdit] = useState(null);
 
   const [payOpen, setPayOpen] = useState(false);
   const [payOrderId, setPayOrderId] = useState(null);
@@ -98,9 +101,6 @@ export default function SupplierPayablesWorkbench() {
   const [payPackDate, setPayPackDate] = useState(nowLocalDateTime());
   const [payPackNote, setPayPackNote] = useState("");
   const [payPackMethod, setPayPackMethod] = useState("efectivo");
-
-  const [editingItemId, setEditingItemId] = useState(null);
-  const [editFields, setEditFields] = useState({});
 
   const load = async (keepSelection = true) => {
     try {
@@ -168,6 +168,14 @@ export default function SupplierPayablesWorkbench() {
     [supplierOrders]
   );
 
+  const paidOrders = useMemo(
+    () =>
+      supplierOrders.filter(
+        (o) => toNum(o.remainingAmount) <= 0.009 && toNum(o.totalAmount) > 0.009
+      ),
+    [supplierOrders]
+  );
+
   const pendingItems = useMemo(() => {
     const out = [];
     for (const o of pendingOrders) {
@@ -191,6 +199,40 @@ export default function SupplierPayablesWorkbench() {
       return Number(b.orderId) - Number(a.orderId);
     });
   }, [pendingOrders]);
+
+  const paidItems = useMemo(() => {
+    const out = [];
+    for (const o of paidOrders) {
+      for (const it of o.items || []) {
+        out.push({
+          ...it,
+          orderId: o.id,
+          orderDate: o.date,
+          orderReceivedAt: o.receivedAt || null,
+          orderRemaining: 0,
+          orderPaidAmount: toNum(o.paidAmount),
+          supplierId: o.supplierId,
+          orderNotes: o.notes || "",
+          packId: it.packId || null,
+        });
+      }
+    }
+    return out.sort((a, b) => {
+      const byName = String(a.product).localeCompare(String(b.product), "es");
+      if (byName !== 0) return byName;
+      return Number(b.orderId) - Number(a.orderId);
+    });
+  }, [paidOrders]);
+
+  const paidOrdersTotal = useMemo(
+    () =>
+      Number(
+        paidOrders
+          .reduce((s, o) => s + (toNum(o.paidAmount) || toNum(o.totalAmount)), 0)
+          .toFixed(2)
+      ),
+    [paidOrders]
+  );
 
   const supplierPacks = useMemo(
     () =>
@@ -386,105 +428,53 @@ export default function SupplierPayablesWorkbench() {
     }
   };
 
-  const handleEditToggle = (item) => {
-    if (!item) {
-      setEditingItemId(null);
-      return;
-    }
-    setEditingItemId(item.id);
-    setEditFields((prev) => ({
-      ...prev,
-      [item.id]: {
-        quantity: String(item.quantity ?? ""),
-        unitPrice: String(item.unitPrice ?? ""),
-      },
-    }));
-  };
-
-  const handleEditFieldChange = (itemId, field, value) => {
-    setEditFields((prev) => ({
-      ...prev,
-      [itemId]: { ...prev[itemId], [field]: value },
-    }));
-  };
-
-  const handleEditConfirm = async (item) => {
-    const order = orders.find((o) => o.id === item.orderId);
-    if (!order) {
-      setUiMsg({ type: "error", text: "Pedido no encontrado" });
-      return;
-    }
-    const fields = editFields[item.id] || {};
-    const canEditPrice = toNum(order.remainingAmount) > 0.009;
-    const canEditQty = !order.receivedAt;
-    if (!canEditPrice && !canEditQty) {
-      setUiMsg({
-        type: "error",
-        text: "No se puede editar: pedido liquidado o ya recibido sin cambios permitidos",
-      });
-      return;
-    }
-
-    const nextQty = canEditQty
-      ? Number(String(fields.quantity ?? "").replace(",", "."))
-      : toNum(item.quantity);
-    const nextPrice = canEditPrice
-      ? Number(String(fields.unitPrice ?? "").replace(",", "."))
-      : toNum(item.unitPrice);
-
-    if (!(nextQty > 0) || Number.isNaN(nextQty)) {
-      setUiMsg({ type: "error", text: "Cantidad inválida" });
-      return;
-    }
-    if (!(nextPrice >= 0) || Number.isNaN(nextPrice)) {
-      setUiMsg({ type: "error", text: "Precio inválido" });
-      return;
-    }
-
-    const itemsPayload = (order.items || []).map((it) => ({
-      productId: it.productId,
-      quantity: it.id === item.id ? nextQty : toNum(it.quantity),
-      unitPrice: it.id === item.id ? nextPrice : toNum(it.unitPrice),
-      taxRate: toNum(it.taxRate),
-    }));
-
-    const payload = { items: itemsPayload };
-    if (!order.receivedAt) {
-      payload.supplierId = order.supplierId;
-      payload.notes = order.notes || null;
-      const d = String(order.date || "").slice(0, 10);
-      payload.date = d.includes("T") ? order.date : `${d}T12:00:00`;
-    }
-
-    try {
-      setLoading(true);
-      await toastAuth({
-        promise: updateSupplierOrderRequest(order.id, payload),
-        onSuccess: async () => {
-          setEditingItemId(null);
-          await load(true);
-          setUiMsg({ type: "success", text: `Línea del pedido #${order.id} actualizada` });
-          return { title: "Pedido proveedor", description: `Pedido #${order.id} actualizado` };
+  const openEditOrder = (ord) => {
+    if (!ord?.id) return;
+    const full = orders.find((o) => Number(o.id) === Number(ord.id)) || ord;
+    setOrderToEdit({
+      id: full.id,
+      supplierId: full.supplierId,
+      date: full.date,
+      notes: full.notes || "",
+      status: full.status,
+      receivedAt: full.receivedAt || null,
+      paidAt: full.paidAt || null,
+      ERP_supplier_order_items: (full.items || []).map((it) => ({
+        id: it.id,
+        productId: it.productId,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        taxRate: it.taxRate ?? 0,
+        ERP_inventory_product: {
+          id: it.productId,
+          name: it.product || "(sin nombre)",
         },
-        onError: (res) => ({
-          title: "Pedido proveedor",
-          description: res?.response?.data?.message || "No se pudo actualizar la línea",
-        }),
-      });
-    } catch (err) {
-      setUiMsg({
-        type: "error",
-        text: err?.response?.data?.message || "No se pudo actualizar la línea",
-      });
-    } finally {
-      setLoading(false);
-    }
+      })),
+    });
+    setEditOrderOpen(true);
+  };
+
+  const closeEditOrder = () => {
+    setEditOrderOpen(false);
+    setOrderToEdit(null);
   };
 
   const toggleItemSelect = (itemId) => {
     setSelectedItemIds((prev) =>
       prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]
     );
+  };
+
+  const toggleItemIds = (ids = []) => {
+    const list = (ids || []).map(Number).filter((id) => Number.isFinite(id));
+    if (!list.length) return;
+    setSelectedItemIds((prev) => {
+      const set = new Set(prev);
+      const allSelected = list.every((id) => set.has(id));
+      if (allSelected) list.forEach((id) => set.delete(id));
+      else list.forEach((id) => set.add(id));
+      return Array.from(set);
+    });
   };
 
   const toggleOrderSelect = (orderId) => {
@@ -794,83 +784,66 @@ export default function SupplierPayablesWorkbench() {
                 onChange={(_, v) => setMainTab(v)}
                 variant="scrollable"
                 scrollButtons="auto"
-                sx={{ mt: 1.5, borderBottom: 1, borderColor: "divider" }}
+                sx={{ mt: 1.5, borderBottom: 1, borderColor: "divider", minHeight: 40 }}
               >
-                <Tab label="Pendiente" />
-                <Tab label={`Grupos (${paymentGroups.length})`} />
-                <Tab label={`Pacas (${cartonPacks.length})`} />
+                <Tab label={`Vista (${pendingOrders.length})`} sx={{ minHeight: 40, textTransform: "none" }} />
+                <Tab label={`Pagados (${paidOrders.length})`} sx={{ minHeight: 40, textTransform: "none" }} />
+                <Tab label={`Grupos (${paymentGroups.length})`} sx={{ minHeight: 40, textTransform: "none" }} />
+                <Tab label={`Pacas (${cartonPacks.length})`} sx={{ minHeight: 40, textTransform: "none" }} />
+                <Tab label="Detalle" sx={{ minHeight: 40, textTransform: "none" }} />
               </Tabs>
             </CardContent>
           </Card>
 
           {mainTab === 0 ? (
-            <>
-              <SupplierPendingSummaryPanel
+            <Card variant="outlined">
+              <SupplierPendingViewTab
+                mode="pending"
                 debtTotal={supplier.debtTotal}
                 pendingOrders={pendingOrders}
                 pendingItems={pendingItems}
-                packs={[]}
-                isProgrammer={isProgrammer}
-                canSelectItems={canManagePacks}
+                canSelect={canManagePacks}
                 selectedItemIds={selectedItemIds}
-                onToggleItem={toggleItemSelect}
                 selectedOrderIds={selectedOrderIds}
                 onToggleOrder={toggleOrderSelect}
+                onToggleItemIds={toggleItemIds}
                 onClearOrderSelection={() => setSelectedOrderIds([])}
+                onClearItemSelection={() => setSelectedItemIds([])}
                 onCreateOrderGroup={canManagePacks ? openOrderGroupDialog : undefined}
-                editingItemId={editingItemId}
-                editFields={editFields}
-                onEditToggle={handleEditToggle}
-                onEditFieldChange={handleEditFieldChange}
-                onEditConfirm={handleEditConfirm}
+                onArmPack={canManagePacks ? openPackDialog : undefined}
+                onEditOrder={openEditOrder}
                 onAbonarOrder={(ord) => {
                   setSelectedOrderId(ord.id);
                   openPay(ord);
                 }}
+                selectedPackQty={selectedPackPreview.qty}
                 busy={loading}
               />
-
-              {canManagePacks && selectedItemIds.length > 0 ? (
-                <Card variant="outlined">
-                  <CardContent>
-                    <Stack
-                      direction={{ xs: "column", sm: "row" }}
-                      spacing={1}
-                      alignItems={{ xs: "stretch", sm: "center" }}
-                      justifyContent="space-between"
-                    >
-                      <Typography variant="body2">
-                        <b>{selectedItemIds.length}</b> línea(s) seleccionada(s) · Cant.{" "}
-                        {selectedPackPreview.qty}
-                      </Typography>
-                      <Stack direction="row" spacing={1}>
-                        <Button size="small" onClick={() => setSelectedItemIds([])}>
-                          Limpiar
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="warning"
-                          startIcon={<Inventory2Icon />}
-                          onClick={() => {
-                            openPackDialog();
-                          }}
-                          disabled={loading}
-                        >
-                          Armar paca / cartón
-                        </Button>
-                      </Stack>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              ) : null}
-            </>
+            </Card>
           ) : null}
 
           {mainTab === 1 ? (
+            <Card variant="outlined">
+              <SupplierPendingViewTab
+                mode="paid"
+                debtTotal={paidOrdersTotal}
+                pendingOrders={paidOrders}
+                pendingItems={paidItems}
+                canSelect={false}
+                onEditOrder={openEditOrder}
+                onOpenOrder={(ord) => {
+                  setSelectedOrderId(ord.id);
+                  setMainTab(4);
+                }}
+                busy={loading}
+              />
+            </Card>
+          ) : null}
+
+          {mainTab === 2 ? (
             <PackListCard
               title="Grupos de pago"
-              emptyText="No hay grupos de pago. En Pendiente → Por pedidos, marcá pedidos y tocá Crear grupo."
+              emptyText="No hay grupos. En Vista → Por pedidos, marcá pedidos y Creá grupo."
               packs={paymentGroups}
               kind="order_group"
               canManage={canManagePacks}
@@ -881,10 +854,10 @@ export default function SupplierPayablesWorkbench() {
             />
           ) : null}
 
-          {mainTab === 2 ? (
+          {mainTab === 3 ? (
             <PackListCard
               title="Pacas / cartones"
-              emptyText="No hay pacas. En Pendiente → Por producto, seleccioná líneas y armá una paca."
+              emptyText="No hay pacas. En Vista → Por producto, seleccioná líneas y armá una paca."
               packs={cartonPacks}
               kind="carton"
               canManage={canManagePacks}
@@ -895,72 +868,121 @@ export default function SupplierPayablesWorkbench() {
             />
           ) : null}
 
-          {selectedOrder && mainTab === 0 ? (
+          {mainTab === 4 ? (
             <Card variant="outlined">
               <CardContent>
-                <Typography variant="subtitle1" sx={{ fontWeight: 900, mb: 1 }}>
-                  Detalle pedido #{selectedOrder.id}
-                </Typography>
-                <Stack spacing={0.5} sx={{ mb: 2 }}>
-                  {(selectedOrder.items || []).map((it) => (
-                    <Stack
-                      key={it.id}
-                      direction="row"
-                      justifyContent="space-between"
-                      spacing={1}
-                    >
-                      <Typography variant="body2">
-                        {it.product} × {it.quantity} · {money(it.unitPrice)}
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {money(it.lineTotal)}
-                      </Typography>
-                    </Stack>
-                  ))}
-                </Stack>
-                <Divider sx={{ mb: 1.5 }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
-                  Historial de abonos
-                </Typography>
-                {orderPayments.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    Aún no hay abonos en este pedido.
-                  </Typography>
+                {!selectedOrder ? (
+                  <Alert severity="info" sx={{ py: 0.5 }}>
+                    Elegí un pedido en Vista (Abonar) o Editar para ver el detalle y el historial de
+                    abonos.
+                  </Alert>
                 ) : (
-                  <Stack spacing={1}>
-                    {orderPayments.map((p) => (
-                      <Stack
-                        key={p.id}
-                        direction="row"
-                        alignItems="center"
-                        spacing={1}
-                        justifyContent="space-between"
+                  <>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1}
+                      justifyContent="space-between"
+                      alignItems={{ xs: "stretch", sm: "center" }}
+                      sx={{ mb: 1 }}
+                    >
+                      <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
+                        Detalle pedido #{selectedOrder.id}
+                      </Typography>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="error"
+                        disabled={loading || !(toNum(selectedOrder.remainingAmount) > 0.009)}
+                        onClick={() => openPay(selectedOrder)}
                       >
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                            {money(p.amount)} · {p.method}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {p.date} {p.note ? `· ${p.note}` : ""}
-                          </Typography>
-                        </Box>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => removePayment(p.id)}
-                          disabled={loading}
+                        Abonar
+                      </Button>
+                    </Stack>
+                    <Stack spacing={0.5} sx={{ mb: 2 }}>
+                      {(selectedOrder.items || []).map((it) => (
+                        <Stack
+                          key={it.id}
+                          direction="row"
+                          justifyContent="space-between"
+                          spacing={1}
                         >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
+                          <Typography variant="body2">
+                            {it.product} × {it.quantity} · {money(it.unitPrice)}
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            {money(it.lineTotal)}
+                          </Typography>
+                        </Stack>
+                      ))}
+                    </Stack>
+                    <Divider sx={{ mb: 1.5 }} />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
+                      Historial de abonos
+                    </Typography>
+                    {orderPayments.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Aún no hay abonos en este pedido.
+                      </Typography>
+                    ) : (
+                      <Stack spacing={1}>
+                        {orderPayments.map((p) => (
+                          <Stack
+                            key={p.id}
+                            direction="row"
+                            alignItems="center"
+                            spacing={1}
+                            justifyContent="space-between"
+                          >
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                {money(p.amount)} · {p.method}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {p.date} {p.note ? `· ${p.note}` : ""}
+                              </Typography>
+                            </Box>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => removePayment(p.id)}
+                              disabled={loading}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        ))}
                       </Stack>
-                    ))}
-                  </Stack>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
           ) : null}
         </Stack>
       )}
+
+
+      <SimpleDialog
+        open={editOrderOpen}
+        onClose={closeEditOrder}
+        tittle={
+          orderToEdit?.id
+            ? `Editar pedido a proveedor #${orderToEdit.id}`
+            : "Editar pedido a proveedor"
+        }
+        maxWidth="lg"
+        fullWidth
+      >
+        {orderToEdit ? (
+          <SupplierOrderForm
+            onClose={closeEditOrder}
+            reload={() => load(true)}
+            isEditing
+            datos={orderToEdit}
+            active={editOrderOpen}
+          />
+        ) : null}
+      </SimpleDialog>
 
       <Dialog open={payOpen} onClose={() => setPayOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle sx={{ fontWeight: 900 }}>Abonar a proveedor</DialogTitle>

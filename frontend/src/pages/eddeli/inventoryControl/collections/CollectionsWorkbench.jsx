@@ -56,7 +56,9 @@ import { formatDateTime } from "../../../../helpers/functions.js";
 import { buildReportTxtByProduct } from "./reportBuilders.js";
 import ItemsTable from "./ItemsTable.jsx";
 import CollectionsDialogs from "./CollectionsDialogs.jsx";
-import PendingSummaryPanel from "./PendingSummaryPanel.jsx";
+import CollectionsPendingViewTab from "./CollectionsPendingViewTab.jsx";
+import OrderForm from "../components/OrderForm.jsx";
+import SimpleDialog from "../../../../components/Dialogs/SimpleDialog.jsx";
 import DebtReportDialog from "./DebtReportDialog.jsx";
 
 export default function CollectionsWorkbench() {
@@ -100,6 +102,8 @@ export default function CollectionsWorkbench() {
   const [editPaymentNote, setEditPaymentNote] = useState("");
   const [editPaymentMethod, setEditPaymentMethod] = useState("efectivo");
   const [debtReportOpen, setDebtReportOpen] = useState(false);
+  const [editOrderOpen, setEditOrderOpen] = useState(false);
+  const [orderToEdit, setOrderToEdit] = useState(null);
 
   const loadWorkbench = async (keepSelection = true) => {
     try {
@@ -454,11 +458,68 @@ export default function CollectionsWorkbench() {
     }
   };
 
+
+  const openEditOrder = (orderId) => {
+    const id = Number(orderId);
+    if (!Number.isFinite(id)) return;
+    const full =
+      orders.find((o) => Number(o.id) === id) ||
+      customerOrders.find((o) => Number(o.id) === id);
+    if (!full) return;
+    setOrderToEdit({
+      id: full.id,
+      customerId: full.customerId,
+      date: full.date,
+      notes: full.notes || "",
+      status: full.status,
+      paidAt: full.paidAt || null,
+      deliveredAt: full.deliveredAt || null,
+      ERP_order_items: (full.items || []).map((it) => ({
+        id: it.id,
+        productId: it.productId,
+        quantity: it.qty ?? it.quantity,
+        soldQty: it.soldQty,
+        damagedQty: it.damagedQty,
+        giftQty: it.giftQty,
+        replacedQty: it.replacedQty,
+        price: it.price,
+        deliveredAt: it.deliveredAt || null,
+        paidAt: it.paidAt || null,
+        ERP_inventory_product: {
+          id: it.productId,
+          name: it.product || it.productName || it.name || "(sin nombre)",
+        },
+      })),
+    });
+    setEditOrderOpen(true);
+  };
+
+  const closeEditOrder = () => {
+    setEditOrderOpen(false);
+    setOrderToEdit(null);
+  };
+
   const toggleSelectItem = (itemId) => {
     setSelectedItemIds((prev) =>
       prev.includes(itemId) ? prev.filter((x) => x !== itemId) : [...prev, itemId]
     );
   };
+  /** Marca/desmarca un lote de ítems (pedido o producto) de una sola vez. */
+  const toggleSelectItemIds = (ids = []) => {
+    const list = (ids || []).map(Number).filter((id) => Number.isFinite(id));
+    if (!list.length) return;
+    setSelectedItemIds((prev) => {
+      const set = new Set(prev);
+      const allSelected = list.every((id) => set.has(id));
+      if (allSelected) {
+        list.forEach((id) => set.delete(id));
+      } else {
+        list.forEach((id) => set.add(id));
+      }
+      return Array.from(set);
+    });
+  };
+  const clearItemSelection = () => setSelectedItemIds([]);
   const toggleSelectPaidItem = (itemId) => {
     setSelectedPaidItemIds((prev) =>
       prev.includes(itemId) ? prev.filter((x) => x !== itemId) : [...prev, itemId]
@@ -1036,180 +1097,61 @@ export default function CollectionsWorkbench() {
         </CardContent>
       </Card>
 
-      <PendingSummaryPanel
-        customerId={selectedCustomerId}
-        customerItems={customerItems}
-        displayPending={displayPending}
-        onPrepareOrderGroup={prepareOrderGroup}
-        onAbonarOrderGroup={abonarOrderGroup}
-      />
-
       <Card variant="outlined" sx={{ width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
         <CardContent sx={{ p: 0, "&:last-child": { pb: 0 }, width: "100%", boxSizing: "border-box" }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ px: { xs: 1.25, sm: 1.5 }, pt: 1.25, pb: 0 }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              Pendiente cobrable: <b>{money(displayPending)}</b>
+            </Typography>
+            <Chip
+              size="small"
+              color="warning"
+              variant="outlined"
+              label={money(displayPending)}
+            />
+          </Stack>
           <Tabs
             value={tab}
             onChange={(_, v) => setTab(v)}
-            variant={isMobile ? "scrollable" : "fullWidth"}
-            scrollButtons={isMobile ? "auto" : false}
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{ px: 0.5 }}
           >
-            <Tab label={`Pendientes sin grupo (${itemsUngrouped.length})`} />
-            <Tab label={`Pagados sin grupo (${itemsPaidUngrouped.length})`} />
+            <Tab label={`Vista (${itemsUngrouped.length})`} />
+            <Tab label={`Pagados (${itemsPaidUngrouped.length})`} />
             <Tab label={`Grupos (${customerGroups.length})`} />
             <Tab label="Detalle" />
           </Tabs>
           <Divider />
 
           {tab === 0 && (
-            <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1}
-                justifyContent="space-between"
-                alignItems={{ xs: "stretch", sm: "center" }}
-                sx={{ mb: 2 }}
-              >
-                <Typography variant="subtitle1">Ítems pendientes sin grupo</Typography>
-                <Stack direction="row" spacing={1} justifyContent="flex-end">
-                  <Button
-                    variant="outlined"
-                    disabled={loading || itemsUngrouped.length === 0}
-                    onClick={() => {
-                      const { txt } = buildReportTxtByProduct({
-                        title: "REPORTE PENDIENTE SIN GRUPO (POR PRODUCTO)",
-                        customer,
-                        items: itemsUngrouped,
-                      });
-                      const filename = `pendiente_sin_grupo_${safeFileName(customer?.name)}_${todayISO()}.txt`;
-                      downloadTextFile(filename, txt);
-                    }}
-                  >
-                    TXT sin grupo
-                  </Button>
-                  <Button
-                    variant="contained"
-                    disabled={loading || itemsUngrouped.length === 0}
-                    onClick={() => openCreateGroup("pending")}
-                  >
-                    Crear grupo
-                  </Button>
-                </Stack>
-              </Stack>
-              {customerOrders.length === 0 ? (
-                <Alert severity="info">Este cliente no tiene pedidos.</Alert>
-              ) : itemsUngrouped.length === 0 ? (
-                <Alert severity="info">No hay ítems pendientes sin grupo.</Alert>
-              ) : (
-                <Stack spacing={1}>
-                  {customerOrders
-                    .slice()
-                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                    .map((o) => {
-                      const items = (o.items || [])
-                        .map((it) => ({
-                          ...it,
-                          qty: it.qty ?? it.quantity ?? 0,
-                          product: it.product ?? it.productName ?? it.name ?? "(sin nombre)",
-                          damagedQty: it.damagedQty ?? 0,
-                          giftQty: it.giftQty ?? 0,
-                          replacedQty: it.replacedQty ?? 0,
-                        }))
-                        .filter((it) => !it.paidAt);
-                      if (items.length === 0) return null;
-                      const selectableItems = items.filter((it) => !getItemGroupId(it));
-                      const hasSelectable = selectableItems.length > 0;
-                      const orderPendingTotal = Number(
-                        sum(items, (it) => itemLineTotal(it)).toFixed(2)
-                      );
-                      return (
-                        <Accordion key={o.id} variant="outlined" disableGutters>
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Stack
-                              direction="row"
-                              spacing={1}
-                              alignItems="center"
-                              sx={{ width: "100%", pr: 1 }}
-                            >
-                              <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography sx={{ fontWeight: 800 }}>
-                                  Pedido #{o.id}
-                                </Typography>
-                                <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                                  Día: {dayLabel(o.date)}
-                                </Typography>
-                              </Box>
-                              <Stack
-                                direction="row"
-                                spacing={1}
-                                flexWrap="wrap"
-                                alignItems="center"
-                              >
-                                <Chip
-                                  size="small"
-                                  label={`Pendiente ${money(orderPendingTotal)}`}
-                                  variant="outlined"
-                                />
-                                <Chip
-                                  size="small"
-                                  label={
-                                    hasSelectable
-                                      ? "Tiene ítems sin grupo"
-                                      : "Todo ya en grupo"
-                                  }
-                                  color={hasSelectable ? "warning" : "default"}
-                                  variant="outlined"
-                                />
-                              </Stack>
-                            </Stack>
-                          </AccordionSummary>
-                          <AccordionDetails>
-                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                              Ítems pendientes (selecciona los SIN GRUPO)
-                            </Typography>
-                            <Paper variant="outlined" sx={{ p: 1 }}>
-                              <ItemsTable
-                                items={items}
-                                selectable
-                                selectedItemIds={selectedItemIds}
-                                onToggleItem={toggleSelectItem}
-                                isItemSelectable={(it) =>
-                                  !it.paidAt && !getItemGroupId(it)
-                                }
-                                editable={isProgrammer}
-                                canEditItem={(it) => isProgrammer && !it.paidAt}
-                                isEditingItem={(id) => !!editMode[id]}
-                                getEditFields={(id) => editFields[id] || {}}
-                                onEditToggle={(it) => toggleEditItem(it)}
-                                onEditFieldChange={(id, field, value) =>
-                                  setItemField(id, field, value)
-                                }
-                                onEditConfirm={(it) => confirmEditItem(it)}
-                              />
-                            </Paper>
-                          </AccordionDetails>
-                        </Accordion>
-                      );
-                    })}
-                </Stack>
-              )}
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1}
-                justifyContent="space-between"
-                alignItems={{ xs: "stretch", sm: "center" }}
-                sx={{ mt: 2 }}
-              >
-                <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                  Selecciona ítems pendientes sin grupo para crear un grupo.
-                </Typography>
-                <Stack direction="row" spacing={1}>
-                  <Chip
-                    label={`Seleccionados: ${selectedItemIds.length}`}
-                    variant="outlined"
-                  />
-                  <Chip label={`Total: ${money(selectedItemsTotal)}`} variant="outlined" />
-                </Stack>
-              </Stack>
-            </Box>
+            <CollectionsPendingViewTab
+              itemsUngrouped={itemsUngrouped}
+              selectedItemIds={selectedItemIds}
+              onToggleItemIds={toggleSelectItemIds}
+              onClearSelection={clearItemSelection}
+              onCreateGroup={() => openCreateGroup("pending")}
+              onPrepareOrderGroup={prepareOrderGroup}
+              onAbonarOrder={abonarOrderGroup}
+              onEditOrder={openEditOrder}
+              selectedTotal={selectedItemsTotal}
+              busy={loading}
+              onTxtReport={() => {
+                const { txt } = buildReportTxtByProduct({
+                  title: "REPORTE PENDIENTE SIN GRUPO (POR PRODUCTO)",
+                  customer,
+                  items: itemsUngrouped,
+                });
+                const filename = `pendiente_sin_grupo_${safeFileName(customer?.name)}_${todayISO()}.txt`;
+                downloadTextFile(filename, txt);
+              }}
+            />
           )}
 
           {tab === 1 && (
@@ -1604,6 +1546,25 @@ export default function CollectionsWorkbench() {
           )}
         </CardContent>
       </Card>
+
+      <SimpleDialog
+        open={editOrderOpen}
+        onClose={closeEditOrder}
+        tittle={
+          orderToEdit?.id ? `Editar pedido #${orderToEdit.id}` : "Editar pedido"
+        }
+        maxWidth="lg"
+        fullWidth
+      >
+        {orderToEdit ? (
+          <OrderForm
+            onClose={closeEditOrder}
+            reload={() => loadWorkbench(true)}
+            isEditing
+            datos={orderToEdit}
+          />
+        ) : null}
+      </SimpleDialog>
 
       <CollectionsDialogs
         createOpen={createOpen}

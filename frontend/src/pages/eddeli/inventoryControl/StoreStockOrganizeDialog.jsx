@@ -33,6 +33,7 @@ import {
   getAllProductsAll,
   getStoreStocksRequest,
   transferStoreStockRequest,
+  patchProductStockRequest,
 } from "../../../api/inventoryControlRequest";
 import SearchableSelect from "../../../components/SearchableSelect.jsx";
 import { useAuth } from "../../../context/AuthContext";
@@ -40,6 +41,9 @@ import {
   locationKindLabel,
   normalizeLocationKind,
 } from "../../../utils/storeLocationKind.js";
+import TuneIcon from "@mui/icons-material/Tune";
+import SaveIcon from "@mui/icons-material/Save";
+import CloseIcon from "@mui/icons-material/Close";
 
 function normalizeProductList(data) {
   if (Array.isArray(data)) return data;
@@ -69,7 +73,8 @@ export function StoreStockManager({
   embedded = false,
   defaultTab = 0,
 }) {
-  const { toast: toastAuth } = useAuth();
+  const { toast: toastAuth, user } = useAuth();
+  const isProgrammer = user?.loginRol === "Programador";
   const [tab, setTab] = useState(defaultTab);
   const [loading, setLoading] = useState(false);
   const [stocks, setStocks] = useState([]);
@@ -85,6 +90,13 @@ export function StoreStockManager({
   const [fromLoading, setFromLoading] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [lastMsg, setLastMsg] = useState("");
+
+  /** Programador: fijar stock absoluto en este local (sin movimiento). */
+  const [editProductId, setEditProductId] = useState(null);
+  const [editQty, setEditQty] = useState("");
+  const [savingAdjust, setSavingAdjust] = useState(false);
+  const [adjustProductId, setAdjustProductId] = useState("");
+  const [adjustQty, setAdjustQty] = useState("");
 
   const storeId = store?.id ? Number(store.id) : null;
   const kind = normalizeLocationKind(store?.locationKind);
@@ -174,6 +186,26 @@ export function StoreStockManager({
   useEffect(() => {
     loadFromStocks(fromStoreId ? Number(fromStoreId) : null);
   }, [fromStoreId, loadFromStocks]);
+
+  const saveAbsoluteStock = useCallback(
+    async (productIdToSet, quantity) => {
+      if (!storeId || !isProgrammer) return;
+      const pid = Number(productIdToSet);
+      const n = Number(quantity);
+      if (!Number.isFinite(pid) || pid <= 0) {
+        throw new Error("Producto inválido");
+      }
+      if (!Number.isFinite(n) || n < 0) {
+        throw new Error("Cantidad inválida");
+      }
+      await toastAuth({
+        promise: patchProductStockRequest(pid, { stock: n, storeId }),
+        successMessage: `Stock del local fijado en ${n}`,
+      });
+      await loadStocks();
+    },
+    [storeId, isProgrammer, toastAuth, loadStocks],
+  );
 
   const filteredRows = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -419,7 +451,64 @@ export function StoreStockManager({
         <Alert severity="info" sx={{ mb: 1.5, py: 0.5 }}>
           Productos con stock <strong>en este local</strong> (Bodega o sucursal). Para mover varios,
           usa “A la lista” y confirma en la pestaña de traspaso.
+          {isProgrammer
+            ? " Como Programador puedes fijar la cantidad exacta aquí (sin crear movimiento)."
+            : ""}
         </Alert>
+
+        {isProgrammer ? (
+          <Paper variant="outlined" sx={{ p: 1.25, mb: 1.5 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+              <TuneIcon fontSize="small" color="warning" />
+              <Typography variant="subtitle2">Ajuste Programador (sin movimiento)</Typography>
+            </Stack>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "flex-start" }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <SearchableSelect
+                  label="Producto"
+                  items={catalog}
+                  value={adjustProductId}
+                  onChange={(v) => setAdjustProductId(v === "" || v == null ? "" : String(v))}
+                  getOptionLabel={(item) => item?.name || ""}
+                  getSearchText={(item) =>
+                    `${item?.name || ""} ${item?.sku || ""} ${item?.barcode || ""} ${item?.id || ""}`
+                  }
+                  placeholder="Buscar producto…"
+                />
+              </Box>
+              <TextField
+                size="small"
+                type="number"
+                label="Cantidad en este local"
+                value={adjustQty}
+                onChange={(e) => setAdjustQty(e.target.value)}
+                inputProps={{ min: 0, step: "any" }}
+                sx={{ width: { xs: "100%", sm: 160 } }}
+              />
+              <Button
+                variant="contained"
+                color="warning"
+                disabled={savingAdjust || !adjustProductId}
+                sx={{ mt: { sm: 0.5 }, whiteSpace: "nowrap" }}
+                onClick={async () => {
+                  try {
+                    setSavingAdjust(true);
+                    await saveAbsoluteStock(adjustProductId, adjustQty);
+                    setAdjustProductId("");
+                    setAdjustQty("");
+                  } catch {
+                    /* toast */
+                  } finally {
+                    setSavingAdjust(false);
+                  }
+                }}
+              >
+                Fijar stock
+              </Button>
+            </Stack>
+          </Paper>
+        ) : null}
+
         <TextField
           size="small"
           fullWidth
@@ -441,7 +530,10 @@ export function StoreStockManager({
           </Stack>
         ) : filteredRows.length === 0 ? (
           <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
-            Sin stock registrado aquí. Traspasa desde otro local con la lista.
+            Sin stock registrado aquí.
+            {isProgrammer
+              ? " Usa el ajuste Programador arriba o traspasa desde otro local."
+              : " Traspasa desde otro local con la lista."}
           </Typography>
         ) : (
           <Paper variant="outlined" sx={{ overflow: "hidden" }}>
@@ -459,6 +551,7 @@ export function StoreStockManager({
                   {filteredRows.map((row) => {
                     const p = row.product || {};
                     const q = Number(row.quantity || 0);
+                    const editing = editProductId === row.productId;
                     return (
                       <TableRow key={row.productId} hover>
                         <TableCell>
@@ -471,22 +564,80 @@ export function StoreStockManager({
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
-                          <Chip
-                            size="small"
-                            label={q}
-                            color={q > 0 ? "success" : "default"}
-                            variant={q > 0 ? "filled" : "outlined"}
-                          />
+                          {editing ? (
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={editQty}
+                              onChange={(e) => setEditQty(e.target.value)}
+                              inputProps={{ min: 0, step: "any" }}
+                              sx={{ width: 100 }}
+                            />
+                          ) : (
+                            <Chip
+                              size="small"
+                              label={q}
+                              color={q > 0 ? "success" : "default"}
+                              variant={q > 0 ? "filled" : "outlined"}
+                            />
+                          )}
                         </TableCell>
                         <TableCell align="right">
                           {p.stock != null ? Number(p.stock) : "—"}
                         </TableCell>
                         <TableCell align="right">
-                          {q > 0 ? (
-                            <Button size="small" onClick={() => addFromStockRow(row)}>
-                              A la lista
-                            </Button>
-                          ) : null}
+                          <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                            {isProgrammer && !editing ? (
+                              <Tooltip title="Ajustar cantidad (Programador)">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => {
+                                    setEditProductId(row.productId);
+                                    setEditQty(String(q));
+                                  }}
+                                >
+                                  <TuneIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            ) : null}
+                            {editing ? (
+                              <>
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  disabled={savingAdjust}
+                                  onClick={async () => {
+                                    try {
+                                      setSavingAdjust(true);
+                                      await saveAbsoluteStock(row.productId, editQty);
+                                      setEditProductId(null);
+                                      setEditQty("");
+                                    } catch {
+                                      /* toast */
+                                    } finally {
+                                      setSavingAdjust(false);
+                                    }
+                                  }}
+                                >
+                                  <SaveIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => {
+                                    setEditProductId(null);
+                                    setEditQty("");
+                                  }}
+                                >
+                                  <CloseIcon fontSize="small" />
+                                </IconButton>
+                              </>
+                            ) : null}
+                            {!editing && q > 0 ? (
+                              <Button size="small" onClick={() => addFromStockRow(row)}>
+                                A la lista
+                              </Button>
+                            ) : null}
+                          </Stack>
                         </TableCell>
                       </TableRow>
                     );

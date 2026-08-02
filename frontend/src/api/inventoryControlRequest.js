@@ -568,10 +568,13 @@ export const getStoreProductsPublicRequest = (storeId, params = {}) =>
     params: { activeOnly: true, ...params },
   });
 
-export const addProductsToStoreRequest = (storeId, productIds) =>
+export const addProductsToStoreRequest = (storeId, productIds, { exhibidorId } = {}) =>
   axios.post(
     `/inventory/stores/${storeId}/products`,
-    { productIds }, // array de IDs
+    {
+      productIds,
+      ...(exhibidorId != null && exhibidorId !== "" ? { exhibidorId: Number(exhibidorId) } : {}),
+    },
     { headers: { Authorization: jwt() } }
   );
 
@@ -580,12 +583,40 @@ export const removeProductFromStoreRequest = (storeId, productId) =>
     headers: { Authorization: jwt() },
   });
 
-export const toggleStoreProductRequest = (storeId, productId, isActive) =>
+export const toggleStoreProductRequest = (storeId, productId, isActive, extra = {}) =>
   axios.patch(
     `/inventory/stores/${storeId}/products/${productId}`,
-    { isActive },
+    { isActive, ...extra },
     { headers: { Authorization: jwt() } }
   );
+
+/** Asignar / quitar exhibidor de un producto en el local (organización; sin stock). */
+export const setStoreProductExhibidorRequest = (storeId, productId, exhibidorId) =>
+  axios.patch(
+    `/inventory/stores/${storeId}/products/${productId}`,
+    { exhibidorId: exhibidorId == null || exhibidorId === "" ? null : Number(exhibidorId) },
+    { headers: { Authorization: jwt() } }
+  );
+
+export const getStoreExhibidoresRequest = (storeId) =>
+  axios.get(`/inventory/stores/${storeId}/exhibidores`, {
+    headers: { Authorization: jwt() },
+  });
+
+export const createStoreExhibidorRequest = (storeId, data) =>
+  axios.post(`/inventory/stores/${storeId}/exhibidores`, data, {
+    headers: { Authorization: jwt() },
+  });
+
+export const updateStoreExhibidorRequest = (storeId, exhibidorId, data) =>
+  axios.put(`/inventory/stores/${storeId}/exhibidores/${exhibidorId}`, data, {
+    headers: { Authorization: jwt() },
+  });
+
+export const deleteStoreExhibidorRequest = (storeId, exhibidorId) =>
+  axios.delete(`/inventory/stores/${storeId}/exhibidores/${exhibidorId}`, {
+    headers: { Authorization: jwt() },
+  });
 
 // Catálogo de productos finales para el selector
 export const getFinalProductsRequest = (params = {}) =>

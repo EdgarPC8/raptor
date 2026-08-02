@@ -20,7 +20,7 @@ import {
   Button,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { money, moneyUnitPrice, toNum } from "./helpers.js";
+import { money, moneyUnitPrice, toNum, getItemGroupId } from "./helpers.js";
 import { buildPendingByProduct, buildPendingByDate } from "./summaryBuilders.js";
 import { getBillableQty } from "./helpers.js";
 
@@ -60,6 +60,7 @@ function itemPendingTotal(it) {
   return Number((qty * toNum(it.price)).toFixed(2));
 }
 
+/** Resumen rápido arriba (solo lectura + atajos por pedido). La selección multi va en la pestaña Vista. */
 export default function PendingSummaryPanel({
   customerId,
   customerItems,
@@ -96,7 +97,7 @@ export default function PendingSummaryPanel({
       const line = itemPendingTotal(it);
       row.items.push(it);
       row.total = Number((row.total + line).toFixed(2));
-      const gid = it.itemGroupId ?? it.groupId;
+      const gid = getItemGroupId(it);
       if (gid) {
         row.grouped.push(it);
       } else {
@@ -207,8 +208,8 @@ export default function PendingSummaryPanel({
                         getBillableQty(it),
                         moneyUnitPrice(it.price),
                         money(itemPendingTotal(it)),
-                        it.itemGroupId || it.groupId
-                          ? `Grupo #${it.itemGroupId || it.groupId}`
+                        getItemGroupId(it)
+                          ? `Grupo #${getItemGroupId(it)}`
                           : "Sin grupo",
                       ])}
                     />
@@ -245,11 +246,9 @@ export default function PendingSummaryPanel({
                               ord.ungrouped.length === 0 &&
                               ord.grouped.length > 0 &&
                               new Set(
-                                ord.grouped.map((it) => Number(it.itemGroupId || it.groupId))
+                                ord.grouped.map((it) => Number(getItemGroupId(it)))
                               ).size === 1
-                                ? Number(
-                                    ord.grouped[0].itemGroupId || ord.grouped[0].groupId
-                                  )
+                                ? Number(getItemGroupId(ord.grouped[0]))
                                 : null,
                           })
                         }
@@ -262,8 +261,7 @@ export default function PendingSummaryPanel({
               ))
             )}
             <Typography variant="caption" color="text.secondary">
-              Tip: «Abonar este pedido» crea (o usa) un grupo con los ítems del pedido y abre el
-              diálogo de abono. Así vinculas el cobro al pedido del cliente.
+              Tip: para seleccionar varios pedidos o productos usá la pestaña <b>Vista</b> abajo.
             </Typography>
           </Stack>
         )}

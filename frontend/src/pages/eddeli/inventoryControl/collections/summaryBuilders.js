@@ -80,24 +80,44 @@ export function buildPendingByProduct(customerItems) {
     const product = String(it.product || "(sin nombre)");
     const priceKey = String(price);
     const mapKey = `${product}\0${priceKey}`;
+    const grouped = it.itemGroupId != null || it.groupId != null;
     if (!byProductPrice.has(mapKey)) {
       byProductPrice.set(mapKey, {
         product,
         unitPrice: price,
         qty: 0,
         total: 0,
+        orderIds: [],
+        itemIds: [],
+        selectableItemIds: [],
+        selectableQty: 0,
+        selectableTotal: 0,
       });
     }
     const agg = byProductPrice.get(mapKey);
     agg.qty = Number((agg.qty + qty).toFixed(2));
     agg.total = Number((agg.total + total).toFixed(2));
+    if (it.orderId != null && !agg.orderIds.includes(Number(it.orderId))) {
+      agg.orderIds.push(Number(it.orderId));
+    }
+    if (it.id != null) agg.itemIds.push(it.id);
+    if (!grouped && it.id != null) {
+      agg.selectableItemIds.push(it.id);
+      agg.selectableQty = Number((agg.selectableQty + qty).toFixed(2));
+      agg.selectableTotal = Number((agg.selectableTotal + total).toFixed(2));
+    }
   }
 
-  const rows = Array.from(byProductPrice.values()).sort((a, b) => {
-    const byName = String(a.product).localeCompare(String(b.product), "es");
-    if (byName !== 0) return byName;
-    return a.unitPrice - b.unitPrice;
-  });
+  const rows = Array.from(byProductPrice.values())
+    .map((r) => ({
+      ...r,
+      orderIds: r.orderIds.slice().sort((a, b) => Number(a) - Number(b)),
+    }))
+    .sort((a, b) => {
+      const byName = String(a.product).localeCompare(String(b.product), "es");
+      if (byName !== 0) return byName;
+      return a.unitPrice - b.unitPrice;
+    });
 
   return {
     rows,

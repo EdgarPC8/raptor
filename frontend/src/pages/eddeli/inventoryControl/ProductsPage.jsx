@@ -22,6 +22,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import ViewModuleIcon from "@mui/icons-material/ViewModule";
 import TableRowsIcon from "@mui/icons-material/TableRows";
+import StorefrontIcon from "@mui/icons-material/Storefront";
 import SearchIcon from "@mui/icons-material/Search";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -30,6 +31,7 @@ import toast from "react-hot-toast";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 import ProductForm from "./components/ProductForm";
 import ProductsGridView from "./components/ProductsGridView";
+import ProductsByStoreView from "./components/ProductsByStoreView";
 import {
   getAllProductsAll,
   unwrapListResponse,
@@ -66,6 +68,12 @@ function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [allCategories, setAllCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!multiStockEnabled && viewMode === "byStore") {
+      setViewMode("cards");
+    }
+  }, [multiStockEnabled, viewMode]);
 
   const fecthData = async () => {
     setLoading(true);
@@ -413,6 +421,12 @@ function ProductsPage() {
             <TableRowsIcon sx={{ mr: 0.5 }} fontSize="small" />
             Tabla
           </ToggleButton>
+          {multiStockEnabled ? (
+            <ToggleButton value="byStore" aria-label="por local">
+              <StorefrontIcon sx={{ mr: 0.5 }} fontSize="small" />
+              Por local
+            </ToggleButton>
+          ) : null}
         </ToggleButtonGroup>
       </Paper>
 
@@ -460,6 +474,14 @@ function ProductsPage() {
             loading={loading}
           />
         </Paper>
+      ) : viewMode === "byStore" && multiStockEnabled ? (
+        <ProductsByStoreView
+          products={data}
+          categoryFilter={categoryFilter}
+          onEdit={openEditProduct}
+          onReload={fecthData}
+          loading={loading}
+        />
       ) : (
         <TablePro
           rows={filteredTableData}

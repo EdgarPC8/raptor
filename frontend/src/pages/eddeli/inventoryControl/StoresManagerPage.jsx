@@ -24,7 +24,6 @@ import {
   TableCell,
   Checkbox,
   CircularProgress,
-  InputAdornment,
   Chip,
   Alert,
   Tabs,
@@ -38,10 +37,6 @@ import {
   Map as MapIcon,
   ContentPaste,
   Inventory2 as InventoryIcon,
-  Visibility,
-  VisibilityOff,
-  RemoveCircleOutline,
-  Search,
   Storefront,
   ReceiptLong,
   Place,
@@ -57,19 +52,13 @@ import {
   createStoreRequest,
   updateStoreRequest,
   deleteStoreRequest,
-  // store-products APIs
-  getStoreProductsRequest,
   addProductsToStoreRequest,
-  removeProductFromStoreRequest,
-  toggleStoreProductRequest,
-  getAllProductsAll,
 } from "../../../api/inventoryControlRequest";
 
 import { pathImg, buildImageUrl } from "../../../api/axios";
 import { mediaStoragePath } from "../../../utils/mediaPaths.js";
 import { useAuth } from "../../../context/AuthContext";
 import Cropper from "react-easy-crop";
-import SearchableSelect from "../../../components/SearchableSelect.jsx";
 import {
   locationKindLabel,
   normalizeLocationKind,
@@ -82,6 +71,7 @@ import { LOCALES_TOUR_ID, getLocalesTourSteps } from "../../../tours/localesTour
 import StoreStockOrganizeDialog, {
   StoreStockManager,
 } from "./StoreStockOrganizeDialog.jsx";
+import StoreProductsLinker from "./StoreProductsLinker.jsx";
 
 /* ===========================
    Helpers de imagen / crop
@@ -490,361 +480,6 @@ function MapPreview({ latitude, longitude, address, city, province, height = 220
 }
 
 /* ===========================
-   Productos del local (buscador + enlaces)
-=========================== */
-function normalizeProductList(data) {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.products)) return data.products;
-  if (Array.isArray(data?.items)) return data.items;
-  if (Array.isArray(data?.rows)) return data.rows;
-  return [];
-}
-
-function productPrice(p) {
-  const n = Number(p?.price);
-  return Number.isFinite(n) ? n : null;
-}
-
-function productStock(p) {
-  const n = Number(p?.stock);
-  return Number.isFinite(n) ? n : null;
-}
-
-function formatMoneyShort(n) {
-  if (n == null) return "—";
-  return `$${Number(n).toFixed(2)}`;
-}
-
-const linkerFieldSx = {
-  m: 0,
-  "& .MuiInputBase-root": { fontSize: "0.82rem" },
-  "& .MuiInputLabel-root": { fontSize: "0.78rem" },
-};
-
-function StoreProductsLinker({ storeId, pendingIds = [], onPendingChange, compact = false }) {
-  const { toast: toastAuth } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [links, setLinks] = useState([]);
-  const [catalog, setCatalog] = useState([]);
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [pickId, setPickId] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [filterAssigned, setFilterAssigned] = useState("");
-
-  const assignedIds = useMemo(() => {
-    if (storeId) return new Set(links.map((l) => Number(l.productId)));
-    return new Set((pendingIds || []).map(Number));
-  }, [storeId, links, pendingIds]);
-
-  const pickOptions = useMemo(() => {
-    return catalog.filter((p) => {
-      if (p?.isActive === false) return false;
-      const t = String(p?.type || "").toLowerCase();
-      if (t && t !== "final") return false;
-      return !assignedIds.has(Number(p.id));
-    });
-  }, [catalog, assignedIds]);
-
-  const pendingProducts = useMemo(() => {
-    const map = new Map(catalog.map((p) => [Number(p.id), p]));
-    return (pendingIds || []).map((id) => map.get(Number(id))).filter(Boolean);
-  }, [catalog, pendingIds]);
-
-  const loadCatalog = async () => {
-    try {
-      setCatalogLoading(true);
-      const { data } = await getAllProductsAll();
-      setCatalog(normalizeProductList(data));
-    } catch {
-      setCatalog([]);
-    } finally {
-      setCatalogLoading(false);
-    }
-  };
-
-  const fetchLinks = async () => {
-    if (!storeId) {
-      setLinks([]);
-      return;
-    }
-    try {
-      setLoading(true);
-      const { data } = await getStoreProductsRequest(storeId, { activeOnly: false });
-      setLinks(Array.isArray(data) ? data : []);
-    } catch (err) {
-      toastAuth({
-        promise: Promise.reject(err),
-        onError: (res) => ({
-          title: "Productos",
-          description: res?.response?.data?.message || "No se pudo cargar",
-        }),
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadCatalog();
-  }, []);
-
-  useEffect(() => {
-    void fetchLinks();
-    setPickId("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId]);
-
-  const addProduct = async (productId) => {
-    const id = Number(productId);
-    if (!Number.isFinite(id) || assignedIds.has(id)) return;
-    setPickId("");
-    if (!storeId) {
-      onPendingChange?.([...(pendingIds || []), id]);
-      return;
-    }
-    try {
-      setBusy(true);
-      await addProductsToStoreRequest(storeId, [id]);
-      await fetchLinks();
-    } catch (err) {
-      toastAuth({
-        promise: Promise.reject(err),
-        onError: (res) => ({
-          title: "Asignar producto",
-          description: res?.response?.data?.message || "No se pudo asignar",
-        }),
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const removeProduct = async (productId) => {
-    const id = Number(productId);
-    if (!storeId) {
-      onPendingChange?.((pendingIds || []).filter((x) => Number(x) !== id));
-      return;
-    }
-    try {
-      await removeProductFromStoreRequest(storeId, id);
-      setLinks((prev) => prev.filter((r) => Number(r.productId) !== id));
-    } catch {}
-  };
-
-  const toggleVisibility = async (productId, current) => {
-    if (!storeId) return;
-    try {
-      await toggleStoreProductRequest(storeId, productId, !current);
-      setLinks((prev) =>
-        prev.map((r) => (r.productId === productId ? { ...r, isActive: !current } : r)),
-      );
-    } catch {}
-  };
-
-  const assignedRows = storeId
-    ? links.filter((r) => {
-        const q = filterAssigned.trim().toLowerCase();
-        if (!q) return true;
-        return String(r.product?.name || "").toLowerCase().includes(q);
-      })
-    : pendingProducts.filter((p) => {
-        const q = filterAssigned.trim().toLowerCase();
-        if (!q) return true;
-        return String(p.name || "").toLowerCase().includes(q);
-      });
-
-  const listMaxH = compact ? 180 : 280;
-  const colSpan = storeId ? 5 : 4;
-
-  return (
-    <Stack spacing={1.25}>
-      {!storeId && (
-        <Alert severity="info" sx={{ py: 0.25, "& .MuiAlert-message": { fontSize: "0.75rem" } }}>
-          Puedes ir eligiendo productos ahora; se enlazarán al crear el local.
-        </Alert>
-      )}
-
-      <SearchableSelect
-        label="Buscar producto para añadir"
-        placeholder="Nombre…"
-        items={pickOptions}
-        value={pickId}
-        onChange={(id) => {
-          if (id === "" || id == null) {
-            setPickId("");
-            return;
-          }
-          void addProduct(id);
-        }}
-        loading={catalogLoading || busy}
-        clearInputOnSelect
-        getOptionLabel={(p) => p?.name || ""}
-        getSearchText={(p) =>
-          `${p?.name || ""} ${p?.barcode || ""} ${p?.sku || ""} ${formatMoneyShort(productPrice(p))} stock ${productStock(p) ?? ""}`
-        }
-        renderOption={(props, p) => {
-          const { key, ...rest } = props;
-          const img = p.primaryImageUrl ? `${pathImg}${p.primaryImageUrl}` : null;
-          const stock = productStock(p);
-          const price = productPrice(p);
-          return (
-            <li key={key} {...rest}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ width: "100%", py: 0.25 }}>
-                {img ? (
-                  <img
-                    src={img}
-                    alt=""
-                    style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover" }}
-                    onError={(e) => (e.currentTarget.style.visibility = "hidden")}
-                  />
-                ) : (
-                  <Box sx={{ width: 32, height: 32, bgcolor: "action.hover", borderRadius: 1, flexShrink: 0 }} />
-                )}
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" noWrap fontWeight={600}>
-                    {p.name}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Stock {stock != null ? stock : "—"} · {formatMoneyShort(price)}
-                  </Typography>
-                </Box>
-              </Stack>
-            </li>
-          );
-        }}
-      />
-
-      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-        <Typography variant="subtitle2" fontWeight={700}>
-          Enlazados ({storeId ? links.length : (pendingIds || []).length})
-        </Typography>
-        <TextField
-          size="small"
-          placeholder="Filtrar…"
-          value={filterAssigned}
-          onChange={(e) => setFilterAssigned(e.target.value)}
-          sx={{ ...linkerFieldSx, maxWidth: 160 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search fontSize="small" />
-              </InputAdornment>
-            ),
-          }}
-        />
-      </Stack>
-
-      <Paper variant="outlined" sx={{ overflow: "hidden" }}>
-        <Box sx={{ maxHeight: listMaxH, overflow: "auto" }}>
-          <Table size="small" stickyHeader>
-            <TableHead>
-              <TableRow>
-                <TableCell>Producto</TableCell>
-                <TableCell align="right">Stock</TableCell>
-                <TableCell align="right">Precio</TableCell>
-                {storeId ? <TableCell align="center">Visible</TableCell> : null}
-                <TableCell align="center" width={48} />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={colSpan} align="center" sx={{ py: 2 }}>
-                    <CircularProgress size={22} />
-                  </TableCell>
-                </TableRow>
-              ) : assignedRows.length ? (
-                storeId
-                  ? assignedRows.map((r) => {
-                      const p = r.product || {};
-                      const img = p.primaryImageUrl ? `${pathImg}${p.primaryImageUrl}` : null;
-                      return (
-                        <TableRow key={r.linkId || r.productId} hover>
-                          <TableCell>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              {img ? (
-                                <img
-                                  src={img}
-                                  alt={p.name}
-                                  style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover" }}
-                                  onError={(e) => (e.currentTarget.style.visibility = "hidden")}
-                                />
-                              ) : (
-                                <Box sx={{ width: 32, height: 32, bgcolor: "action.hover", borderRadius: 1 }} />
-                              )}
-                              <Typography variant="body2" noWrap sx={{ maxWidth: 220 }}>
-                                {p.name || `#${r.productId}`}
-                              </Typography>
-                            </Stack>
-                          </TableCell>
-                          <TableCell align="right">{productStock(p) != null ? productStock(p) : "—"}</TableCell>
-                          <TableCell align="right">{formatMoneyShort(productPrice(p))}</TableCell>
-                          <TableCell align="center">
-                            <Tooltip title={r.isActive ? "Ocultar" : "Mostrar"}>
-                              <IconButton size="small" onClick={() => toggleVisibility(r.productId, r.isActive)}>
-                                {r.isActive ? <Visibility fontSize="small" /> : <VisibilityOff fontSize="small" />}
-                              </IconButton>
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell align="center">
-                            <Tooltip title="Quitar">
-                              <IconButton color="error" size="small" onClick={() => void removeProduct(r.productId)}>
-                                <RemoveCircleOutline fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  : assignedRows.map((p) => {
-                      const img = p.primaryImageUrl ? `${pathImg}${p.primaryImageUrl}` : null;
-                      return (
-                        <TableRow key={p.id} hover>
-                          <TableCell>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              {img ? (
-                                <img
-                                  src={img}
-                                  alt={p.name}
-                                  style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover" }}
-                                  onError={(e) => (e.currentTarget.style.visibility = "hidden")}
-                                />
-                              ) : (
-                                <Box sx={{ width: 32, height: 32, bgcolor: "action.hover", borderRadius: 1 }} />
-                              )}
-                              <Typography variant="body2">{p.name}</Typography>
-                            </Stack>
-                          </TableCell>
-                          <TableCell align="right">{productStock(p) != null ? productStock(p) : "—"}</TableCell>
-                          <TableCell align="right">{formatMoneyShort(productPrice(p))}</TableCell>
-                          <TableCell align="center">
-                            <IconButton color="error" size="small" onClick={() => void removeProduct(p.id)}>
-                              <RemoveCircleOutline fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={colSpan} align="center" sx={{ py: 2 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {catalogLoading
-                        ? "Cargando catálogo…"
-                        : "Sin productos. Búscalos arriba para añadir."}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Box>
-      </Paper>
-    </Stack>
-  );
-}
-
-/* ===========================
    StoreProductsDialog
 =========================== */
 function StoreProductsDialog({ open, onClose, store }) {
@@ -1097,10 +732,30 @@ function StoreForm({ value, onChange, inventoryStores = [] }) {
               <Switch
                 size="small"
                 checked={Boolean(value.isActive)}
-                onChange={(e) => set("isActive", e.target.checked)}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  set("isActive", on);
+                  if (!on) set("isVisible", false);
+                }}
               />
             }
-            label="Activo (visible en catálogo / POS)"
+            label="Activo (operativo: turno, stock, movimientos)"
+          />
+          <FormControlLabel
+            sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: "0.82rem" } }}
+            control={
+              <Switch
+                size="small"
+                checked={Boolean(value.isVisible)}
+                disabled={!value.isActive}
+                onChange={(e) => set("isVisible", e.target.checked)}
+              />
+            }
+            label={
+              value.isActive
+                ? "Visible en home / punto de venta"
+                : "Visible (inactivo → siempre oculto)"
+            }
           />
         </Stack>
       </StoreFormTabPanel>
@@ -1353,6 +1008,7 @@ function StoresPage() {
     longitude: "",
     position: 0,
     isActive: true,
+    isVisible: true,
     locationKind: "vitrina",
     establishmentCode: "001",
     emissionPointCode: "001",
@@ -1434,6 +1090,7 @@ function StoresPage() {
       longitude: "",
       position: 0,
       isActive: true,
+      isVisible: true,
       locationKind: "vitrina",
       establishmentCode: "001",
       emissionPointCode: "001",
@@ -1462,6 +1119,7 @@ function StoresPage() {
       longitude: typeof row.longitude === "number" ? row.longitude : row.longitude ?? "",
       position: Number.isFinite(row.position) ? row.position : 0,
       isActive: Boolean(row.isActive),
+      isVisible: row.isVisible !== false && row.isVisible !== 0,
       locationKind: normalizeLocationKind(row.locationKind),
       establishmentCode: row.establishmentCode || "001",
       emissionPointCode: row.emissionPointCode || "001",
@@ -1501,6 +1159,9 @@ function StoresPage() {
 
     fd.append("position", String(Number.isFinite(formValue.position) ? formValue.position : 0));
     fd.append("isActive", String(Boolean(formValue.isActive)));
+    const visible =
+      Boolean(formValue.isActive) && Boolean(formValue.isVisible);
+    fd.append("isVisible", String(visible));
     fd.append("locationKind", normalizeLocationKind(formValue.locationKind));
     fd.append("establishmentCode", String(formValue.establishmentCode || "001").trim());
     fd.append("emissionPointCode", String(formValue.emissionPointCode || "001").trim());
@@ -1666,8 +1327,15 @@ function StoresPage() {
     {
       label: "Activo",
       id: "isActive",
-      width: 90,
+      width: 80,
       render: (row) => (row.isActive == 1 || row.isActive === true ? "Sí" : "No"),
+    },
+    {
+      label: "Visible",
+      id: "isVisible",
+      width: 80,
+      render: (row) =>
+        row.isVisible === false || row.isVisible === 0 ? "No" : "Sí",
     },
     {
       label: "Acciones",

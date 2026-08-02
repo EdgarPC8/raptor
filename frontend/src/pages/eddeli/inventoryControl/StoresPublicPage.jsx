@@ -31,25 +31,28 @@ export default function StoresPublicPage() {
     (async () => {
       try {
         setErr("");
-        const { data } = await getStoresRequest({ isActive: true });
+        const { data } = await getStoresRequest({ isVisible: true });
         const arr = Array.isArray(data) ? data : data?.data ?? [];
 
-        const mapped = arr.map((s) => ({
-          id: s.id,
-          name: s.name,
-          address: s.address,
-          description: s.description,
-          city: s.city,
-          province: s.province,
-          phone: s.phone,
-          email: s.email,
-          img: s.imageUrl ? `${pathImg}${s.imageUrl}` : s.img || null,
-          position: s.position,
-          isActive: s.isActive,
-          latitude: s.latitude,
-          longitude: s.longitude,
-          locationKind: s.locationKind === "propia" ? "propia" : "vitrina",
-        }));
+        const mapped = arr
+          .filter((s) => s.isVisible !== false && s.isVisible !== 0)
+          .map((s) => ({
+            id: s.id,
+            name: s.name,
+            address: s.address,
+            description: s.description,
+            city: s.city,
+            province: s.province,
+            phone: s.phone,
+            email: s.email,
+            img: s.imageUrl ? `${pathImg}${s.imageUrl}` : s.img || null,
+            position: s.position,
+            isActive: s.isActive,
+            isVisible: s.isVisible,
+            latitude: s.latitude,
+            longitude: s.longitude,
+            locationKind: s.locationKind === "propia" ? "propia" : "vitrina",
+          }));
 
         if (alive) setStores(mapped);
       } catch (e) {
