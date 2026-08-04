@@ -102,6 +102,8 @@ export default function CollectionsWorkbench() {
   const [editPaymentNote, setEditPaymentNote] = useState("");
   const [editPaymentMethod, setEditPaymentMethod] = useState("efectivo");
   const [debtReportOpen, setDebtReportOpen] = useState(false);
+  /** null | 'account' | 'group' — qué resumen muestra DebtReportDialog */
+  const [debtReportMode, setDebtReportMode] = useState("account");
   const [editOrderOpen, setEditOrderOpen] = useState(false);
   const [orderToEdit, setOrderToEdit] = useState(null);
 
@@ -1007,7 +1009,10 @@ export default function CollectionsWorkbench() {
             size="small"
             variant="contained"
             disabled={!customer || loading || customerItems.length === 0}
-            onClick={() => setDebtReportOpen(true)}
+            onClick={() => {
+              setDebtReportMode("account");
+              setDebtReportOpen(true);
+            }}
             sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" }, whiteSpace: "nowrap" }}
           >
             Resumen de cuenta
@@ -1409,7 +1414,17 @@ export default function CollectionsWorkbench() {
                         <b>{money(groupRemaining(selectedGroupId))}</b>
                       </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1}>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      <Button
+                        variant="contained"
+                        disabled={loading || !selectedGroupId || selectedGroupItems.length === 0}
+                        onClick={() => {
+                          setDebtReportMode("group");
+                          setDebtReportOpen(true);
+                        }}
+                      >
+                        Resumen de cuenta
+                      </Button>
                       <Button
                         variant="outlined"
                         disabled={loading || !selectedGroupId}
@@ -1640,7 +1655,16 @@ export default function CollectionsWorkbench() {
         open={debtReportOpen}
         onClose={() => setDebtReportOpen(false)}
         customer={customer}
-        items={customerItems}
+        items={debtReportMode === "group" ? selectedGroupItems : customerItems}
+        group={
+          debtReportMode === "group" && selectedGroupId
+            ? {
+                id: selectedGroupId,
+                concept: selectedGroup?.concept || `Grupo #${selectedGroupId}`,
+              }
+            : null
+        }
+        payments={debtReportMode === "group" ? selectedGroupPayments : []}
         onError={(text) => setUiMsg({ type: "error", text })}
       />
       </Box>

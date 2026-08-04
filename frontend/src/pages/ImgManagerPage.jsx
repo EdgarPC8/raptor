@@ -39,23 +39,39 @@ import { useAuth } from "../context/AuthContext.jsx";
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|svg)$/i;
 
-/** Normaliza ruta relativa hacia src/img */
+/**
+ * Ruta relativa destino bajo src/img.
+ * Con "Subir carpeta", el navegador manda webkitRelativePath con TODAS las
+ * subcarpetas (ej. img/EdDeli/products/a.png → EdDeli/products/a.png).
+ */
 function toRelPath(file, baseFolder = "") {
-  let rel = String(file.webkitRelativePath || file.name || "")
+  const fromPicker = String(file.webkitRelativePath || "")
     .replace(/\\/g, "/")
-    .replace(/^\/+/, "");
-  if (!rel) return "";
-  // Si eligieron la carpeta "img", quitar ese prefijo
-  if (rel.toLowerCase().startsWith("img/")) rel = rel.slice(4);
-  // Archivo suelto → meter bajo la carpeta del filtro actual
-  if (!rel.includes("/") && baseFolder) {
-    rel = `${String(baseFolder).replace(/\/+$/, "")}/${rel}`;
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
+
+  if (fromPicker) {
+    // Árbol completo desde el folder picker: conservar subcarpetas
+    let rel = fromPicker;
+    // Si eligieron la carpeta raíz "img", quitar solo ese prefijo
+    if (/^img\//i.test(rel)) rel = rel.replace(/^img\//i, "");
+    const fileName = rel.split("/").pop() || "";
+    if (!IMAGE_EXT.test(fileName)) return "";
+    return rel.replace(/^\/+/, "");
   }
-  return rel.replace(/^\/+/, "");
+
+  // Archivos sueltos (sin webkitRelativePath) → filtro de carpeta actual
+  const name = String(file.name || "").replace(/^.*[/\\]/, "");
+  if (!name || !IMAGE_EXT.test(name)) return "";
+  const base = String(baseFolder || "").replace(/^\/+|\/+$/g, "");
+  return base ? `${base}/${name}` : name;
 }
 
 function splitRelPath(relPath) {
-  const parts = String(relPath || "").replace(/\\/g, "/").split("/");
+  const parts = String(relPath || "")
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter(Boolean);
   const name = parts.pop() || "";
   const folder = parts.join("/");
   return { folder, name };
@@ -66,7 +82,7 @@ export default function ImgManagerPage() {
   const [rows, setRows] = useState([]);
   const [totals, setTotals] = useState(null);
   const [folder, setFolder] = useState("");
-  const [maxDepth, setMaxDepth] = useState(5);
+  const [maxDepth, setMaxDepth] = useState(10);
   const [openUpload, setOpenUpload] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
@@ -95,6 +111,15 @@ export default function ImgManagerPage() {
   useEffect(() => {
     if (user?.loginRol === "Programador") fetchScan().catch(() => {});
   }, [user?.loginRol]);
+
+  // Asegurar selección recursiva de carpeta (Chrome/Edge/Firefox)
+  useEffect(() => {
+    const el = folderInputRef.current;
+    if (!el) return;
+    el.setAttribute("webkitdirectory", "");
+    el.setAttribute("directory", "");
+    el.setAttribute("mozdirectory", "");
+  }, []);
 
   if (user?.loginRol !== "Programador") return <Navigate to="/" replace />;
 
@@ -175,9 +200,11 @@ export default function ImgManagerPage() {
   };
 
   const prepareBulkFromFileList = async (fileList) => {
-    const files = Array.from(fileList || []).filter((f) =>
-      IMAGE_EXT.test(f.name),
-    );
+    const all = Array.from(fileList || []);
+    const files = all.filter((f) => {
+      const label = f.webkitRelativePath || f.name || "";
+      return IMAGE_EXT.test(label) || IMAGE_EXT.test(f.name || "");
+    });
     if (!files.length) {
       toast({
         message: "No hay imágenes válidas (.png .jpg .webp .gif .svg)",
@@ -188,10 +215,13 @@ export default function ImgManagerPage() {
 
     const items = [];
     const seen = new Set();
+    const folders = new Set();
     for (const file of files) {
       const relPath = toRelPath(file, folder);
       if (!relPath || seen.has(relPath)) continue;
       seen.add(relPath);
+      const { folder: destFolder } = splitRelPath(relPath);
+      if (destFolder) folders.add(destFolder);
       items.push({ file, relPath });
     }
 
@@ -199,6 +229,11 @@ export default function ImgManagerPage() {
       toast({ message: "Sin rutas válidas para subir", variant: "warning" });
       return;
     }
+
+    toast({
+      message: `Preparando ${items.length} imagen(es) en ${folders.size || 1} carpeta(s)…`,
+      variant: "info",
+    });
 
     try {
       const { data } = await checkImagesExistRequest(items.map((i) => i.relPath));
@@ -315,7 +350,15 @@ export default function ImgManagerPage() {
           startIcon={<DriveFolderUploadIcon />}
           variant="outlined"
           disabled={uploading}
-          onClick={() => folderInputRef.current?.click()}
+          onClick={() => {
+            const el = folderInputRef.current;
+            if (!el) return;
+            // Recursivo: incluye subcarpetas y todos sus archivos
+            el.setAttribute("webkitdirectory", "");
+            el.setAttribute("directory", "");
+            el.setAttribute("mozdirectory", "");
+            el.click();
+          }}
         >
           Subir carpeta
         </Button>
@@ -341,8 +384,6 @@ export default function ImgManagerPage() {
         type="file"
         hidden
         multiple
-        webkitdirectory=""
-        directory=""
         onChange={(e) => {
           const list = e.target.files;
           e.target.value = "";

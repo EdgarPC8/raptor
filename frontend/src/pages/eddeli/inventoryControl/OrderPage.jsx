@@ -5,10 +5,15 @@ import {
   Box,
   Stack,
   Paper,
+  IconButton,
+  Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import AssignmentIcon from "@mui/icons-material/Assignment";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { useCallback, useRef, useState } from "react";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 import TourHelpButton from "../../../components/TourHelpButton.jsx";
@@ -17,6 +22,8 @@ import SupplierOrderForm from "./components/SupplierOrderForm";
 import {
   getOrdersForMonthRequest,
   getSupplierOrdersForMonthRequest,
+  exportOrdersMonthRequest,
+  importOrdersMonthRequest,
 } from "../../../api/ordersRequest";
 import OrderCalendaryTable from "./components/OrderCalendaryTable";
 import {
@@ -37,10 +44,14 @@ import {
   PEDIDO_PROVEEDOR_FORM_TOUR_ID,
   getPedidoProveedorFormTourSteps,
 } from "../../../tours/pedidoProveedorFormTour.js";
+import { useAuth } from "../../../context/AuthContext";
+import { format } from "date-fns";
 
 function OrderPage() {
+  const { toast } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [transferBusy, setTransferBusy] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [openSupplierDialog, setOpenSupplierDialog] = useState(false);
   const [titleDialog, setTitleDialog] = useState("");
@@ -55,6 +66,7 @@ function OrderPage() {
   const calendarTourRef = useRef(null);
   const orderFormTourRef = useRef(null);
   const supplierFormTourRef = useRef(null);
+  const importFileRef = useRef(null);
 
   const loadOrdersForMonth = useCallback(async (visibleMonth, { force = false } = {}) => {
     const key = monthCacheKey(visibleMonth);
@@ -94,6 +106,103 @@ function OrderPage() {
     loadedMonthsRef.current.delete(monthCacheKey(month));
     await loadOrdersForMonth(month, { force: true });
   }, [loadOrdersForMonth]);
+
+  const handleExportMonth = useCallback(async () => {
+    const month = visibleMonthRef.current || new Date();
+    setTransferBusy(true);
+    try {
+      const res = await toast({
+        promise: exportOrdersMonthRequest(month),
+        successMessage: "JSON del mes exportado",
+        errorMessage: "No se pudo exportar el mes",
+      });
+      const data = res?.data;
+      if (!data) return;
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json;charset=utf-8",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pedidos-${format(month, "yyyy-MM")}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      /* toast ya mostró el error */
+    } finally {
+      setTransferBusy(false);
+    }
+  }, [toast]);
+
+  const handleImportMonthClick = useCallback(() => {
+    if (transferBusy) return;
+    const ok = window.confirm(
+      "Importar JSON del mes\n\n" +
+        "• Crea pedidos de clientes y proveedores (solo datos).\n" +
+        "• No mueve stock ni recrea cobranzas / Income.\n" +
+        "• Los productos deben existir (código de barras, SKU o nombre).\n\n" +
+        "¿Continuar?",
+    );
+    if (!ok) return;
+    importFileRef.current?.click();
+  }, [transferBusy]);
+
+  const handleImportFileChange = useCallback(
+    async (event) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+
+      setTransferBusy(true);
+      try {
+        const text = await file.text();
+        let payload;
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          toast({
+            message: "El archivo no es un JSON válido",
+            variant: "warning",
+          });
+          return;
+        }
+        if (payload?.kind !== "eddeli-orders-month") {
+          toast({
+            message: "JSON inválido: se espera un export de pedidos del mes",
+            variant: "warning",
+          });
+          return;
+        }
+
+        const res = await toast({
+          promise: importOrdersMonthRequest(payload),
+          successMessage: "Importación lista",
+          errorMessage: "No se pudo importar el JSON",
+        });
+        const s = res?.data?.summary;
+        if (s) {
+          const skipped = Array.isArray(s.skipped) ? s.skipped.length : 0;
+          const errors = Array.isArray(s.errors) ? s.errors.length : 0;
+          toast({
+            message:
+              `Clientes: ${s.customerOrdersCreated || 0} · ` +
+              `Proveedores: ${s.supplierOrdersCreated || 0}` +
+              (skipped ? ` · Omitidos: ${skipped}` : "") +
+              (errors ? ` · Errores: ${errors}` : ""),
+            variant: errors ? "warning" : "success",
+          });
+        }
+        await refreshCurrentRange();
+      } catch {
+        /* toast ya mostró el error */
+      } finally {
+        setTransferBusy(false);
+      }
+    },
+    [toast, refreshCurrentRange],
+  );
 
   const patchOrderItem = useCallback((orderId, itemId, fields) => {
     setOrders((prev) => patchOrderItemInList(prev, orderId, itemId, fields));
@@ -289,6 +398,45 @@ function OrderPage() {
             useFlexGap
             sx={{ flexShrink: 0, justifyContent: { xs: "flex-end", sm: "flex-end" } }}
           >
+            <input
+              ref={importFileRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={handleImportFileChange}
+            />
+            <Tooltip title="Exportar JSON del mes visible (clientes + proveedores)">
+              <span>
+                <IconButton
+                  data-tour="pedidos-export-month"
+                  size="small"
+                  color="primary"
+                  disabled={transferBusy || loadingOrders}
+                  onClick={handleExportMonth}
+                  aria-label="Exportar mes"
+                >
+                  {transferBusy ? (
+                    <CircularProgress size={18} />
+                  ) : (
+                    <FileDownloadOutlinedIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Importar JSON del mes (solo datos; sin stock ni cobranzas)">
+              <span>
+                <IconButton
+                  data-tour="pedidos-import-month"
+                  size="small"
+                  color="primary"
+                  disabled={transferBusy || loadingOrders}
+                  onClick={handleImportMonthClick}
+                  aria-label="Importar mes"
+                >
+                  <UploadFileIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
             <TourHelpButton onClick={startTour} title="Ver tutorial de pedidos" />
             <Button
               data-tour="pedidos-create-customer"

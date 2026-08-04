@@ -787,6 +787,7 @@ export default function SupplierOrderAccordion({
                         compact
                         quantity={addDraft.quantity}
                         unitPrice={addDraft.unitPrice}
+                        variant="supplier"
                       />
                     ) : null;
                   })()}

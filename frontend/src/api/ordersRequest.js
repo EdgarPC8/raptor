@@ -122,6 +122,26 @@ export const getSupplierOrdersForMonthRequest = async (visibleMonth) => {
   return getAllSupplierOrdersRequest({ from, to });
 };
 
+/** Exportar pedidos del mes visible (clientes + proveedores) como JSON. */
+export const exportOrdersMonthRequest = async (visibleMonth) => {
+  if (isGuestDataMode()) return guestDenied();
+  const year = visibleMonth.getFullYear();
+  const month = visibleMonth.getMonth() + 1;
+  return axios.get(`/orders/month-transfer/export?year=${year}&month=${month}`, {
+    headers: { Authorization: jwt() },
+    timeout: 120000,
+  });
+};
+
+/** Importar JSON de pedidos del mes (solo datos; sin stock). */
+export const importOrdersMonthRequest = async (payload) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.post("/orders/month-transfer/import", payload, {
+    headers: { Authorization: jwt() },
+    timeout: 180000,
+  });
+};
+
 // ===============================
 // 🟠 PROVEEDORES Y PEDIDOS A PROVEEDOR
 // ===============================

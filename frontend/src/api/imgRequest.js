@@ -11,12 +11,18 @@ export const scanImagesRequest = ({ folder = "", maxDepth = 10 } = {}) =>
 
 export const uploadImageRequest = ({ file, folder = "", name = "", replace = false }) => {
   const fd = new FormData();
+  // También en body por si el servidor los lee desde ahí
   if (folder) fd.append("folder", folder);
   if (name) fd.append("name", name);
   fd.append("replace", String(!!replace));
   fd.append("file", file);
-  return axios.post("/img/upload", fd, {
-    headers: { Authorization: jwt(), "Content-Type": "multipart/form-data" },
+  // Query: multer a veces no tiene req.body en destination; query sí está disponible
+  const qs = new URLSearchParams();
+  if (folder) qs.set("folder", folder);
+  if (name) qs.set("name", name);
+  qs.set("replace", String(!!replace));
+  return axios.post(`/img/upload?${qs.toString()}`, fd, {
+    headers: { Authorization: jwt() },
   });
 };
 

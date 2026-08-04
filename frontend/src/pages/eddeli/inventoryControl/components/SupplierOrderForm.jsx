@@ -10,10 +10,13 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import AddBoxIcon from "@mui/icons-material/AddBox";
 import AddBusinessIcon from "@mui/icons-material/AddBusiness";
+import EditIcon from "@mui/icons-material/Edit";
 import CloseIcon from "@mui/icons-material/Close";
 import { useForm } from "react-hook-form";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -21,6 +24,7 @@ import {
   createSupplierOrderRequest,
   updateSupplierOrderRequest,
   getAllSuppliersRequest,
+  getAllSupplierOrdersRequest,
 } from "../../../../api/ordersRequest";
 import { getAllProductsAll } from "../../../../api/inventoryControlRequest";
 import { useAuth } from "../../../../context/AuthContext";
@@ -233,8 +237,14 @@ function SupplierOrderForm(
   const [selectedSupplier, setSelectedSupplier] = useState("");
   const [pendingVoucherFile, setPendingVoucherFile] = useState(null);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
+  /** create = producto nuevo · edit = editar el seleccionado */
+  const [productDialogMode, setProductDialogMode] = useState("create");
   const [supplierDialogOpen, setSupplierDialogOpen] = useState(false);
   const [ivaRate, setIvaRate] = useState(15);
+  /** Solo productos que este proveedor ya me vendió (historial de pedidos). */
+  const [onlySoldBySupplier, setOnlySoldBySupplier] = useState(false);
+  const [soldProductIds, setSoldProductIds] = useState(() => new Set());
+  const [loadingSoldProducts, setLoadingSoldProducts] = useState(false);
   const tourGenRef = useRef(0);
   const lotsRef = useRef([]);
   const { toast } = useAuth();
@@ -252,6 +262,45 @@ function SupplierOrderForm(
     return products.find((p) => p.id === Number(selectedProductId)) || null;
   }, [selectedProductId, products]);
 
+  const productOptions = useMemo(() => {
+    if (!onlySoldBySupplier) return products;
+    if (!selectedSupplier) return [];
+    return products.filter((p) => soldProductIds.has(Number(p.id)));
+  }, [products, onlySoldBySupplier, selectedSupplier, soldProductIds]);
+
+  // Historial: productos que este proveedor ya vendió
+  useEffect(() => {
+    if (!selectedSupplier) {
+      setSoldProductIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    setLoadingSoldProducts(true);
+    (async () => {
+      try {
+        const { data } = await getAllSupplierOrdersRequest();
+        const ids = new Set();
+        const sid = Number(selectedSupplier);
+        for (const o of Array.isArray(data) ? data : []) {
+          if (Number(o.supplierId) !== sid) continue;
+          const lines = o.ERP_supplier_order_items || o.items || [];
+          for (const it of lines) {
+            const pid = Number(it.productId);
+            if (pid) ids.add(pid);
+          }
+        }
+        if (!cancelled) setSoldProductIds(ids);
+      } catch {
+        if (!cancelled) setSoldProductIds(new Set());
+      } finally {
+        if (!cancelled) setLoadingSoldProducts(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSupplier]);
+
   useEffect(() => {
     if (!selectedProductId) return;
     const product = products.find((p) => p.id === Number(selectedProductId));
@@ -268,13 +317,19 @@ function SupplierOrderForm(
     return list;
   };
 
-  const handleProductCreated = async (created) => {
+  const handleProductSaved = async (saved) => {
+    const editingId =
+      productDialogMode === "edit" ? Number(currentProduct?.id || selectedProductId) : null;
     setProductDialogOpen(false);
-    await fetchCatalog();
-    const id = created?.id ?? created?.data?.id;
+    const list = await fetchCatalog();
+    const id = saved?.id ?? saved?.data?.id ?? editingId;
     if (id != null) {
       setSelectedProduct(String(id));
       setValue("productId", String(id));
+      const updated = list.find((p) => Number(p.id) === Number(id));
+      if (updated?.supplierPrice != null) {
+        setValue("unitPrice", updated.supplierPrice);
+      }
     }
   };
 
@@ -282,6 +337,13 @@ function SupplierOrderForm(
     (rawCode) => {
       const found = findEddeliProductByCode(products, rawCode);
       if (found) {
+        if (onlySoldBySupplier && selectedSupplier && !soldProductIds.has(Number(found.id))) {
+          toast({
+            message: `"${found.name}" no está en el historial de este proveedor`,
+            variant: "warning",
+          });
+          return;
+        }
         setSelectedProduct(String(found.id));
         setValue("productId", String(found.id));
         toast({ message: `Producto: ${found.name}`, variant: "success" });
@@ -293,7 +355,7 @@ function SupplierOrderForm(
         variant: "warning",
       });
     },
-    [products, setValue, toast],
+    [products, setValue, toast, onlySoldBySupplier, selectedSupplier, soldProductIds],
   );
 
   useBarcodeScanner({
@@ -815,30 +877,79 @@ function SupplierOrderForm(
 
             <Grid item xs={12} data-tour="pedido-prov-product">
               <input type="hidden" {...register("productId")} />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={onlySoldBySupplier}
+                    disabled={!selectedSupplier || loadingSoldProducts}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setOnlySoldBySupplier(on);
+                      // Si el producto actual no está en el filtro, limpiarlo
+                      if (on && selectedProductId) {
+                        const pid = Number(selectedProductId);
+                        if (!soldProductIds.has(pid)) {
+                          setSelectedProduct("");
+                          setValue("productId", "");
+                        }
+                      }
+                    }}
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    Solo productos que este proveedor me ha vendido
+                    {onlySoldBySupplier && selectedSupplier
+                      ? ` (${soldProductIds.size})`
+                      : ""}
+                  </Typography>
+                }
+                sx={{ mb: 0.5, ml: 0, alignItems: "center" }}
+              />
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <Box sx={{ flex: 1 }}>
                   <SearchableSelect
                     label="Producto"
-                    items={products}
+                    items={productOptions}
                     value={selectedProduct}
                     onChange={(val) => {
                       setSelectedProduct(val);
                       setValue("productId", val);
                     }}
-                    placeholder="Buscar o escanear código de barras…"
+                    placeholder={
+                      onlySoldBySupplier && !selectedSupplier
+                        ? "Seleccioná un proveedor primero…"
+                        : onlySoldBySupplier && soldProductIds.size === 0
+                          ? "Sin historial de ventas de este proveedor…"
+                          : "Buscar o escanear código de barras…"
+                    }
                     getSearchText={(p) =>
                       [p?.barcode, p?.sku].filter(Boolean).join(" ")
                     }
                     onEnterWithInput={handleBarcodeScan}
                   />
                 </Box>
-                <Tooltip title="Crear producto nuevo">
+                <Tooltip
+                  title={
+                    currentProduct
+                      ? "Editar producto seleccionado"
+                      : "Crear producto nuevo"
+                  }
+                >
                   <IconButton
                     color="primary"
-                    onClick={() => setProductDialogOpen(true)}
+                    onClick={() => {
+                      if (currentProduct) {
+                        setProductDialogMode("edit");
+                      } else {
+                        setProductDialogMode("create");
+                      }
+                      setProductDialogOpen(true);
+                    }}
                     sx={{ border: 1, borderColor: "primary.main" }}
                   >
-                    <AddBoxIcon />
+                    {currentProduct ? <EditIcon /> : <AddBoxIcon />}
                   </IconButton>
                 </Tooltip>
               </Box>
@@ -849,6 +960,7 @@ function SupplierOrderForm(
                   product={currentProduct}
                   quantity={watchQuantity}
                   unitPrice={watchUnitPrice}
+                  variant="supplier"
                 />
               </Grid>
             )}
@@ -1004,7 +1116,7 @@ function SupplierOrderForm(
       >
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2, pt: 1 }}>
           <DialogTitle sx={{ p: 0, fontWeight: 700, fontSize: "1.05rem" }}>
-            Crear producto
+            {productDialogMode === "edit" ? "Editar producto" : "Crear producto"}
           </DialogTitle>
           <IconButton aria-label="Cerrar" onClick={() => setProductDialogOpen(false)} size="small">
             <CloseIcon />
@@ -1012,11 +1124,17 @@ function SupplierOrderForm(
         </Box>
         <DialogContent dividers>
           <ProductForm
-            key={productDialogOpen ? "new-supplier-product" : "closed"}
-            isEditing={false}
-            datos={{}}
+            key={
+              productDialogOpen
+                ? productDialogMode === "edit"
+                  ? `edit-product-${currentProduct?.id || "x"}`
+                  : "new-supplier-product"
+                : "closed"
+            }
+            isEditing={productDialogMode === "edit"}
+            datos={productDialogMode === "edit" ? currentProduct || {} : {}}
             onClose={() => setProductDialogOpen(false)}
-            reload={handleProductCreated}
+            reload={handleProductSaved}
           />
         </DialogContent>
         <DialogActions sx={{ px: 2, py: 1, borderTop: 1, borderColor: "divider" }}>
@@ -1025,7 +1143,7 @@ function SupplierOrderForm(
           </Button>
           <Box sx={{ flex: 1 }} />
           <Button type="submit" form="eddeli-product-form" variant="contained" sx={{ minWidth: 160 }}>
-            Guardar producto
+            {productDialogMode === "edit" ? "Guardar cambios" : "Guardar producto"}
           </Button>
         </DialogActions>
       </Dialog>
