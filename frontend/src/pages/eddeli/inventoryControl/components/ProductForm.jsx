@@ -540,6 +540,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
     <Box
       component="form"
       id="eddeli-product-form"
+      data-tour="producto-form"
       sx={{ mt: 0 }}
       onSubmit={(e) => {
         // Evita que el submit burbujee al formulario padre (p. ej. el modal
@@ -550,7 +551,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
     >
       <Grid container spacing={1} columnSpacing={1.5}>
         {/* Fila 1: nombre, código, imagen */}
-        <Grid item xs={12} md={5}>
+        <Grid item xs={12} md={5} data-tour="producto-form-identity">
           <TextField
             label="Nombre"
             size="small"
@@ -645,7 +646,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
           />
         </Grid>
 
-        <Grid item xs={6} sm={3}>
+        <Grid item xs={6} sm={3} data-tour="producto-form-classify">
           <TextField
             label="Tipo"
             select
@@ -694,7 +695,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
           />
         </Grid>
 
-        <Grid item xs={6} sm={3}>
+        <Grid item xs={6} sm={3} data-tour="producto-form-prices">
           <TextField
             label="P. proveedor"
             type="number"
@@ -761,7 +762,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
           />
         </Grid>
 
-        <Grid item xs={4} sm={3}>
+        <Grid item xs={4} sm={3} data-tour="producto-form-stock">
           <TextField
             label="Stock mín."
             type="number"
@@ -826,7 +827,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
         </Grid>
 
         {/* Tramos paquete — fila compacta */}
-        <Grid item xs={12}>
+        <Grid item xs={12} data-tour="producto-form-packages">
           <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
             <Typography variant="caption" fontWeight={700} color="text.secondary">
               Tramos paquete

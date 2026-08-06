@@ -10,10 +10,13 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import NumbersIcon from '@mui/icons-material/Numbers';
 import { getProductSeriesChartsRequest } from '../../../../../api/financeRequest';
 import ChartBlockHeader from '../../../../../components/Charts/ChartBlockHeader';
 import { ChartSkeleton } from '../../../../../components/ContentSkeleton.jsx';
 import ProductSeriesChart from './ProductSeriesChart';
+import ProductSeriesDetailDialog from './ProductSeriesDetailDialog';
 import { dashboardPanelSx } from '../dashboardPanelStyles.js';
 
 const paperSx = {
@@ -37,16 +40,18 @@ function bandLabel(band) {
 export default function ProductChartsPanel() {
   const [period, setPeriod] = useState('month');
   const [band, setBand] = useState(1);
+  const [sortBy, setSortBy] = useState('amount');
   const [loading, setLoading] = useState(true);
   const [sales, setSales] = useState(null);
   const [meta, setMeta] = useState({ totalBands: 1, totalRanked: 0, rankStart: 1, rankEnd: 10 });
+  const [detail, setDetail] = useState({ open: false, productId: null, productName: '' });
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const { data } = await getProductSeriesChartsRequest(period, band);
+        const { data } = await getProductSeriesChartsRequest(period, band, sortBy);
         if (cancelled) return;
         setSales(data?.sales ?? null);
         setMeta({
@@ -65,7 +70,7 @@ export default function ProductChartsPanel() {
     return () => {
       cancelled = true;
     };
-  }, [period, band]);
+  }, [period, band, sortBy]);
 
   useEffect(() => {
     if (band > meta.totalBands) setBand(1);
@@ -79,6 +84,7 @@ export default function ProductChartsPanel() {
   const periodLabel = sales?.periodLabel ?? '';
   const rankStart = sales?.rankStart ?? meta.rankStart;
   const rankEnd = sales?.rankEnd ?? meta.rankEnd;
+  const sortLabel = sortBy === 'qty' ? 'por cantidad' : 'por ingresos ($)';
 
   return (
     <Paper variant="panel" sx={{ ...paperSx, overflowX: 'auto' }}>
@@ -91,10 +97,31 @@ export default function ProductChartsPanel() {
       >
         <ChartBlockHeader
           title="Ingresos por producto"
-          subtitle="Por fecha de registro en Income (productos finales pagados). Importe y cantidad al pasar el mouse."
+          subtitle="Cobranzas de productos finales. Por $ / cant. filtra el gráfico. Al hacer clic en un producto ves su historial completo (desde la 1ª venta)."
           sx={{ mb: 0, flex: 1 }}
         />
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ flexShrink: 0 }}>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={sortBy}
+            onChange={(_, v) => {
+              if (v) {
+                setSortBy(v);
+                setBand(1);
+              }
+            }}
+            aria-label="Ordenar ranking"
+          >
+            <ToggleButton value="amount" sx={{ textTransform: 'none', px: 1.25 }} title="Ranking por valor monetario">
+              <AttachMoneyIcon fontSize="small" sx={{ mr: 0.35 }} />
+              Por $
+            </ToggleButton>
+            <ToggleButton value="qty" sx={{ textTransform: 'none', px: 1.25 }} title="Ranking por cantidad">
+              <NumbersIcon fontSize="small" sx={{ mr: 0.35 }} />
+              Por cant.
+            </ToggleButton>
+          </ToggleButtonGroup>
           <FormControl size="small" sx={{ minWidth: 130 }}>
             <InputLabel id="product-charts-band-label">Rango</InputLabel>
             <Select
@@ -134,7 +161,7 @@ export default function ProductChartsPanel() {
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
         {loading
           ? 'Cargando…'
-          : `${periodLabel} · posiciones ${rankStart}–${rankEnd} · ${meta.totalRanked} productos con ventas`}
+          : `${periodLabel} · ranking ${sortLabel} · posiciones ${rankStart}–${rankEnd} · ${meta.totalRanked} productos`}
       </Typography>
 
       {loading ? (
@@ -146,8 +173,23 @@ export default function ProductChartsPanel() {
           chartHeight={300}
           showHeader={false}
           sideLegend
+          metric={sortBy}
+          onProductClick={(item) =>
+            setDetail({
+              open: true,
+              productId: item.id,
+              productName: item.name,
+            })
+          }
         />
       )}
+
+      <ProductSeriesDetailDialog
+        open={detail.open}
+        onClose={() => setDetail({ open: false, productId: null, productName: '' })}
+        productId={detail.productId}
+        productName={detail.productName}
+      />
     </Paper>
   );
 }

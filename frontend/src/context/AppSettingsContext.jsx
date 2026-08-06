@@ -5,7 +5,7 @@ import {
   looksUnconfigured,
   resolveSettingsForUi,
 } from "../config/appInfo.js";
-import { buildImageUrl } from "../api/axios.js";
+import { buildImageUrl, socket } from "../api/axios.js";
 import { SHELL_ONLY } from "../config/deployEnv.js";
 import { RAPTOR_LOGO_URL } from "../config/raptorBrand.js";
 
@@ -72,8 +72,8 @@ function toActiveApp(settings, { offline = false } = {}) {
       ? false
       : resolved.showPublicStoresVitrina !== false,
     multiStockEnabled: unconfigured
-      ? true
-      : resolved.multiStockEnabled !== false,
+      ? false
+      : Boolean(resolved.multiStockEnabled),
     year: new Date().getFullYear(),
     background: "#F0F9FB",
   };
@@ -139,6 +139,17 @@ export function AppSettingsProvider({ children }) {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    if (SHELL_ONLY) return undefined;
+    const onEntitlement = () => {
+      void load();
+    };
+    socket.on("entitlementUpdated", onEntitlement);
+    return () => {
+      socket.off("entitlementUpdated", onEntitlement);
+    };
   }, []);
 
   const activeApp = useMemo(

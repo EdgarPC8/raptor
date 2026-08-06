@@ -59,10 +59,15 @@ function DropZone({ zoneType, zoneKey, children, onDropItem, sx = {} }) {
 function DraggableLine({
   item,
   ivaRate,
+  showIva = true,
   onRemove,
   onUpdateField,
   onToggleIva,
 }) {
+  const lineTotal =
+    formatOrderLineTotal(item.quantity, item.unitPrice) *
+    (showIva && item.hasIva ? 1 + (Number(ivaRate) || 0) / 100 : 1);
+
   return (
     <Box
       sx={{
@@ -127,23 +132,22 @@ function DraggableLine({
         inputProps={{ min: 0, step: "any" }}
         sx={{ width: 100 }}
       />
-      <FormControlLabel
-        sx={{ ml: 0.25, mr: 0, "& .MuiFormControlLabel-label": { fontSize: "0.75rem" } }}
-        control={
-          <Checkbox
-            size="small"
-            sx={{ p: 0.25 }}
-            checked={Boolean(item.hasIva)}
-            onChange={(e) => onToggleIva(item.lineId, e.target.checked)}
-          />
-        }
-        label={`IVA ${Number(ivaRate) || 0}%`}
-      />
+      {showIva && (
+        <FormControlLabel
+          sx={{ ml: 0.25, mr: 0, "& .MuiFormControlLabel-label": { fontSize: "0.75rem" } }}
+          control={
+            <Checkbox
+              size="small"
+              sx={{ p: 0.25 }}
+              checked={Boolean(item.hasIva)}
+              onChange={(e) => onToggleIva(item.lineId, e.target.checked)}
+            />
+          }
+          label={`IVA ${Number(ivaRate) || 0}%`}
+        />
+      )}
       <Typography variant="body2" fontWeight={700} sx={{ ml: "auto", minWidth: 72, textAlign: "right" }}>
-        {formatProductPrice(
-          formatOrderLineTotal(item.quantity, item.unitPrice) *
-            (item.hasIva ? 1 + (Number(ivaRate) || 0) / 100 : 1),
-        )}
+        {formatProductPrice(lineTotal)}
       </Typography>
     </Box>
   );
@@ -157,6 +161,9 @@ export default function SupplierOrderItemsBoard({
   packs,
   lots,
   ivaRate,
+  showIva = true,
+  tourIdPrefix = "pedido-prov",
+  helpText,
   onRemoveItem,
   onUpdateItemField,
   onToggleItemIva,
@@ -173,7 +180,10 @@ export default function SupplierOrderItemsBoard({
   const freeItems = items.filter((it) => !it.packKey);
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }} data-tour="pedido-prov-packs">
+    <Box
+      sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}
+      data-tour={`${tourIdPrefix}-packs`}
+    >
       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <Typography variant="subtitle2" fontWeight={700} sx={{ flex: 1 }}>
           Productos ({items.length})
@@ -183,16 +193,20 @@ export default function SupplierOrderItemsBoard({
           variant="outlined"
           startIcon={<AddIcon />}
           onClick={onCreatePack}
-          data-tour="pedido-prov-create-pack"
+          data-tour={`${tourIdPrefix}-create-pack`}
         >
           Crear paca
         </Button>
       </Box>
 
       <Typography variant="caption" color="text.secondary">
-        Creá una paca, poné vencimiento/elaboración y el <strong>valor total de la paca</strong>. Al
-        aplicar, se reparte en los precios unitarios (varios decimales). Colapsá la paca o usá ↑↓
-        para ordenar.
+        {helpText || (
+          <>
+            Creá una paca, poné vencimiento/elaboración y el <strong>valor total de la paca</strong>.
+            Al aplicar, se reparte en los precios unitarios (varios decimales). Colapsá la paca o usá
+            ↑↓ para ordenar.
+          </>
+        )}
       </Typography>
 
       <DropZone
@@ -214,6 +228,7 @@ export default function SupplierOrderItemsBoard({
               key={item.lineId}
               item={item}
               ivaRate={ivaRate}
+              showIva={showIva}
               onRemove={onRemoveItem}
               onUpdateField={onUpdateItemField}
               onToggleIva={onToggleItemIva}
@@ -239,7 +254,7 @@ export default function SupplierOrderItemsBoard({
             onChange={(_, exp) => onUpdatePack(pack.key, { expanded: exp })}
             disableGutters
             elevation={0}
-            data-tour={packIndex === 0 ? "pedido-prov-pack" : undefined}
+            data-tour={packIndex === 0 ? `${tourIdPrefix}-pack` : undefined}
             sx={{
               border: 1,
               borderColor: "primary.light",
@@ -321,7 +336,7 @@ export default function SupplierOrderItemsBoard({
 
               <Box
                 sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, alignItems: "flex-start" }}
-                data-tour={packIndex === 0 ? "pedido-prov-pack-meta" : undefined}
+                data-tour={packIndex === 0 ? `${tourIdPrefix}-pack-meta` : undefined}
               >
                 {!pack.useLots && (
                   <>
@@ -417,6 +432,7 @@ export default function SupplierOrderItemsBoard({
                       key={item.lineId}
                       item={item}
                       ivaRate={ivaRate}
+                      showIva={showIva}
                       onRemove={onRemoveItem}
                       onUpdateField={onUpdateItemField}
                       onToggleIva={onToggleItemIva}
@@ -484,6 +500,7 @@ export default function SupplierOrderItemsBoard({
                               key={item.lineId}
                               item={item}
                               ivaRate={ivaRate}
+                              showIva={showIva}
                               onRemove={onRemoveItem}
                               onUpdateField={onUpdateItemField}
                               onToggleIva={onToggleItemIva}
@@ -508,6 +525,7 @@ export default function SupplierOrderItemsBoard({
                         key={item.lineId}
                         item={item}
                         ivaRate={ivaRate}
+                        showIva={showIva}
                         onRemove={onRemoveItem}
                         onUpdateField={onUpdateItemField}
                         onToggleIva={onToggleItemIva}

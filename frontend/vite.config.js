@@ -44,8 +44,15 @@ export default defineConfig(({ mode, command }) => {
   );
 
   return {
-    plugins: [react()],
+    plugins: [
+      react({
+        jsxImportSource: "@emotion/react",
+      }),
+    ],
     base,
+    // Store (:5174) y Eddeli (:5173) a la vez no deben compartir la misma
+    // caché de optimizeDeps — eso provoca "styled_default is not a function".
+    cacheDir: `node_modules/.vite-${mode}`,
     resolve: {
       dedupe: muiDedupe,
     },
@@ -56,6 +63,9 @@ export default defineConfig(({ mode, command }) => {
         "@emotion/styled",
         "@mui/material",
         "@mui/material/styles",
+        "@mui/material/styles/styled",
+        "@mui/material/Tooltip",
+        "@mui/material/Popper",
         "@mui/system",
         "@mui/styled-engine",
         "@mui/x-charts",

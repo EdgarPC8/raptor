@@ -75,11 +75,20 @@ export const getFinanceSummaryRequest = async () => {
   });
 };
 
-/** Series de ventas por producto final (semana | mes | año). */
-export const getProductSeriesChartsRequest = async (period = "month", band = 1) => {
-  if (isGuestDataMode()) return guestFrom("productSeries", { period, band });
+/** Series de ventas por producto final (semana | mes | año). sortBy: amount | qty */
+export const getProductSeriesChartsRequest = async (period = "month", band = 1, sortBy = "amount") => {
+  if (isGuestDataMode()) return guestFrom("productSeries", { period, band, sortBy });
   return axios.get("/finance/product-series", {
-    params: { period, band },
+    params: { period, band, sortBy },
+    headers: { Authorization: jwt() },
+  });
+};
+
+/** Detalle historial completo de un producto (desde la 1ª venta). */
+export const getProductSeriesDetailRequest = async (productId) => {
+  if (isGuestDataMode()) return guestFrom("productSeriesDetail", { productId });
+  return axios.get("/finance/product-series/detail", {
+    params: { productId },
     headers: { Authorization: jwt() },
   });
 };

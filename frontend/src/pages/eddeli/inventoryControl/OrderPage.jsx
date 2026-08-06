@@ -33,7 +33,7 @@ import {
   removeOrderFromList,
   removeOrderItemFromList,
 } from "../../../utils/orderListUtils";
-import { isCajaPosOrder } from "../../../utils/eddeliPosOrderUtils.js";
+import { isPedidosListOrder } from "../../../utils/eddeliPosOrderUtils.js";
 import { usePageTour } from "../../../hooks/usePageTour.js";
 import { PEDIDOS_TOUR_ID, getPedidosTourSteps } from "../../../tours/pedidosTour.js";
 import {
@@ -80,7 +80,7 @@ function OrderPage() {
       ]);
       loadedMonthsRef.current.add(key);
       const manualOrders = (Array.isArray(customerRes.data) ? customerRes.data : [])
-        .filter((o) => !isCajaPosOrder(o))
+        .filter(isPedidosListOrder)
         .map((o) => ({ ...o, orderKind: o.orderKind || "customer" }));
       const supplierOrders = (Array.isArray(supplierRes.data) ? supplierRes.data : []).map(
         (o) => ({ ...o, orderKind: "supplier" })
@@ -255,19 +255,10 @@ function OrderPage() {
     () => calendarTourRef.current?.prepareExpandOrderDemo?.(),
     [],
   );
-  const runAddLineDemo = useCallback(
-    () => calendarTourRef.current?.runAddLineDemo?.(),
-    [],
-  );
-  const confirmAddLineDemo = useCallback(
-    () => calendarTourRef.current?.confirmAddLineDemo?.(),
-    [],
-  );
-
   const prepareCreateFormDemo = useCallback(async () => {
     setIsEditing(false);
     setOrderToEdit(null);
-    setTitleDialog("Registrar nuevo pedido");
+    setTitleDialog("Nuevo pedido de cliente");
     setOpenDialog(true);
     await new Promise((r) => window.setTimeout(r, 180));
   }, []);
@@ -285,8 +276,6 @@ function OrderPage() {
       getPedidosTourSteps({
         prepareOpenDayDemo,
         prepareExpandOrderDemo,
-        runAddLineDemo,
-        confirmAddLineDemo,
         prepareCreateFormDemo,
         runCreateFormItemsDemo,
         resetTourDemo: resetPageTourDemo,
@@ -294,8 +283,6 @@ function OrderPage() {
     [
       prepareOpenDayDemo,
       prepareExpandOrderDemo,
-      runAddLineDemo,
-      confirmAddLineDemo,
       prepareCreateFormDemo,
       runCreateFormItemsDemo,
       resetPageTourDemo,
@@ -307,6 +294,7 @@ function OrderPage() {
       getPedidoClienteFormTourSteps({
         runItemsDemo: () => orderFormTourRef.current?.runItemsDemo?.(),
         resetDemo: () => orderFormTourRef.current?.resetDemo?.(),
+        createPackDemo: () => orderFormTourRef.current?.createPackDemo?.(),
       }),
     [],
   );
@@ -447,7 +435,7 @@ function OrderPage() {
               onClick={() => {
                 setIsEditing(false);
                 setOrderToEdit(null);
-                setTitleDialog("Registrar nuevo pedido");
+                setTitleDialog("Nuevo pedido de cliente");
                 handleDialog();
               }}
             >
@@ -482,6 +470,8 @@ function OrderPage() {
           handleDialog();
         }}
         tittle={titleDialog}
+        maxWidth="lg"
+        fullWidth
         titleExtra={
           !isEditing ? (
             <TourHelpButton
@@ -497,6 +487,7 @@ function OrderPage() {
           reload={refreshCurrentRange}
           isEditing={isEditing}
           datos={orderToEdit}
+          active={openDialog}
         />
       </SimpleDialog>
 
@@ -553,7 +544,7 @@ function OrderPage() {
         onEdit={(pedido) => {
           setIsEditing(true);
           setOrderToEdit(pedido);
-          setTitleDialog("Editar Pedido");
+          setTitleDialog("Editar pedido de cliente");
           setOpenDialog(true);
         }}
         onEditSupplier={(pedido) => {

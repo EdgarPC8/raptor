@@ -12,6 +12,7 @@ import {
   DialogActions,
   FormControlLabel,
   Checkbox,
+  Alert,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import AddBoxIcon from "@mui/icons-material/AddBox";
@@ -847,6 +848,11 @@ function SupplierOrderForm(
       sx={{ mt: 1 }}
       onSubmit={handleSubmit(submitOrder)}
     >
+      <Alert severity="info" sx={{ mb: 2, py: 0.75 }}>
+        <strong>Pedido a proveedor</strong>
+        {isEditing ? ` · #${datos?.id ?? ""}` : " · nuevo"}: compra/entrada de mercadería (no es
+        pedido de cliente).
+      </Alert>
       <Grid container spacing={3}>
         <Grid item xs={12} md={5}>
           <Grid container spacing={2}>

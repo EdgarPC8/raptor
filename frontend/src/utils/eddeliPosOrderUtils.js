@@ -40,6 +40,23 @@ export function isCajaPosOrder(order) {
   return String(order?.notes || "").includes(CAJA_POS_TAG);
 }
 
+/**
+ * Venta de caja al contado (efectivo/transferencia/etc.): no debe listarse en Pedidos.
+ * Las de crédito ([CREDITO] / paymentMethod credito) sí van a Pedidos.
+ */
+export function isCajaPosContadoOrder(order) {
+  const notes = String(order?.notes || "");
+  if (!notes.includes(CAJA_POS_TAG)) return false;
+  if (notes.includes(SALE_CREDITO_TAG)) return false;
+  if (String(order?.paymentMethod || "").toLowerCase() === "credito") return false;
+  return true;
+}
+
+/** Pedidos del calendario: manuales + crédito de caja (sin contado POS). */
+export function isPedidosListOrder(order) {
+  return !isCajaPosContadoOrder(order);
+}
+
 /** Cliente genérico para ventas de mostrador sin datos de factura. */
 export function findConsumidorFinalCustomer(customers) {
   return (

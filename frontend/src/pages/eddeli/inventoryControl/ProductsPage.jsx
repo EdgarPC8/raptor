@@ -18,6 +18,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  Stack,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ViewModuleIcon from "@mui/icons-material/ViewModule";
@@ -29,6 +30,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Edit, Delete, Inventory } from "@mui/icons-material";
 import toast from "react-hot-toast";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
+import TourHelpButton from "../../../components/TourHelpButton.jsx";
 import ProductForm from "./components/ProductForm";
 import ProductsGridView from "./components/ProductsGridView";
 import ProductsByStoreView from "./components/ProductsByStoreView";
@@ -52,6 +54,12 @@ import {
   productMatchesCategoryFilter,
 } from "../../../utils/categoryUtils.js";
 import { useAppSettings } from "../../../context/AppSettingsContext.jsx";
+import { usePageTour } from "../../../hooks/usePageTour.js";
+import { PRODUCTOS_TOUR_ID, getProductosTourSteps } from "../../../tours/productosTour.js";
+import {
+  PRODUCTO_FORM_TOUR_ID,
+  getProductoFormTourSteps,
+} from "../../../tours/productoFormTour.js";
 
 function ProductsPage() {
   const { activeApp } = useAppSettings();
@@ -158,6 +166,67 @@ function ProductsPage() {
     onScan: handleCatalogBarcodeScan,
     ignoreWhenTypingInInputs: true,
   });
+
+  const prepareCardsView = useCallback(async () => {
+    setViewMode("cards");
+    await new Promise((r) => window.setTimeout(r, 80));
+  }, []);
+
+  const prepareTableView = useCallback(async () => {
+    setViewMode("table");
+    await new Promise((r) => window.setTimeout(r, 100));
+  }, []);
+
+  const prepareByStoreView = useCallback(async () => {
+    if (!multiStockEnabled) return;
+    setViewMode("byStore");
+    await new Promise((r) => window.setTimeout(r, 160));
+  }, [multiStockEnabled]);
+
+  const resetPageTourDemo = useCallback(() => {
+    setOpenDialog(false);
+    setIsEditing(false);
+    setDatos({});
+    setViewMode("cards");
+  }, []);
+
+  const getTourSteps = useCallback(
+    () =>
+      getProductosTourSteps({
+        prepareCardsView,
+        prepareTableView,
+        prepareByStoreView,
+        multiStockEnabled,
+        resetTourDemo: resetPageTourDemo,
+      }),
+    [
+      prepareCardsView,
+      prepareTableView,
+      prepareByStoreView,
+      multiStockEnabled,
+      resetPageTourDemo,
+    ],
+  );
+
+  const { startTour: startTourBase } = usePageTour({
+    tourId: PRODUCTOS_TOUR_ID,
+    getSteps: getTourSteps,
+    enabled: !loading && !openDialog,
+    autoDelayMs: 800,
+    onDestroyed: resetPageTourDemo,
+  });
+
+  const { startTour: startFormTour } = usePageTour({
+    tourId: PRODUCTO_FORM_TOUR_ID,
+    getSteps: getProductoFormTourSteps,
+    enabled: openDialog && !isEditing,
+    autoDelayMs: 450,
+  });
+
+  const startTour = useCallback(() => {
+    resetPageTourDemo();
+    window.setTimeout(() => startTourBase(), 80);
+  }, [resetPageTourDemo, startTourBase]);
 
   const columns = [
     {
@@ -315,9 +384,17 @@ function ProductsPage() {
           <DialogTitle sx={{ p: 0, flex: 1, fontWeight: 700, fontSize: "1.05rem" }}>
             {titleUserDialog}
           </DialogTitle>
-          <IconButton aria-label="Cerrar" onClick={closeProductDialog} size="small">
-            <CloseIcon />
-          </IconButton>
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            {!isEditing ? (
+              <TourHelpButton
+                onClick={startFormTour}
+                title="Ver tutorial de este formulario"
+              />
+            ) : null}
+            <IconButton aria-label="Cerrar" onClick={closeProductDialog} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Stack>
         </Box>
 
         <DialogContent
@@ -357,6 +434,7 @@ function ProductsPage() {
             type="submit"
             form="eddeli-product-form"
             variant="contained"
+            data-tour="producto-form-save"
             sx={{ minWidth: 160 }}
           >
             {isEditing ? "Actualizar producto" : "Guardar producto"}
@@ -365,6 +443,7 @@ function ProductsPage() {
       </Dialog>
 
       <Paper
+        data-tour="productos-header"
         sx={{
           p: 2,
           mb: 2,
@@ -377,6 +456,7 @@ function ProductsPage() {
         }}
       >
         <Button
+          data-tour="productos-create"
           variant="text"
           endIcon={<Inventory />}
           onClick={() => {
@@ -388,8 +468,9 @@ function ProductsPage() {
         >
           Crear Producto
         </Button>
+        <TourHelpButton onClick={startTour} title="Ver tutorial de productos" />
         <Box sx={{ flexGrow: 1 }} />
-        <FormControl size="small" sx={{ minWidth: 220 }}>
+        <FormControl size="small" sx={{ minWidth: 220 }} data-tour="productos-category">
           <InputLabel>Categoría</InputLabel>
           <Select
             value={categoryFilter}
@@ -407,6 +488,7 @@ function ProductsPage() {
           </Select>
         </FormControl>
         <ToggleButtonGroup
+          data-tour="productos-view-mode"
           size="small"
           value={viewMode}
           exclusive
@@ -431,7 +513,7 @@ function ProductsPage() {
       </Paper>
 
       {viewMode === "cards" ? (
-        <Paper sx={{ p: 2.5, borderRadius: 2 }}>
+        <Paper data-tour="productos-cards" sx={{ p: 2.5, borderRadius: 2 }}>
           <Box
             sx={{
               display: "flex",
@@ -445,6 +527,7 @@ function ProductsPage() {
               Catálogo
             </Typography>
             <TextField
+              data-tour="productos-search"
               size="small"
               placeholder="Buscar o escanear código de barras…"
               value={cardSearch}
@@ -483,15 +566,17 @@ function ProductsPage() {
           loading={loading}
         />
       ) : (
-        <TablePro
-          rows={filteredTableData}
-          columns={columns}
-          defaultRowsPerPage={25}
-          rowsPerPageOptions={[25, 50, 100, 200]}
-          title="PRODUCTOS"
-          showIndex={true}
-          loading={loading}
-        />
+        <Box data-tour="productos-table">
+          <TablePro
+            rows={filteredTableData}
+            columns={columns}
+            defaultRowsPerPage={25}
+            rowsPerPageOptions={[25, 50, 100, 200]}
+            title="PRODUCTOS"
+            showIndex={true}
+            loading={loading}
+          />
+        </Box>
       )}
     </Container>
   );

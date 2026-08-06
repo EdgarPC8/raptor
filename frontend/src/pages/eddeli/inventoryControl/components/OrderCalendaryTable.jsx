@@ -15,12 +15,10 @@ import {
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import EditNoteIcon from '@mui/icons-material/EditNote';
-import SaveIcon from '@mui/icons-material/Save';
+import EditCalendarIcon from '@mui/icons-material/EditCalendar';
 import CloseIcon from '@mui/icons-material/Close';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -29,17 +27,12 @@ import PrintIcon from '@mui/icons-material/Print';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import TodayIcon from '@mui/icons-material/Today';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import TuneIcon from '@mui/icons-material/Tune';
 
 import {
-  updateOrderItemRequest,
-  markItemAsPaidRequest,
   markItemAsDeliveredRequest,
+  updateOrderItemRequest,
   deleteOrder,
-  deleteOrderItem,
-  updateOrderRequest,
-  getAllCustomersRequest,
   addOrderItemToOrderRequest,
 } from '../../../../api/ordersRequest';
 import {
@@ -50,7 +43,6 @@ import {
 } from '../../../../api/inventoryControlRequest';
 import { useAuth } from '../../../../context/AuthContext';
 import { useAppSettings } from '../../../../context/AppSettingsContext.jsx';
-import { formatDateTime } from '../../../../helpers/functions';
 import {
   locationKindLabel,
   normalizeLocationKind,
@@ -72,6 +64,7 @@ function parseOrderDate(value) {
 }
 import SimpleDialog from '../../../../components/Dialogs/SimpleDialog';
 import SearchableSelect from '../../../../components/SearchableSelect';
+import ProductForm from './ProductForm.jsx';
 import ProductPriceReference, {
   getDefaultDistributorPrice,
   getProductUnitLabel,
@@ -79,7 +72,6 @@ import ProductPriceReference, {
   formatProductPrice,
   formatUnitPrice,
 } from './ProductPriceReference';
-import DocumentAttachmentIcon from './DocumentAttachmentIcon';
 import DocumentUploadButton from './DocumentUploadButton';
 import PrintFormatDialog from '../../../../components/saleReceipt/PrintFormatDialog.jsx';
 import { buildReceiptFromCustomerOrder } from '../../../../utils/saleReceiptUtils.js';
@@ -244,13 +236,6 @@ function getColorByOrder(order, theme, tone) {
   return theme.palette.mode === 'dark' ? theme.palette.background.paper : 'white';
 }
 
-const buildFullDate = (dateStr, hh, mm, ss) => {
-  if (!dateStr || hh === '' || mm === '' || ss === '') return null;
-  const str = `${dateStr}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-  const d = new Date(str);
-  return isNaN(d.getTime()) ? null : d;
-};
-
 function getOrderStatusMeta(order) {
   const sev = getOrderSeverity(order);
   if (sev === 3) return { label: 'Completo', color: 'success' };
@@ -258,6 +243,20 @@ function getOrderStatusMeta(order) {
   if (sev === 1) return { label: 'Entregado · falta cobro', color: 'warning' };
   if (sev === 2) return { label: 'Cobrado · falta entrega', color: 'info' };
   return { label: 'Parcial', color: 'warning' };
+}
+
+/** Convierte una fecha (ISO o "dd/MM/yyyy HH:mm:ss") a "YYYY-MM-DD" para inputs date. */
+function toDateInputValue(value) {
+  if (!value) return '';
+  if (typeof value === 'string' && value.includes('/')) {
+    const [datePart] = value.split(' ');
+    const [dd, mm, yyyy] = datePart.split('/');
+    if (dd && mm && yyyy) return `${yyyy}-${mm}-${dd}`;
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
 }
 
 function orderProgress(order) {
@@ -326,8 +325,6 @@ export default forwardRef(function OrderCalendarView({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [orderFilter, setOrderFilter] = useState('all');
-  const [fields, setFields] = useState({});
-  const [editMode, setEditMode] = useState({});
   const [expandedOrders, setExpandedOrders] = useState({});
   const [tourFocusDay, setTourFocusDay] = useState(null);
   const [tourExtraItems, setTourExtraItems] = useState({});
@@ -345,16 +342,18 @@ export default forwardRef(function OrderCalendarView({
     border: 0.6,                                              // opacidad de bordes
   };
 
-  // Edición de orden (date y notes)
-  const [orderEditMode, setOrderEditMode] = useState({});
-  const [orderFields, setOrderFields] = useState({});
-
   // Dialogs de eliminación
   const [openDeleteOrder, setOpenDeleteOrder] = useState(false);
-  const [openDeleteItem, setOpenDeleteItem] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState(null);
-  const [itemToDelete, setItemToDelete] = useState(null);
   const [payCustomerOrder, setPayCustomerOrder] = useState(null);
+  const [dateDialogOpen, setDateDialogOpen] = useState(false);
+  const [dateDraft, setDateDraft] = useState({
+    orderId: null,
+    items: [],
+    deliveredAt: '',
+    paidAt: '',
+  });
+  const [dateBusy, setDateBusy] = useState(false);
 
   const { user, toast: toastAuth } = useAuth();
   const { activeApp } = useAppSettings();
@@ -383,7 +382,6 @@ export default forwardRef(function OrderCalendarView({
   /** Ajuste de stock con movimiento `ajuste`: solo Programador y Administrador */
   const canAdjustStock = canManageOrders;
 
-  const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   /** Borrador por pedido: agregar línea sin abrir otro formulario */
   const [addLineDraft, setAddLineDraft] = useState({});
@@ -391,7 +389,8 @@ export default forwardRef(function OrderCalendarView({
   const [printReceipt, setPrintReceipt] = useState(null);
 
   const [deliverOpen, setDeliverOpen] = useState(false);
-  const [deliverItem, setDeliverItem] = useState(null);
+  const [deliverOrder, setDeliverOrder] = useState(null);
+  const [deliverPendingItems, setDeliverPendingItems] = useState([]);
   const [deliverStoreId, setDeliverStoreId] = useState('');
   const [inventoryStores, setInventoryStores] = useState([]);
   const [storeStockAvail, setStoreStockAvail] = useState(null);
@@ -402,6 +401,10 @@ export default forwardRef(function OrderCalendarView({
   const [adjustStock, setAdjustStock] = useState('');
   const [adjustStoreId, setAdjustStoreId] = useState('');
   const [adjustBusy, setAdjustBusy] = useState(false);
+
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [productDialogDatos, setProductDialogDatos] = useState(null);
+  const [productDialogBusy, setProductDialogBusy] = useState(false);
 
   const handlePrevMonth = () => setCurrentDate((prev) => addMonths(prev, -1));
   const handleNextMonth = () => setCurrentDate((prev) => addMonths(prev, 1));
@@ -415,15 +418,11 @@ export default forwardRef(function OrderCalendarView({
     let cancelled = false;
     (async () => {
       try {
-        const [custRes, prodRes] = await Promise.all([
-          getAllCustomersRequest(),
-          getAllProductsAll(),
-        ]);
+        const prodRes = await getAllProductsAll();
         if (cancelled) return;
-        setCustomers(custRes?.data || []);
         setProducts(prodRes?.data || []);
       } catch (e) {
-        console.error('OrderCalendaryTable: catálogo clientes/productos', e);
+        console.error('OrderCalendaryTable: catálogo productos', e);
       }
     })();
     return () => { cancelled = true; };
@@ -470,20 +469,28 @@ export default forwardRef(function OrderCalendarView({
     }
   }, []);
 
-  const handleDeliver = async (item) => {
-    const itemId = typeof item === 'object' ? item?.id : item;
-    if (!itemId) return;
-    if (!multiStockEnabled) {
-      await runMutation(markItemAsDeliveredRequest(itemId), async (res) => {
-        if (!applyItemFromResponse(res, itemId)) await onReload?.();
-      });
+  const handleDeliverOrder = async (order) => {
+    const pending = (order?.ERP_order_items || order?.items || []).filter((it) => it?.id && !it.deliveredAt);
+    if (!pending.length) {
+      toastAuth({ message: 'Este pedido ya está entregado.', variant: 'info' });
       return;
     }
-    const row =
-      typeof item === 'object' && item?.id
-        ? item
-        : null;
-    setDeliverItem(row || { id: itemId });
+    if (!multiStockEnabled) {
+      setDeliverBusy(true);
+      try {
+        await runMutation(
+          Promise.all(pending.map((it) => markItemAsDeliveredRequest(it.id))),
+          async () => {
+            await onReload?.();
+          },
+        );
+      } finally {
+        setDeliverBusy(false);
+      }
+      return;
+    }
+    setDeliverOrder(order);
+    setDeliverPendingItems(pending);
     setDeliverOpen(true);
     const { defaultId } = await loadInventoryStores();
     setDeliverStoreId(defaultId);
@@ -491,7 +498,7 @@ export default forwardRef(function OrderCalendarView({
   };
 
   useEffect(() => {
-    if (!deliverOpen || !deliverStoreId || !deliverItem?.productId) {
+    if (!deliverOpen || !deliverStoreId || !deliverPendingItems?.length) {
       setStoreStockAvail(null);
       return;
     }
@@ -500,9 +507,14 @@ export default forwardRef(function OrderCalendarView({
       try {
         const { data } = await getStoreStocksRequest(Number(deliverStoreId));
         const map = data?.byProductId || {};
-        const pid = Number(deliverItem.productId);
-        const avail = Number(map[pid] ?? map[String(pid)] ?? 0);
-        if (!cancelled) setStoreStockAvail(Number.isFinite(avail) ? avail : 0);
+        const lines = deliverPendingItems.map((it) => {
+          const pid = Number(it.productId ?? it.ERP_inventory_product?.id);
+          const need = Number(it.quantity || 0);
+          const avail = Number(map[pid] ?? map[String(pid)] ?? 0);
+          const name = it.ERP_inventory_product?.name || `Producto #${pid}`;
+          return { pid, need, avail, name, ok: Number.isFinite(avail) ? avail >= need : true };
+        });
+        if (!cancelled) setStoreStockAvail(lines);
       } catch {
         if (!cancelled) setStoreStockAvail(null);
       }
@@ -510,24 +522,24 @@ export default forwardRef(function OrderCalendarView({
     return () => {
       cancelled = true;
     };
-  }, [deliverOpen, deliverStoreId, deliverItem?.productId]);
+  }, [deliverOpen, deliverStoreId, deliverPendingItems]);
 
-  const confirmDeliver = async () => {
-    if (!deliverItem?.id) return;
+  const confirmDeliverOrder = async () => {
+    if (!deliverPendingItems?.length) return;
     if (multiStockEnabled && !deliverStoreId) {
       toastAuth({ message: 'Elige Bodega o sucursal de donde sale el stock.', variant: 'warning' });
       return;
     }
     setDeliverBusy(true);
     try {
+      const payload = multiStockEnabled ? { storeId: Number(deliverStoreId) } : {};
       await runMutation(
-        markItemAsDeliveredRequest(deliverItem.id, {
-          ...(multiStockEnabled ? { storeId: Number(deliverStoreId) } : {}),
-        }),
-        async (res) => {
+        Promise.all(deliverPendingItems.map((it) => markItemAsDeliveredRequest(it.id, payload))),
+        async () => {
           setDeliverOpen(false);
-          setDeliverItem(null);
-          if (!applyItemFromResponse(res, deliverItem.id)) await onReload?.();
+          setDeliverOrder(null);
+          setDeliverPendingItems([]);
+          await onReload?.();
         },
       );
     } finally {
@@ -537,6 +549,52 @@ export default forwardRef(function OrderCalendarView({
 
   const resolveItemProductId = (item) =>
     Number(item?.productId ?? item?.ERP_inventory_product?.id) || null;
+
+  const refreshProductsCatalog = async () => {
+    try {
+      const { data } = await getAllProductsAll();
+      setProducts(Array.isArray(data) ? data : data?.products || []);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const openEditProduct = async (item) => {
+    if (!canManageOrders) return;
+    const productId = resolveItemProductId(item);
+    if (!productId) {
+      toastAuth?.({ message: 'Este ítem no tiene producto asociado.', variant: 'warning' });
+      return;
+    }
+    setProductDialogBusy(true);
+    try {
+      let full = products.find((p) => Number(p.id) === Number(productId));
+      if (!full) {
+        const { data } = await getAllProductsAll();
+        const list = Array.isArray(data) ? data : data?.products || [];
+        setProducts(list);
+        full = list.find((p) => Number(p.id) === Number(productId));
+      }
+      if (!full) {
+        toastAuth?.({ message: 'No se encontró el producto para editar.', variant: 'error' });
+        return;
+      }
+      setProductDialogDatos(full);
+      setProductDialogOpen(true);
+    } catch (e) {
+      console.error(e);
+      toastAuth?.({ message: 'No se pudo cargar el producto.', variant: 'error' });
+    } finally {
+      setProductDialogBusy(false);
+    }
+  };
+
+  const handleProductDialogSaved = async () => {
+    setProductDialogOpen(false);
+    setProductDialogDatos(null);
+    await refreshProductsCatalog();
+    await onReload?.();
+  };
 
   const openStockAdjust = async (item) => {
     if (!canAdjustStock) return;
@@ -616,20 +674,52 @@ export default forwardRef(function OrderCalendarView({
     }
   };
 
-  const handlePaid = async (itemId) => {
-    await runMutation(markItemAsPaidRequest(itemId), async (res) => {
-      if (!applyItemFromResponse(res, itemId)) await onReload?.();
+  // Abrir diálogos
+  const openCustomerDateDialog = (order) => {
+    if (!canManageOrders) return;
+    const items = order?.ERP_order_items || order?.items || [];
+    const paid = items.find((i) => i.paidAt)?.paidAt;
+    const delivered = items.find((i) => i.deliveredAt)?.deliveredAt;
+    setDateDraft({
+      orderId: order?.id ?? null,
+      items,
+      deliveredAt: toDateInputValue(delivered),
+      paidAt: toDateInputValue(paid),
     });
+    setDateDialogOpen(true);
   };
 
-  // Abrir diálogos
+  const handleSaveCustomerDates = async () => {
+    const items = (dateDraft.items || []).filter((i) => i?.id);
+    if (!items.length) {
+      toastAuth?.({ message: 'Este pedido no tiene ítems para actualizar.', variant: 'warning' });
+      return;
+    }
+    const deliveredAt = dateDraft.deliveredAt
+      ? new Date(`${dateDraft.deliveredAt}T12:00:00`).toISOString()
+      : null;
+    const paidAt = dateDraft.paidAt
+      ? new Date(`${dateDraft.paidAt}T12:00:00`).toISOString()
+      : null;
+    setDateBusy(true);
+    try {
+      await runMutation(
+        Promise.all(
+          items.map((i) => updateOrderItemRequest(i.id, { deliveredAt, paidAt }))
+        ),
+        async () => {
+          setDateDialogOpen(false);
+          await onReload?.();
+        }
+      );
+    } finally {
+      setDateBusy(false);
+    }
+  };
+
   const openOrderDialog = (order) => {
     setOrderToDelete(order);
     setOpenDeleteOrder(true);
-  };
-  const openItemDialog = (item) => {
-    setItemToDelete(item);
-    setOpenDeleteItem(true);
   };
 
   // Confirmar eliminaciones
@@ -640,17 +730,6 @@ export default forwardRef(function OrderCalendarView({
       setOpenDeleteOrder(false);
       setOrderToDelete(null);
       if (onRemoveOrder) onRemoveOrder(orderId);
-      else await onReload?.();
-    });
-  };
-
-  const confirmDeleteItem = async () => {
-    if (!itemToDelete) return;
-    const { id: itemId, orderId } = itemToDelete;
-    await runMutation(deleteOrderItem(itemId), async () => {
-      setOpenDeleteItem(false);
-      setItemToDelete(null);
-      if (onRemoveOrderItem && orderId) onRemoveOrderItem(orderId, itemId);
       else await onReload?.();
     });
   };
@@ -679,92 +758,6 @@ export default forwardRef(function OrderCalendarView({
     if (selectedDate && isSameDay(date, selectedDate)) setSelectedDate(null);
     else setSelectedDate(date);
   };
-
-  const handleChange = (itemId, field, value) => {
-    setFields((prev) => ({
-      ...prev,
-      [itemId]: { ...prev[itemId], [field]: value },
-    }));
-  };
-
-  const buildDate = (date, hour, minute, second) => {
-    if (!date || hour === '' || minute === '' || second === '') return null;
-    const str = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`;
-    const result = new Date(str);
-    return isNaN(result.getTime()) ? null : result;
-  };
-
-  const handleConfirm = async (itemId) => {
-    const f = fields[itemId] || {};
-    const paidAt = buildDate(f?.paidDate, f?.paidHour, f?.paidMinute, f?.paidSecond);
-    const deliveredAt = buildDate(f?.deliveredDate, f?.deliveredHour, f?.deliveredMinute, f?.deliveredSecond);
-    const quantity = Math.max(0, toNumber(f?.quantity, 0));
-    const price = Math.max(0, toNumber(f?.price, 0));
-
-    await runMutation(
-      updateOrderItemRequest(itemId, { paidAt, deliveredAt, quantity, price }),
-      async (res) => {
-        if (!applyItemFromResponse(res, itemId)) await onReload?.();
-      },
-    );
-  };
-
-  const toggleOrderEdit = (orderId) => {
-    setOrderEditMode(prev => ({ ...prev, [orderId]: !prev[orderId] }));
-  };
-
-  const handleConfirmOrder = async (orderId) => {
-    const f = orderFields[orderId] || {};
-    const newDate = buildFullDate(f.date, f.hour, f.minute, f.second);
-    const payload = { date: newDate ? newDate.toISOString() : null, notes: f.notes ?? '' };
-    if (f.customerId != null && f.customerId !== '') {
-      payload.customerId = Number(f.customerId);
-    }
-
-    await runMutation(updateOrderRequest(orderId, payload), async () => {
-      await onReload?.();
-    });
-  };
-
-  useEffect(() => {
-    const newFields = {};
-    const newOrderFields = {};
-
-    orders.forEach(order => {
-      if (order.orderKind === 'supplier') return;
-      // Ítems
-      (order.ERP_order_items || order.items || []).forEach(item => {
-        const paidDate = parseOrderDate(item.paidAt);
-        const deliveredDate = parseOrderDate(item.deliveredAt);
-        newFields[item.id] = {
-          paidDate: paidDate ? format(paidDate, 'yyyy-MM-dd') : '',
-          paidHour: paidDate ? String(paidDate.getHours()).padStart(2, '0') : '',
-          paidMinute: paidDate ? String(paidDate.getMinutes()).padStart(2, '0') : '',
-          paidSecond: paidDate ? String(paidDate.getSeconds()).padStart(2, '0') : '',
-          deliveredDate: deliveredDate ? format(deliveredDate, 'yyyy-MM-dd') : '',
-          deliveredHour: deliveredDate ? String(deliveredDate.getHours()).padStart(2, '0') : '',
-          deliveredMinute: deliveredDate ? String(deliveredDate.getMinutes()).padStart(2, '0') : '',
-          deliveredSecond: deliveredDate ? String(deliveredDate.getSeconds()).padStart(2, '0') : '',
-          quantity: item.quantity ?? '',
-          price: item.price ?? '',
-        };
-      });
-
-      // Orden (date + notes)
-      const orderDate = parseOrderDate(order.date);
-      newOrderFields[order.id] = {
-        date: orderDate ? format(orderDate, 'yyyy-MM-dd') : '',
-        hour: orderDate ? String(orderDate.getHours()).padStart(2, '0') : '',
-        minute: orderDate ? String(orderDate.getMinutes()).padStart(2, '0') : '',
-        second: orderDate ? String(orderDate.getSeconds()).padStart(2, '0') : '',
-        notes: order.notes ?? '',
-        customerId: order.customerId != null ? String(order.customerId) : '',
-      };
-    });
-
-    setFields(newFields);
-    setOrderFields(newOrderFields);
-  }, [orders]);
 
   const sleep = (ms) => new Promise((r) => window.setTimeout(r, ms));
 
@@ -907,18 +900,6 @@ export default forwardRef(function OrderCalendarView({
       >
         ¿Está seguro de eliminar la orden
         {orderToDelete ? ` #${orderToDelete.id}` : ''}? Esta acción no se puede deshacer.
-      </SimpleDialog>
-
-      <SimpleDialog
-        open={openDeleteItem}
-        onClose={() => { setOpenDeleteItem(false); setItemToDelete(null); }}
-        tittle="Eliminar Ítem"
-        onClickAccept={confirmDeleteItem}
-      >
-        ¿Está seguro de eliminar este ítem
-        {itemToDelete && itemToDelete.ERP_inventory_product
-          ? ` (${itemToDelete.ERP_inventory_product.name})`
-          : ''}? Esta acción no se puede deshacer.
       </SimpleDialog>
 
       <Stack
@@ -1361,23 +1342,101 @@ export default forwardRef(function OrderCalendarView({
                             </Stack>
                           </Box>
 
-                          {/* Acciones de la orden (editar / eliminar) */}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flexShrink: 0 }}>
+                          {/* Acciones en el header (junto a editar / eliminar) */}
+                          <Box
+                            data-tour={isTourFocusOrder ? 'pedidos-order-actions' : undefined}
+                            sx={{ display: 'flex', alignItems: 'center', gap: 0.15, flexShrink: 0, flexWrap: 'wrap' }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             {canManageOrders && (
-                              <Tooltip title={orderEditMode[order.id] ? "Cancelar edición" : "Editar orden"}>
+                              <DocumentUploadButton
+                                entityType="order"
+                                entityId={order.id}
+                                label="Recibo firmado del cliente"
+                                buttonText="Adjuntar recibo"
+                                canManage={canManageOrders}
+                                iconsOnly
+                              />
+                            )}
+                            <Tooltip title="Imprimir comprobante">
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPrintReceipt(buildReceiptFromCustomerOrder(order));
+                                  setPrintOpen(true);
+                                }}
+                                onFocus={(e) => e.stopPropagation()}
+                                aria-label="Imprimir"
+                              >
+                                <PrintIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            {canManageOrders && hasUnpaid && (
+                              <Tooltip title="Liquidar / abonar pedido">
                                 <IconButton
                                   size="small"
+                                  color="primary"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    toggleOrderEdit(order.id);
+                                    setPayCustomerOrder(order);
                                   }}
                                   onFocus={(e) => e.stopPropagation()}
+                                  aria-label="Liquidar pedido"
                                 >
-                                  {orderEditMode[order.id] ? <CloseIcon /> : <EditNoteIcon />}
+                                  <PaymentsIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
                             )}
-
+                            {canManageOrders && progress.deliveredCount < progress.total && (
+                              <Tooltip title="Entregar todo el pedido">
+                                <IconButton
+                                  size="small"
+                                  color="info"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleDeliverOrder(orderWithItems);
+                                  }}
+                                  onFocus={(e) => e.stopPropagation()}
+                                  aria-label="Entregar todo"
+                                >
+                                  <LocalShippingIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {canManageOrders && (
+                              <Tooltip title="Editar fechas de entrega y pago">
+                                <IconButton
+                                  size="small"
+                                  color="secondary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openCustomerDateDialog(orderWithItems);
+                                  }}
+                                  onFocus={(e) => e.stopPropagation()}
+                                  aria-label="Editar fechas"
+                                >
+                                  <EditCalendarIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {canManageOrders && onEdit && (
+                              <Tooltip title="Editar pedido de cliente">
+                                <IconButton
+                                  size="small"
+                                  data-tour={isTourFocusOrder ? 'pedidos-edit-order' : undefined}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEdit(order);
+                                  }}
+                                  onFocus={(e) => e.stopPropagation()}
+                                  aria-label="Editar pedido"
+                                >
+                                  <EditNoteIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
                             {canManageOrders && (
                               <Tooltip title="Eliminar orden">
                                 <IconButton
@@ -1387,8 +1446,9 @@ export default forwardRef(function OrderCalendarView({
                                     openOrderDialog(order);
                                   }}
                                   onFocus={(e) => e.stopPropagation()}
+                                  aria-label="Eliminar orden"
                                 >
-                                  <DeleteForeverIcon />
+                                  <DeleteForeverIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
                             )}
@@ -1397,622 +1457,59 @@ export default forwardRef(function OrderCalendarView({
                       </AccordionSummary>
 
                       <AccordionDetails sx={{ pt: 0, px: { xs: 1, sm: 1.5 }, pb: 1.5 }}>
-                        <Stack
-                          direction="row"
-                          alignItems="center"
-                          spacing={0.75}
-                          sx={{ mb: 1.5, flexWrap: 'wrap', gap: 0.75, pb: 1, borderBottom: 1, borderColor: 'divider' }}
-                        >
-                          <Tooltip title="Comprobante / factura">
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={<PrintIcon fontSize="small" />}
-                              onClick={() => {
-                                setPrintReceipt(buildReceiptFromCustomerOrder(order));
-                                setPrintOpen(true);
-                              }}
-                              sx={{ borderRadius: 1.5, fontSize: '0.75rem' }}
-                            >
-                              Imprimir
-                            </Button>
-                          </Tooltip>
-                          {canManageOrders && hasUnpaid && (
-                            <Button
-                              size="small"
-                              variant="contained"
-                              color="primary"
-                              startIcon={<PaymentsIcon />}
-                              onClick={() => setPayCustomerOrder(order)}
-                              sx={{ borderRadius: 1.5, fontSize: '0.75rem', fontWeight: 700 }}
-                            >
-                              Abonar pedido
-                            </Button>
-                          )}
-                        </Stack>
-
-                        {/* Bloque de edición de la ORDEN */}
-                        {orderEditMode[order.id] && (
-                          <Box
-                            sx={{
-                              mb: 2,
-                              p: 1.5,
-                              border: '1px dashed',
-                              borderColor: theme.palette.divider,
-                              borderRadius: 1,
-                              backgroundColor: theme.palette.mode === 'dark'
-                                ? alpha(theme.palette.background.paper, 0.6)
-                                : orderColor,
-                            }}
-                          >
-                            <Typography variant="subtitle2" gutterBottom>Editar orden</Typography>
-
-                            <Grid container spacing={1} sx={{ mb: 1 }}>
-                              <Grid item xs={12}>
-                                <SearchableSelect
-                                  label="Cliente del pedido"
-                                  items={customers}
-                                  value={orderFields[order.id]?.customerId ?? ''}
-                                  onChange={(val) =>
-                                    setOrderFields((prev) => ({
-                                      ...prev,
-                                      [order.id]: { ...prev[order.id], customerId: val != null ? String(val) : '' },
-                                    }))
-                                  }
-                                  getOptionLabel={(c) => c?.name ?? ''}
-                                  getOptionValue={(c) => c?.id ?? ''}
-                                  placeholder="Buscar cliente…"
-                                />
-                              </Grid>
-                            </Grid>
-
-                            <Grid container spacing={1} alignItems="flex-end">
-                              <Grid item xs={12} sm={4}>
-                                <TextField
-                                  label="Fecha del pedido"
-                                  type="date"
-                                  fullWidth
-                                  value={orderFields[order.id]?.date || ''}
-                                  onChange={(e) => setOrderFields(prev => ({
-                                    ...prev, [order.id]: { ...prev[order.id], date: e.target.value }
-                                  }))}
-                                />
-                              </Grid>
-                              <Grid item xs={4} sm={2}>
-                                <TextField
-                                  label="Hora"
-                                  type="number"
-                                  inputProps={{ min: 0, max: 23 }}
-                                  fullWidth
-                                  value={orderFields[order.id]?.hour || ''}
-                                  onChange={(e) => setOrderFields(prev => ({
-                                    ...prev, [order.id]: { ...prev[order.id], hour: e.target.value }
-                                  }))}
-                                />
-                              </Grid>
-                              <Grid item xs={4} sm={2}>
-                                <TextField
-                                  label="Min"
-                                  type="number"
-                                  inputProps={{ min: 0, max: 59 }}
-                                  fullWidth
-                                  value={orderFields[order.id]?.minute || ''}
-                                  onChange={(e) => setOrderFields(prev => ({
-                                    ...prev, [order.id]: { ...prev[order.id], minute: e.target.value }
-                                  }))}
-                                />
-                              </Grid>
-                              <Grid item xs={4} sm={2}>
-                                <TextField
-                                  label="Seg"
-                                  type="number"
-                                  inputProps={{ min: 0, max: 59 }}
-                                  fullWidth
-                                  value={orderFields[order.id]?.second || ''}
-                                  onChange={(e) => setOrderFields(prev => ({
-                                    ...prev, [order.id]: { ...prev[order.id], second: e.target.value }
-                                  }))}
-                                />
-                              </Grid>
-
-                              <Grid item xs={12}>
-                                <TextField
-                                  label="Notas"
-                                  fullWidth
-                                  multiline
-                                  minRows={2}
-                                  value={orderFields[order.id]?.notes ?? ''}
-                                  onChange={(e) => setOrderFields(prev => ({
-                                    ...prev, [order.id]: { ...prev[order.id], notes: e.target.value }
-                                  }))}
-                                />
-                              </Grid>
-
-                              <Grid item xs={12} sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  startIcon={<SaveIcon />}
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    await handleConfirmOrder(order.id);
-                                    toggleOrderEdit(order.id);
-                                  }}
-                                >
-                                  Guardar cambios
-                                </Button>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  startIcon={<CloseIcon />}
-                                  onClick={(e) => { e.stopPropagation(); toggleOrderEdit(order.id); }}
-                                >
-                                  Cancelar
-                                </Button>
-                              </Grid>
-                            </Grid>
-                          </Box>
-                        )}
-
-                        {/* Notas de la orden (solo lectura) */}
-                        {!orderEditMode[order.id] && order.notes && (
-                          <Box sx={{ mb: 1 }}>
-                            <Typography variant="caption" color="text.secondary">
-                              Notas de la orden: {order.notes}
-                            </Typography>
-                          </Box>
-                        )}
-
-                        {/* Lista de productos */}
-                        <Box
-                          data-tour={isTourFocusOrder ? 'pedidos-order-items' : undefined}
-                        >
-                          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: 0.8, display: 'block', mb: 1 }}>
-                            Productos del pedido
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                          <Typography variant="caption">
+                            Cobro:{' '}
+                            {hasUnpaid
+                              ? unpaidTotal > 0 && unpaidTotal < orderTotal
+                                ? `Parcial ($${unpaidTotal.toFixed(2)} pendiente)`
+                                : 'Pendiente'
+                              : 'Liquidado'}
                           </Typography>
+                          <Typography variant="caption">
+                            Entrega: {progress.deliveredCount}/{progress.total}
+                          </Typography>
+                        </Box>
 
-                          {orderItems.map((item, idx) => {
+                        {order.notes && (
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                            Notas: {order.notes}
+                          </Typography>
+                        )}
+
+                        <Box data-tour={isTourFocusOrder ? 'pedidos-order-items' : undefined}>
+                          {(orderItems || []).map((item) => {
                             const itemId = item.id;
-                            const f = fields[itemId] || {};
-                            const isEditing = !!editMode[itemId];
-
-                            const toggleEdit = () => {
-                              setEditMode(prev => ({ ...prev, [itemId]: !prev[itemId] }));
-                            };
-
-                            const liveQty = isEditing ? toNumber(f?.quantity, item.quantity) : item.quantity;
-                            const livePrice = isEditing ? toNumber(f?.price, item.price) : item.price;
-                            const liveTotal = (liveQty * livePrice).toFixed(2);
-
-                            const itemBase = getStatusBaseColor([item], theme);
                             const productName =
                               item.ERP_inventory_product?.name ||
                               item.product?.name ||
                               item.name ||
-                              "Producto";
-                            const itemStatus = getOrderStatusMeta([item]);
-
+                              'Producto';
+                            const unit = getProductUnitLabel(item.ERP_inventory_product);
+                            const lineTotal = formatOrderLineTotal(item.quantity, item.price);
                             return (
-                              <Box
-                                key={idx}
-                                sx={{
-                                  mb: 1.25,
-                                  p: 1.25,
-                                  border: '1px solid',
-                                  borderColor: alpha(theme.palette.divider, tones.border),
-                                  borderRadius: 1.5,
-                                  backgroundColor: getColorByStatus([item], theme, tones.state),
-                                  transition: 'background-color 0.2s ease, box-shadow 0.15s ease',
-                                  '&:hover': {
-                                    backgroundColor: itemBase
-                                      ? alpha(itemBase, tones.stateHover)
-                                      : alpha(theme.palette.primary.main, tones.hoverNeutral),
-                                    boxShadow: `0 2px 8px ${alpha(theme.palette.common.black, 0.05)}`,
-                                  },
-                                }}
+                              <Typography
+                                key={itemId ?? `${order.id}-${productName}`}
+                                variant="body2"
+                                sx={{ mb: 0.5 }}
                               >
-                                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: !isEditing ? 0.75 : 0 }}>
-                                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                                    <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mb: 0.25, gap: 0.5 }}>
-                                      <Typography variant="body2" fontWeight={700}>
-                                        {productName}
-                                      </Typography>
-                                      {!isEditing && (
-                                        <Chip
-                                          size="small"
-                                          label={itemStatus.label}
-                                          color={itemStatus.color}
-                                          variant="outlined"
-                                          sx={{ height: 18, fontSize: '0.62rem', fontWeight: 700 }}
-                                        />
-                                      )}
-                                    </Stack>
-                                    {!isEditing && (
-                                      <Typography variant="caption" color="text.secondary">
-                                        {item.quantity}{' '}
-                                        {getProductUnitLabel(item.ERP_inventory_product)} ×{' '}
-                                        {formatUnitPrice(item.price)} ={' '}
-                                        <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
-                                          {formatProductPrice(formatOrderLineTotal(item.quantity, item.price))}
-                                        </Box>
-                                      </Typography>
-                                    )}
-                                  </Box>
-
-                                  {!isEditing && (
-                                    <Stack direction="row" alignItems="center" spacing={0.25} sx={{ mt: -0.25, flexShrink: 0 }}>
-                                      {canAdjustStock && (
-                                        <Tooltip title="Ajustar stock (movimiento de ajuste)">
-                                          <IconButton
-                                            size="small"
-                                            color="secondary"
-                                            onClick={() => void openStockAdjust(item)}
-                                            aria-label="Ajustar stock"
-                                            sx={{
-                                              bgcolor: (t) => alpha(t.palette.secondary.main, 0.12),
-                                              '&:hover': {
-                                                bgcolor: (t) => alpha(t.palette.secondary.main, 0.22),
-                                              },
-                                            }}
-                                          >
-                                            <TuneIcon fontSize="small" />
-                                          </IconButton>
-                                        </Tooltip>
-                                      )}
-                                      {canManageOrders && (
-                                        <Tooltip title="Eliminar ítem">
-                                          <IconButton
-                                            size="small"
-                                            color="error"
-                                            onClick={() => openItemDialog(item)}
-                                          >
-                                            <DeleteOutlineIcon fontSize="small" />
-                                          </IconButton>
-                                        </Tooltip>
-                                      )}
-                                    </Stack>
-                                  )}
-                                </Box>
-
-                                {!isEditing && (
-                                  <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ gap: 0.5 }}>
-                                    {item.paidAt ? (
-                                      <Chip
-                                        size="small"
-                                        icon={<CheckCircleOutlineIcon />}
-                                        label="Pagado"
-                                        color="success"
-                                        variant="outlined"
-                                        sx={{ height: 24, fontSize: '0.68rem' }}
-                                      />
-                                    ) : (
-                                      <Tooltip title="Marcar como pagado">
-                                        <Button
-                                          size="small"
-                                          variant="outlined"
-                                          color="success"
-                                          startIcon={<MonetizationOnIcon sx={{ fontSize: '1rem !important' }} />}
-                                          onClick={() => handlePaid(itemId)}
-                                          sx={{ minHeight: 26, py: 0.25, fontSize: '0.72rem', borderRadius: 1.5 }}
-                                        >
-                                          Cobrar
-                                        </Button>
-                                      </Tooltip>
-                                    )}
-                                    {item.deliveredAt ? (
-                                      <Chip
-                                        size="small"
-                                        icon={<LocalShippingIcon />}
-                                        label="Entregado"
-                                        color="info"
-                                        variant="outlined"
-                                        sx={{ height: 24, fontSize: '0.68rem' }}
-                                      />
-                                    ) : (
-                                      <Tooltip title="Marcar como entregado">
-                                        <Button
-                                          size="small"
-                                          variant="outlined"
-                                          color="info"
-                                          startIcon={<LocalShippingIcon sx={{ fontSize: '1rem !important' }} />}
-                                          onClick={() => handleDeliver(item)}
-                                          sx={{ minHeight: 26, py: 0.25, fontSize: '0.72rem', borderRadius: 1.5 }}
-                                        >
-                                          Entregar
-                                        </Button>
-                                      </Tooltip>
-                                    )}
-                                    {canManageOrders && (
-                                      <Button
-                                        size="small"
-                                        onClick={toggleEdit}
-                                        variant="text"
-                                        sx={{ minHeight: 26, py: 0.25, fontSize: '0.72rem', ml: 'auto' }}
-                                      >
-                                        Editar
-                                      </Button>
-                                    )}
-                                  </Stack>
-                                )}
-
-                                {(item.paidAt || item.deliveredAt) && !isEditing && (
-                                  <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.75, gap: 0.5 }}>
-                                    {item.paidAt && (
-                                      <Typography variant="caption" color="success.main" sx={{ display: 'flex', alignItems: 'center', gap: 0.35 }}>
-                                        <CheckCircleOutlineIcon sx={{ fontSize: 14 }} />
-                                        Pagado: {formatDateTime(item.paidAt)}
-                                      </Typography>
-                                    )}
-                                    {item.deliveredAt && (
-                                      <Typography variant="caption" color="info.main" sx={{ display: 'flex', alignItems: 'center', gap: 0.35 }}>
-                                        <LocalShippingIcon sx={{ fontSize: 14 }} />
-                                        Entregado: {formatDateTime(item.deliveredAt)}
-                                      </Typography>
-                                    )}
-                                  </Stack>
-                                )}
-
-                                {/* Modo edición: fechas + cantidad/precio */}
-                                {isEditing && (
-                                  <Box sx={{ mt: 2 }}>
-                                    <Box sx={{ mb: 2 }}>
-                                      <Typography variant="caption" gutterBottom>Detalles de ítem:</Typography>
-                                      <Grid container spacing={1} alignItems="flex-end">
-                                        <Grid item xs={12} sm={3}>
-                                          <TextField
-                                            label="Cantidad"
-                                            type="number"
-                                            inputProps={{ min: 0, step: 1 }}
-                                            fullWidth
-                                            value={f?.quantity ?? ''}
-                                            onChange={(e) => handleChange(itemId, 'quantity', e.target.value)}
-                                          />
-                                        </Grid>
-                                        <Grid item xs={12} sm={3}>
-                                          <TextField
-                                            label="Precio (USD)"
-                                            type="number"
-                                            inputProps={{ min: 0, step: '0.01' }}
-                                            fullWidth
-                                            value={f?.price ?? ''}
-                                            onChange={(e) => handleChange(itemId, 'price', e.target.value)}
-                                          />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                          <Typography variant="body2" sx={{ pl: { sm: 1 } }}>
-                                            Total: ${liveTotal}
-                                          </Typography>
-                                        </Grid>
-                                      </Grid>
-                                    </Box>
-
-                                    {['paid', 'delivered'].map((prefix) => (
-                                      <Box key={prefix} sx={{ mb: 1 }}>
-                                        <Typography variant="caption" gutterBottom>
-                                          {prefix === 'paid' ? 'Pagado' : 'Entregado'}:
-                                        </Typography>
-                                        <Grid container spacing={1}>
-                                          <Grid item xs={12} sm={3}>
-                                            <TextField
-                                              label="Fecha"
-                                              type="date"
-                                              fullWidth
-                                              value={f[`${prefix}Date`] || ''}
-                                              onChange={(e) => handleChange(itemId, `${prefix}Date`, e.target.value)}
-                                            />
-                                          </Grid>
-                                          <Grid item xs={4} sm={3}>
-                                            <TextField
-                                              label="Hora"
-                                              type="number"
-                                              inputProps={{ min: 0, max: 23 }}
-                                              fullWidth
-                                              value={f[`${prefix}Hour`] || ''}
-                                              onChange={(e) => handleChange(itemId, `${prefix}Hour`, e.target.value)}
-                                            />
-                                          </Grid>
-                                          <Grid item xs={4} sm={3}>
-                                            <TextField
-                                              label="Minuto"
-                                              type="number"
-                                              inputProps={{ min: 0, max: 59 }}
-                                              fullWidth
-                                              value={f[`${prefix}Minute`] || ''}
-                                              onChange={(e) => handleChange(itemId, `${prefix}Minute`, e.target.value)}
-                                            />
-                                          </Grid>
-                                          <Grid item xs={4} sm={3}>
-                                            <TextField
-                                              label="Segundo"
-                                              type="number"
-                                              inputProps={{ min: 0, max: 59 }}
-                                              fullWidth
-                                              value={f[`${prefix}Second`] || ''}
-                                              onChange={(e) => handleChange(itemId, `${prefix}Second`, e.target.value)}
-                                            />
-                                          </Grid>
-                                        </Grid>
-                                      </Box>
-                                    ))}
-
-                                    <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-                                      <Button
-                                        variant="contained"
-                                        size="small"
-                                        onClick={async () => {
-                                          await handleConfirm(itemId);
-                                          toggleEdit();
-                                        }}
-                                      >
-                                        Confirmar
-                                      </Button>
-                                      <Button
-                                        variant="outlined"
-                                        size="small"
-                                        onClick={toggleEdit}
-                                      >
-                                        Cancelar
-                                      </Button>
-                                    </Box>
-                                  </Box>
-                                )}
-
-                                {order.notes && !isEditing && (
-                                  <>
-                                    <Divider sx={{ my: 1 }} />
-                                    <Typography variant="caption" color="text.secondary">
-                                      Notas: {order.notes}
-                                    </Typography>
-                                  </>
-                                )}
-                              </Box>
+                                • {item.packName ? `[${item.packName}] ` : ""}
+                                {productName} — {item.quantity} {unit} × {formatUnitPrice(item.price)} ={' '}
+                                {formatProductPrice(lineTotal)}
+                              </Typography>
                             );
                           })}
 
                           {orderItems.length > 0 && (
-                            <Paper
-                              variant="outlined"
-                              sx={{
-                                mt: 1,
-                                mb: 1,
-                                px: 1.25,
-                                py: 0.75,
-                                borderRadius: 1.5,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                bgcolor: alpha(theme.palette.primary.main, 0.04),
-                              }}
-                            >
-                              <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                                Total del pedido
+                            <Stack spacing={0.35} sx={{ mt: 1 }}>
+                              <Typography variant="body2" fontWeight={700}>
+                                Total pedido: {formatProductPrice(orderTotal)}
                               </Typography>
-                              <Typography variant="subtitle1" fontWeight={800} color="primary.main">
-                                {formatProductPrice(
-                                  orderItems.reduce(
-                                    (acc, i) => acc + formatOrderLineTotal(i.quantity, i.price),
-                                    0,
-                                  ),
-                                )}
+                              <Typography variant="body2" color="text.secondary">
+                                Por cobrar: ${unpaidTotal.toFixed(2)} · Entrega {progress.deliveredCount}/
+                                {progress.total}
                               </Typography>
-                            </Paper>
-                          )}
-
-                          <Divider sx={{ my: 1 }} />
-                          <Box onClick={(e) => e.stopPropagation()}>
-                            <Typography variant="subtitle2" gutterBottom>
-                              Recibo firmado / evidencia del cliente
-                            </Typography>
-                            <DocumentUploadButton
-                              entityType="order"
-                              entityId={order.id}
-                              label="Recibo firmado del cliente"
-                              buttonText="Subir recibo firmado"
-                              canManage={canManageOrders}
-                            />
-                          </Box>
-
-                          {canManageOrders && (
-                            <Box
-                              data-tour={isTourFocusOrder ? 'pedidos-add-line' : undefined}
-                              sx={{
-                                mt: 2,
-                                p: 1.5,
-                                border: '1px dashed',
-                                borderColor: alpha(theme.palette.primary.main, 0.35),
-                                borderRadius: 1.5,
-                                bgcolor: alpha(theme.palette.primary.main, 0.03),
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <AddIcon fontSize="small" color="primary" />
-                                Añadir producto al pedido
-                              </Typography>
-                              <Grid container spacing={1} alignItems="flex-end">
-                                <Grid item xs={12} sm={5}>
-                                  <SearchableSelect
-                                    label="Producto"
-                                    items={products}
-                                    value={addLineDraft[order.id]?.productId ?? ''}
-                                    onChange={(val) => {
-                                      const p = products.find((x) => String(x.id) === String(val));
-                                      setAddLineDraft((prev) => ({
-                                        ...prev,
-                                        [order.id]: {
-                                          ...prev[order.id],
-                                          productId: val != null && val !== '' ? String(val) : '',
-                                          price:
-                                            p != null
-                                              ? String(getDefaultDistributorPrice(p))
-                                              : (prev[order.id]?.price ?? ''),
-                                        },
-                                      }));
-                                    }}
-                                    getOptionLabel={(p) => p?.name ?? ''}
-                                    getOptionValue={(p) => p?.id ?? ''}
-                                    placeholder="Buscar producto…"
-                                  />
-                                  {(() => {
-                                    const draftPid = addLineDraft[order.id]?.productId;
-                                    const p = draftPid
-                                      ? products.find((x) => String(x.id) === String(draftPid))
-                                      : null;
-                                    return p ? (
-                                      <ProductPriceReference
-                                        product={p}
-                                        compact
-                                        quantity={addLineDraft[order.id]?.quantity}
-                                        unitPrice={addLineDraft[order.id]?.price}
-                                      />
-                                    ) : null;
-                                  })()}
-                                </Grid>
-                                <Grid item xs={6} sm={3}>
-                                  <TextField
-                                    label="Cantidad"
-                                    type="number"
-                                    inputProps={{ min: 0.01, step: 'any' }}
-                                    size="small"
-                                    fullWidth
-                                    value={addLineDraft[order.id]?.quantity ?? ''}
-                                    onChange={(e) =>
-                                      setAddLineDraft((prev) => ({
-                                        ...prev,
-                                        [order.id]: { ...prev[order.id], quantity: e.target.value },
-                                      }))
-                                    }
-                                  />
-                                </Grid>
-                                <Grid item xs={6} sm={3}>
-                                  <TextField
-                                    label="Precio distribuidor"
-                                    type="number"
-                                    inputProps={{ min: 0, step: 'any' }}
-                                    size="small"
-                                    fullWidth
-                                    value={addLineDraft[order.id]?.price ?? ''}
-                                    onChange={(e) =>
-                                      setAddLineDraft((prev) => ({
-                                        ...prev,
-                                        [order.id]: { ...prev[order.id], price: e.target.value },
-                                      }))
-                                    }
-                                  />
-                                </Grid>
-                                <Grid item xs={12} sm={1}>
-                                  <Tooltip title="Agregar producto">
-                                    <IconButton
-                                      color="primary"
-                                      onClick={() => handleAddOrderLine(order.id)}
-                                      sx={{ border: 1, borderColor: 'primary.main', borderRadius: 1 }}
-                                    >
-                                      <AddIcon />
-                                    </IconButton>
-                                  </Tooltip>
-                                </Grid>
-                              </Grid>
-                            </Box>
+                            </Stack>
                           )}
                         </Box>
                       </AccordionDetails>
@@ -2041,22 +1538,91 @@ export default forwardRef(function OrderCalendarView({
     />
 
     <Dialog
-      open={deliverOpen}
-      onClose={() => !deliverBusy && setDeliverOpen(false)}
+      open={dateDialogOpen}
+      onClose={() => {
+        if (dateBusy) return;
+        setDateDialogOpen(false);
+      }}
       fullWidth
       maxWidth="xs"
     >
       <DialogTitle sx={{ fontWeight: 700 }}>
-        Entregar ítem #{deliverItem?.id}
+        Editar fechas · Pedido #{dateDraft.orderId}
+      </DialogTitle>
+      <DialogContent dividers>
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
+          Corrección manual. Aplica la misma fecha a todos los ítems del pedido.
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+          <TextField
+            label="Fecha de entrega"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={dateDraft.deliveredAt}
+            onChange={(e) => setDateDraft((p) => ({ ...p, deliveredAt: e.target.value }))}
+            fullWidth
+            disabled={dateBusy}
+          />
+          <TextField
+            label="Fecha de pago"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={dateDraft.paidAt}
+            onChange={(e) => setDateDraft((p) => ({ ...p, paidAt: e.target.value }))}
+            fullWidth
+            disabled={dateBusy}
+          />
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ px: 2, py: 1 }}>
+        <Button onClick={() => setDateDialogOpen(false)} color="inherit" disabled={dateBusy}>
+          Cancelar
+        </Button>
+        <Button
+          variant="contained"
+          onClick={() => void handleSaveCustomerDates()}
+          disabled={dateBusy}
+        >
+          Guardar fechas
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    <Dialog
+      open={deliverOpen}
+      onClose={() => {
+        if (deliverBusy) return;
+        setDeliverOpen(false);
+        setDeliverOrder(null);
+        setDeliverPendingItems([]);
+      }}
+      fullWidth
+      maxWidth="xs"
+    >
+      <DialogTitle sx={{ fontWeight: 700 }}>
+        Entregar pedido #{deliverOrder?.id}
       </DialogTitle>
       <DialogContent dividers>
         <Alert severity="warning" sx={{ py: 0.75, mb: 1.5 }}>
-          Multistock activo: elige <strong>desde dónde sale</strong> el stock (Bodega o sucursal).
+          Multistock activo: elige <strong>desde dónde sale</strong> el stock de todos los ítems pendientes.
         </Alert>
-        <Typography variant="body2" sx={{ mb: 1.25 }}>
-          {deliverItem?.ERP_inventory_product?.name || `Producto #${deliverItem?.productId || '—'}`}
-          {deliverItem?.quantity != null ? ` · qty ${deliverItem.quantity}` : ''}
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          Se entregarán {deliverPendingItems.length}{' '}
+          {deliverPendingItems.length === 1 ? 'producto' : 'productos'} pendientes.
         </Typography>
+        {Array.isArray(storeStockAvail) && storeStockAvail.length > 0 && (
+          <Stack spacing={0.35} sx={{ mb: 1.25 }}>
+            {storeStockAvail.map((line) => (
+              <Typography
+                key={line.pid}
+                variant="caption"
+                color={line.ok ? 'text.secondary' : 'error.main'}
+              >
+                · {line.name}: necesita {line.need}, hay {line.avail}
+              </Typography>
+            ))}
+          </Stack>
+        )}
         <TextField
           select
           fullWidth
@@ -2065,11 +1631,6 @@ export default forwardRef(function OrderCalendarView({
           value={deliverStoreId}
           onChange={(e) => setDeliverStoreId(e.target.value)}
           disabled={deliverBusy}
-          helperText={
-            storeStockAvail != null
-              ? `Disponible en este local: ${storeStockAvail}`
-              : 'Stock del local al confirmar'
-          }
         >
           {inventoryStores.map((s) => (
             <MenuItem key={s.id} value={String(s.id)}>
@@ -2079,7 +1640,15 @@ export default forwardRef(function OrderCalendarView({
         </TextField>
       </DialogContent>
       <DialogActions sx={{ px: 2, py: 1 }}>
-        <Button onClick={() => setDeliverOpen(false)} disabled={deliverBusy} color="inherit">
+        <Button
+          onClick={() => {
+            setDeliverOpen(false);
+            setDeliverOrder(null);
+            setDeliverPendingItems([]);
+          }}
+          disabled={deliverBusy}
+          color="inherit"
+        >
           Cancelar
         </Button>
         <Button
@@ -2087,7 +1656,7 @@ export default forwardRef(function OrderCalendarView({
           color="info"
           startIcon={<LocalShippingIcon />}
           disabled={deliverBusy || !deliverStoreId}
-          onClick={() => void confirmDeliver()}
+          onClick={() => void confirmDeliverOrder()}
         >
           Confirmar entrega
         </Button>
@@ -2166,6 +1735,61 @@ export default forwardRef(function OrderCalendarView({
           onClick={() => void confirmStockAdjust()}
         >
           Registrar ajuste
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    <Dialog
+      open={productDialogOpen}
+      onClose={() => {
+        setProductDialogOpen(false);
+        setProductDialogDatos(null);
+      }}
+      fullWidth
+      maxWidth="lg"
+      scroll="paper"
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, pt: 1 }}>
+        <DialogTitle sx={{ p: 0, fontWeight: 700, fontSize: '1.05rem' }}>
+          Editar producto
+        </DialogTitle>
+        <IconButton
+          aria-label="Cerrar"
+          onClick={() => {
+            setProductDialogOpen(false);
+            setProductDialogDatos(null);
+          }}
+          size="small"
+        >
+          <CloseIcon />
+        </IconButton>
+      </Box>
+      <DialogContent dividers>
+        <ProductForm
+          key={productDialogOpen ? `edit-product-${productDialogDatos?.id || 'x'}` : 'closed'}
+          isEditing
+          datos={productDialogDatos || {}}
+          onClose={() => {
+            setProductDialogOpen(false);
+            setProductDialogDatos(null);
+          }}
+          reload={handleProductDialogSaved}
+        />
+      </DialogContent>
+      <DialogActions sx={{ px: 2, py: 1, borderTop: 1, borderColor: 'divider' }}>
+        <Button
+          type="button"
+          onClick={() => {
+            setProductDialogOpen(false);
+            setProductDialogDatos(null);
+          }}
+          color="inherit"
+        >
+          Cancelar
+        </Button>
+        <Box sx={{ flex: 1 }} />
+        <Button type="submit" form="eddeli-product-form" variant="contained" sx={{ minWidth: 160 }}>
+          Guardar cambios
         </Button>
       </DialogActions>
     </Dialog>

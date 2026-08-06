@@ -1,13 +1,29 @@
-import { Grid, TextField, Box, Button, IconButton, Tooltip, Typography } from "@mui/material";
+import {
+  Grid,
+  TextField,
+  Box,
+  Button,
+  IconButton,
+  Tooltip,
+  Typography,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+} from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import EditIcon from "@mui/icons-material/Edit";
+import CloseIcon from "@mui/icons-material/Close";
 import PrintIcon from "@mui/icons-material/Print";
+import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 import { useForm } from "react-hook-form";
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   createOrderRequest,
   updateOrderRequest,
   getAllCustomersRequest,
-  deleteOrderItem,
 } from "../../../../api/ordersRequest";
 import { getAllProductsAll } from "../../../../api/inventoryControlRequest";
 import { useAuth } from "../../../../context/AuthContext";
@@ -19,28 +35,36 @@ import ProductPriceReference, {
   formatProductPrice,
   formatUnitPrice,
 } from "./ProductPriceReference";
+import ProductForm from "./ProductForm.jsx";
 import PrintFormatDialog from "../../../../components/saleReceipt/PrintFormatDialog.jsx";
 import { buildReceiptFromCustomerOrder } from "../../../../utils/saleReceiptUtils.js";
+import { useBarcodeScanner } from "../../../../hooks/useBarcodeScanner.js";
+import {
+  findEddeliProductByCode,
+  normalizeProductBarcode,
+} from "../../../../utils/productLookup.js";
+import SupplierOrderItemsBoard, { ZONE } from "./SupplierOrderItemsBoard.jsx";
+import {
+  hydratePacksAndLots,
+  newPackKey,
+  resolveItemLotFields,
+} from "./orderPackUtils.js";
 
-/* ========= Utils de fecha en LOCAL (sin UTC) ========= */
 const pad2 = (n) => String(n).padStart(2, "0");
 
-// yyyy-MM-dd en hora local (para <input type="date">)
 const localISODate = () => {
   const d = new Date();
   const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 10);
 };
 
-// HH:mm:ss actual en local
 const localHMS = () => {
   const d = new Date();
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 };
 
-// Convierte un Date a ISO con offset local (no Z)
 const toLocalISOWithOffset = (d) => {
-  const off = -d.getTimezoneOffset(); // minutos respecto a UTC
+  const off = -d.getTimezoneOffset();
   const sign = off >= 0 ? "+" : "-";
   const hhOff = pad2(Math.floor(Math.abs(off) / 60));
   const mmOff = pad2(Math.abs(off) % 60);
@@ -51,45 +75,47 @@ const toLocalISOWithOffset = (d) => {
   )}${sign}${hhOff}:${mmOff}`;
 };
 
-// Intenta normalizar cualquier forma de fecha recibida en datos.* a yyyy-MM-dd
 const normalizeToYYYYMMDD = (datos) => {
   if (!datos) return localISODate();
-  // 1) dateMs (epoch)
   if (datos.dateMs) {
     const d = new Date(Number(datos.dateMs));
     const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
     return local.toISOString().slice(0, 10);
   }
-  // 2) ISO con T (con o sin Z)
   if (typeof datos.date === "string" && datos.date.includes("T")) {
     const d = new Date(datos.date);
     const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
     return local.toISOString().slice(0, 10);
   }
-  // 3) Formato "dd/MM/yyyy HH:mm:ss" o "dd/MM/yyyy"
   if (typeof datos.date === "string" && datos.date.includes("/")) {
     const [datePart] = datos.date.split(" ");
     const [dd, mm, yyyy] = datePart.split("/");
     if (dd && mm && yyyy) return `${yyyy}-${mm}-${dd}`;
   }
-  // Fallback
   return localISODate();
 };
 
-function OrderFormInner({ onClose, reload, isEditing = false, datos = null }, tourApiRef) {
+function OrderFormInner({ onClose, reload, isEditing = false, datos = null, active = true }, tourApiRef) {
   const { handleSubmit, register, reset, setValue, watch } = useForm();
 
   const [products, setProducts] = useState([]);
   const [items, setItems] = useState([]);
+  const [packs, setPacks] = useState([]);
+  const [lots, setLots] = useState([]);
   const [customers, setCustomers] = useState([]);
-
-  // Estos estados son solo para controlar el UI del SearchableSelect
   const [selectedProduct, setSelectedProduct] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [printOpen, setPrintOpen] = useState(false);
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [productDialogMode, setProductDialogMode] = useState("create");
   const tourGenRef = useRef(0);
+  const lotsRef = useRef([]);
 
   const { toast } = useAuth();
+
+  useEffect(() => {
+    lotsRef.current = lots;
+  }, [lots]);
 
   const selectedProductId = watch("productId");
   const watchQuantity = watch("quantity");
@@ -107,23 +133,45 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null }, to
       ERP_order_items: items.map((it) => ({
         productId: it.productId,
         quantity: it.quantity,
-        price: it.price,
+        price: it.unitPrice,
         deliveredAt: it.deliveredAt,
         paidAt: it.paidAt,
         ERP_inventory_product: { name: it.name },
       })),
-      ERP_customer: customers.find((c) => String(c.id) === String(selectedCustomer)) || datos.ERP_customer,
+      ERP_customer:
+        customers.find((c) => String(c.id) === String(selectedCustomer)) || datos.ERP_customer,
     });
   }, [isEditing, datos, items, customers, selectedCustomer]);
 
-  // Autocompletar precio distribuidor al seleccionar producto
   useEffect(() => {
     if (!currentProduct) return;
     const defaultPrice = getDefaultDistributorPrice(currentProduct);
-    if (defaultPrice > 0) {
-      setValue("price", defaultPrice);
-    }
+    if (defaultPrice > 0) setValue("price", defaultPrice);
   }, [currentProduct, setValue]);
+
+  const handleBarcodeScan = useCallback(
+    (rawCode) => {
+      const found = findEddeliProductByCode(products, rawCode);
+      if (found) {
+        setSelectedProduct(String(found.id));
+        setValue("productId", String(found.id));
+        toast({ message: `Producto: ${found.name}`, variant: "success" });
+        return;
+      }
+      const code = normalizeProductBarcode(rawCode) || String(rawCode || "").trim();
+      toast({
+        message: code ? `No se encontró producto con código "${code}"` : "Código vacío",
+        variant: "warning",
+      });
+    },
+    [products, setValue, toast],
+  );
+
+  useBarcodeScanner({
+    enabled: active && products.length > 0 && !productDialogOpen,
+    onScan: handleBarcodeScan,
+    ignoreWhenTypingInInputs: true,
+  });
 
   const fetchProducts = async () => {
     const { data } = await getAllProductsAll();
@@ -135,53 +183,197 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null }, to
     setCustomers(data || []);
   };
 
+  const handleProductSaved = async () => {
+    const editId =
+      productDialogMode === "edit" ? Number(currentProduct?.id || selectedProduct) : null;
+    setProductDialogOpen(false);
+    await fetchProducts();
+    if (editId) {
+      const { data } = await getAllProductsAll();
+      const list = Array.isArray(data) ? data : [];
+      const updated = list.find((p) => Number(p.id) === editId);
+      if (updated) {
+        setSelectedProduct(String(updated.id));
+        setValue("productId", String(updated.id));
+        const defaultPrice = getDefaultDistributorPrice(updated);
+        if (defaultPrice > 0) setValue("price", defaultPrice);
+      }
+    }
+  };
+
   const addItem = () => {
     const productId = Number(watch("productId"));
     const quantity = Number(watch("quantity"));
-    const price = Number(watch("price"));
-
-    if (!productId || !quantity || !price) {
+    const unitPrice = Number(watch("price"));
+    if (!productId || !quantity || !Number.isFinite(unitPrice) || unitPrice < 0) {
       toast({ message: "Seleccione producto, cantidad y precio", variant: "warning" });
       return;
     }
-
     const product = products.find((p) => p.id === productId);
-
     setItems((prev) => [
       ...prev,
       {
+        lineId: newPackKey("line"),
         productId,
         quantity,
-        price,
+        unitPrice,
+        hasIva: false,
         name: product?.name || "",
         unitLabel: getProductUnitLabel(product),
+        packKey: null,
+        lotKey: null,
       },
     ]);
-
     setValue("productId", "");
     setSelectedProduct("");
     setValue("quantity", "");
     setValue("price", "");
   };
 
-  const removeItem = async (index, item) => {
-    const prev = items;
-    const updated = [...items];
-    updated.splice(index, 1);
-    setItems(updated);
+  const removeItem = (lineId) => {
+    setItems((prev) => prev.filter((it) => it.lineId !== lineId));
+  };
 
-    if (isEditing && item?.id) {
-      try {
-        await toast({ promise: deleteOrderItem(item.id) });
-      } catch {
-        setItems(prev);
+  const updateItemField = (lineId, field, rawValue) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.lineId !== lineId) return it;
+        const value = rawValue === "" ? "" : Number(rawValue);
+        return { ...it, [field]: value };
+      }),
+    );
+  };
+
+  const toggleItemIva = () => {};
+
+  const handleDropItem = (lineId, zoneType, zoneKey) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.lineId !== lineId) return it;
+        if (zoneType === ZONE.FREE) return { ...it, packKey: null, lotKey: null };
+        if (zoneType === ZONE.PACK) return { ...it, packKey: zoneKey, lotKey: null };
+        if (zoneType === ZONE.LOT) {
+          const lot = lotsRef.current.find((l) => l.key === zoneKey);
+          return { ...it, packKey: lot?.packKey || it.packKey, lotKey: zoneKey };
+        }
+        return it;
+      }),
+    );
+  };
+
+  const createPack = () => {
+    const key = newPackKey("pack");
+    setPacks((prev) => [
+      ...prev,
+      {
+        key,
+        name: `Paca ${prev.length + 1}`,
+        useLots: false,
+        lotCode: "",
+        expiresAt: "",
+        manufacturedAt: "",
+        totalPrice: "",
+        expanded: true,
+      },
+    ]);
+    setItems((prev) => {
+      const free = prev.filter((it) => !it.packKey);
+      if (!free.length) return prev;
+      return prev.map((it) => (!it.packKey ? { ...it, packKey: key, lotKey: null } : it));
+    });
+  };
+
+  const updatePack = (packKey, patch) => {
+    if (Object.prototype.hasOwnProperty.call(patch, "useLots")) {
+      const enabling = Boolean(patch.useLots);
+      if (enabling) {
+        setLots((lotsPrev) => {
+          if (lotsPrev.some((l) => l.packKey === packKey)) return lotsPrev;
+          return [
+            ...lotsPrev,
+            {
+              key: newPackKey("lot"),
+              packKey,
+              code: "",
+              expiresAt: "",
+              manufacturedAt: "",
+            },
+          ];
+        });
+      } else {
+        setItems((prev) =>
+          prev.map((it) => (it.packKey === packKey ? { ...it, lotKey: null } : it)),
+        );
+        setLots((lotsPrev) => lotsPrev.filter((l) => l.packKey !== packKey));
       }
     }
+    setPacks((prev) => prev.map((p) => (p.key === packKey ? { ...p, ...patch } : p)));
+  };
+
+  const removePack = (packKey) => {
+    setItems((prev) =>
+      prev.map((it) => (it.packKey === packKey ? { ...it, packKey: null, lotKey: null } : it)),
+    );
+    setLots((prev) => prev.filter((l) => l.packKey !== packKey));
+    setPacks((prev) => prev.filter((p) => p.key !== packKey));
+  };
+
+  const movePack = (packKey, direction) => {
+    setPacks((prev) => {
+      const i = prev.findIndex((p) => p.key === packKey);
+      if (i < 0) return prev;
+      const j = i + direction;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      const tmp = next[i];
+      next[i] = next[j];
+      next[j] = tmp;
+      return next;
+    });
+  };
+
+  const applyPackTotal = (packKey, rawTotal) => {
+    const total = Number(rawTotal);
+    if (!Number.isFinite(total) || total < 0) {
+      toast({ message: "Ingresá un valor de paca válido", variant: "warning" });
+      return;
+    }
+    setPacks((prev) =>
+      prev.map((p) => (p.key === packKey ? { ...p, totalPrice: String(total) } : p)),
+    );
+    setItems((prev) => {
+      const packItems = prev.filter((it) => it.packKey === packKey);
+      const qtySum = packItems.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
+      if (qtySum <= 0) return prev;
+      const unit = total / qtySum;
+      return prev.map((it) =>
+        it.packKey === packKey ? { ...it, unitPrice: Number(unit.toFixed(6)) } : it,
+      );
+    });
+  };
+
+  const createLot = (packKey) => {
+    setLots((prev) => [
+      ...prev,
+      { key: newPackKey("lot"), packKey, code: "", expiresAt: "", manufacturedAt: "" },
+    ]);
+    setPacks((prev) => prev.map((p) => (p.key === packKey ? { ...p, useLots: true } : p)));
+  };
+
+  const updateLot = (lotKey, patch) => {
+    setLots((prev) => prev.map((l) => (l.key === lotKey ? { ...l, ...patch } : l)));
+  };
+
+  const removeLot = (lotKey) => {
+    setItems((prev) => prev.map((it) => (it.lotKey === lotKey ? { ...it, lotKey: null } : it)));
+    setLots((prev) => prev.filter((l) => l.key !== lotKey));
   };
 
   const resetForm = () => {
     reset();
     setItems([]);
+    setPacks([]);
+    setLots([]);
     setSelectedCustomer("");
     setSelectedProduct("");
     setValue("productId", "");
@@ -198,14 +390,47 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null }, to
       return;
     }
 
-    const localDT = new Date(`${data.date}T${localHMS()}`);
+    for (const pack of packs) {
+      if (
+        pack.manufacturedAt &&
+        pack.expiresAt &&
+        String(pack.manufacturedAt) > String(pack.expiresAt)
+      ) {
+        toast({
+          message: `En la paca «${pack.name}» la elaboración no puede ser posterior al vencimiento`,
+          variant: "warning",
+        });
+        return;
+      }
+    }
+    for (const item of items) {
+      if (!item.lotKey) continue;
+      const lot = lots.find((l) => l.key === item.lotKey);
+      if (!lot?.expiresAt) {
+        toast({
+          message: `El lote de «${item.name}» necesita fecha de vencimiento`,
+          variant: "warning",
+        });
+        return;
+      }
+    }
 
+    const localDT = new Date(`${data.date}T${localHMS()}`);
     const payload = {
       customerId: selectedCustomer,
       notes: data.notes,
       dateMs: localDT.getTime(),
       date: toLocalISOWithOffset(localDT),
-      items,
+      items: items.map((it) => {
+        const lotFields = resolveItemLotFields(it, packs, lots);
+        return {
+          id: it.id || undefined,
+          productId: it.productId,
+          quantity: Number(it.quantity),
+          price: Number(it.unitPrice),
+          ...lotFields,
+        };
+      }),
     };
 
     try {
@@ -218,44 +443,40 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null }, to
       if (reload) await reload();
       if (onClose) await onClose();
     } catch {
-      /* toast ya mostró el error del backend */
+      /* toast */
     }
   };
 
   useEffect(() => {
     fetchProducts();
     fetchCustomers();
-
     setValue("date", localISODate());
 
     if (isEditing && datos) {
       setSelectedCustomer(datos.customerId || "");
       setValue("notes", datos.notes || "");
       setValue("date", normalizeToYYYYMMDD(datos));
-
-      const loadedItems = (datos.ERP_order_items || []).map((item) => ({
-        id: item.id,
-        productId: item.productId,
-        quantity: item.quantity,
-        price:
-          item.distributorPrice != null
-            ? item.distributorPrice
-            : item.price != null
-            ? item.price
-            : 0,
-        name: item.ERP_inventory_product?.name || "",
+      const raw = (datos.ERP_order_items || []).map((item) => ({
+        ...item,
         unitLabel: getProductUnitLabel(item.ERP_inventory_product),
-        deliveredAt: item.deliveredAt || null,
-        paidAt: item.paidAt || null,
       }));
-
-      setItems(loadedItems);
+      const hydrated = hydratePacksAndLots(raw, { priceField: "price" });
+      setItems(
+        hydrated.items.map((it) => ({
+          ...it,
+          unitLabel: it.unitLabel || getProductUnitLabel(
+            products.find((p) => Number(p.id) === Number(it.productId)),
+          ),
+        })),
+      );
+      setPacks(hydrated.packs);
+      setLots(hydrated.lots);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datos]);
 
   const itemsTotal = useMemo(
-    () => items.reduce((acc, it) => acc + formatOrderLineTotal(it.quantity, it.price), 0),
+    () => items.reduce((acc, it) => acc + formatOrderLineTotal(it.quantity, it.unitPrice), 0),
     [items],
   );
 
@@ -271,6 +492,8 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null }, to
       if (customer) setSelectedCustomer(customer.id);
 
       setItems([]);
+      setPacks([]);
+      setLots([]);
       setSelectedProduct("");
       const picks = [
         products.find((p) => Number(p.id) === 101),
@@ -291,11 +514,15 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null }, to
         setItems((prev) => [
           ...prev,
           {
+            lineId: newPackKey("line"),
             productId: p.id,
             quantity: qty,
-            price,
+            unitPrice: price,
+            hasIva: false,
             name: p.name,
             unitLabel: getProductUnitLabel(p),
+            packKey: null,
+            lotKey: null,
             _tourDemo: true,
           },
         ]);
@@ -305,10 +532,16 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null }, to
         setValue("price", "");
       }
     },
+    createPackDemo() {
+      if (tourGenRef.current < 0) return;
+      createPack();
+    },
     resetDemo() {
       tourGenRef.current += 1;
       if (!isEditing) {
         setItems((prev) => prev.filter((it) => !it._tourDemo));
+        setPacks([]);
+        setLots([]);
         setSelectedProduct("");
       }
     },
@@ -321,150 +554,278 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null }, to
       sx={{ mt: 1 }}
       onSubmit={handleSubmit(submitOrder)}
     >
-      <Grid container spacing={2}>
-        <Grid item xs={12} data-tour="pedido-cliente-customer">
-          <SearchableSelect
-            label="Seleccionar Cliente"
-            items={customers}
-            value={selectedCustomer}
-            onChange={(val) => {
-              setSelectedCustomer(val);
-            }}
-          />
-        </Grid>
+      <Alert severity="info" sx={{ mb: 2, py: 0.75 }}>
+        <strong>Pedido de cliente</strong>
+        {isEditing ? ` · #${datos?.id ?? ""}` : " · nuevo"}: a la izquierda armás cada línea; a la
+        derecha el carrito y las pacas. Las ventas al contado de caja no se editan aquí.
+      </Alert>
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={5}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} data-tour="pedido-cliente-customer">
+              <SearchableSelect
+                label="Cliente"
+                items={customers}
+                value={selectedCustomer}
+                onChange={(val) => setSelectedCustomer(val)}
+                placeholder="Buscar cliente…"
+              />
+            </Grid>
 
-        <Grid item xs={12} data-tour="pedido-cliente-product">
-          <input type="hidden" {...register("productId")} />
-
-          <SearchableSelect
-            label="Seleccionar Producto"
-            items={products}
-            value={selectedProduct}
-            onChange={(val) => {
-              setSelectedProduct(val);
-              setValue("productId", val);
-            }}
-          />
-        </Grid>
-
-        {currentProduct && (
-          <Grid item xs={12}>
-            <ProductPriceReference
-              product={currentProduct}
-              quantity={watchQuantity}
-              unitPrice={watchPrice}
-            />
-          </Grid>
-        )}
-
-        <Grid item xs={12} sm={4} data-tour="pedido-cliente-line">
-          <TextField
-            label="Cantidad"
-            type="number"
-            fullWidth
-            variant="standard"
-            inputProps={{ min: 1 }}
-            {...register("quantity")}
-          />
-        </Grid>
-
-        <Grid item xs={12} sm={4}>
-          <TextField
-            label="Precio distribuidor"
-            type="number"
-            fullWidth
-            variant="standard"
-            inputProps={{ step: "any", min: 0 }}
-            InputLabelProps={{ shrink: true }}
-            helperText={
-              currentProduct
-                ? `Por defecto: ${formatUnitPrice(getDefaultDistributorPrice(currentProduct))}`
-                : undefined
-            }
-            {...register("price")}
-          />
-        </Grid>
-
-        <Grid item xs={12} sm={4} sx={{ display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          <Tooltip title="Agregar producto">
-            <IconButton color="primary" onClick={addItem} sx={{ border: 1, borderColor: "primary.main" }}>
-              <AddIcon />
-            </IconButton>
-          </Tooltip>
-        </Grid>
-
-        <Grid item xs={12} data-tour="pedido-cliente-items">
-          {items.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              Sin productos en el pedido.
-            </Typography>
-          ) : (
-            <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-              {items.map((item, index) => (
-                <Box component="li" key={`${item.productId}-${index}`} sx={{ mb: 0.75 }}>
-                  <Typography variant="body2" component="span">
-                    {item.name} — {item.quantity} {item.unitLabel || "u."} ×{" "}
-                    {formatUnitPrice(item.price)} ={" "}
-                    {formatProductPrice(formatOrderLineTotal(item.quantity, item.price))}
-                  </Typography>
-                  <Button
-                    color="error"
-                    size="small"
-                    onClick={() => removeItem(index, item)}
-                    sx={{ ml: 1, minWidth: 0, py: 0 }}
-                  >
-                    Quitar
-                  </Button>
+            <Grid item xs={12} data-tour="pedido-cliente-product">
+              <input type="hidden" {...register("productId")} />
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Box sx={{ flex: 1 }}>
+                  <SearchableSelect
+                    label="Producto"
+                    items={products}
+                    value={selectedProduct}
+                    onChange={(val) => {
+                      setSelectedProduct(val);
+                      setValue("productId", val);
+                    }}
+                    placeholder="Buscar o escanear código de barras…"
+                    getSearchText={(p) => [p?.barcode, p?.sku].filter(Boolean).join(" ")}
+                    onEnterWithInput={handleBarcodeScan}
+                  />
                 </Box>
-              ))}
-            </Box>
-          )}
-          {items.length > 0 && (
-            <Typography variant="subtitle1" fontWeight={700} align="right" sx={{ mt: 1 }}>
-              Total: {formatProductPrice(itemsTotal)}
-            </Typography>
-          )}
+                <Tooltip
+                  title={
+                    currentProduct ? "Editar producto seleccionado" : "Crear producto nuevo"
+                  }
+                >
+                  <IconButton
+                    color="primary"
+                    onClick={() => {
+                      setProductDialogMode(currentProduct ? "edit" : "create");
+                      setProductDialogOpen(true);
+                    }}
+                    sx={{ border: 1, borderColor: "primary.main" }}
+                  >
+                    {currentProduct ? <EditIcon /> : <AddBoxIcon />}
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </Grid>
+
+            {currentProduct && (
+              <Grid item xs={12}>
+                <ProductPriceReference
+                  product={currentProduct}
+                  quantity={watchQuantity}
+                  unitPrice={watchPrice}
+                />
+              </Grid>
+            )}
+
+            <Grid item xs={6} data-tour="pedido-cliente-line">
+              <TextField
+                label="Cantidad"
+                type="number"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ min: 0.01, step: "any" }}
+                {...register("quantity")}
+              />
+            </Grid>
+
+            <Grid item xs={6}>
+              <TextField
+                label="Precio unitario"
+                type="number"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ step: "any", min: 0 }}
+                helperText={
+                  currentProduct
+                    ? `Por defecto: ${formatUnitPrice(getDefaultDistributorPrice(currentProduct))}`
+                    : undefined
+                }
+                {...register("price")}
+              />
+            </Grid>
+
+            <Grid item xs={12} sx={{ display: "flex", justifyContent: "flex-start" }}>
+              <Tooltip title="Agregar al carrito (sin paca)">
+                <IconButton
+                  color="primary"
+                  onClick={addItem}
+                  sx={{ border: 1, borderColor: "primary.main" }}
+                >
+                  <AddIcon />
+                </IconButton>
+              </Tooltip>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 1, alignSelf: "center" }}
+              >
+                Se agrega sin paca; después lo agrupás si hace falta
+              </Typography>
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                label="Fecha del pedido"
+                type="date"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                {...register("date")}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField label="Notas" fullWidth multiline rows={2} {...register("notes")} />
+            </Grid>
+
+            <Grid
+              item
+              xs={12}
+              display="flex"
+              justifyContent="flex-end"
+              alignItems="center"
+              gap={1}
+              flexWrap="wrap"
+            >
+              {isEditing && printReceipt && (
+                <Tooltip title="Comprobante / factura">
+                  <IconButton color="primary" onClick={() => setPrintOpen(true)}>
+                    <PrintIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+              <Button
+                data-tour="pedido-cliente-save"
+                variant="contained"
+                fullWidth
+                type="submit"
+              >
+                {!isEditing ? "Guardar pedido de cliente" : "Actualizar pedido de cliente"}
+              </Button>
+            </Grid>
+          </Grid>
         </Grid>
 
-        <Grid item xs={6}>
-          <TextField
-            label="Fecha del pedido"
-            type="date"
-            fullWidth
-            variant="standard"
-            InputLabelProps={{ shrink: true }}
-            {...register("date")}
-          />
-        </Grid>
-
-        <Grid item xs={6}>
-          <TextField
-            label="Notas"
-            fullWidth
-            variant="standard"
-            {...register("notes")}
-          />
-        </Grid>
-
-        <Grid item xs={12} display="flex" justifyContent="flex-end" alignItems="center" gap={1} flexWrap="wrap">
-          {isEditing && printReceipt && (
-            <Tooltip title="Comprobante / factura">
-              <IconButton color="primary" onClick={() => setPrintOpen(true)}>
-                <PrintIcon />
-              </IconButton>
-            </Tooltip>
-          )}
-          <Button
-            data-tour="pedido-cliente-save"
-            variant="contained"
-            fullWidth
-            type="submit"
-            sx={{ maxWidth: 280 }}
+        <Grid item xs={12} md={7}>
+          <Box
+            data-tour="pedido-cliente-items"
+            sx={{
+              border: 1,
+              borderColor: "divider",
+              borderRadius: 2,
+              p: 1.5,
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              gap: 1,
+              bgcolor: "background.default",
+              maxHeight: { md: "70vh" },
+              overflow: "auto",
+            }}
           >
-            {!isEditing ? "Guardar Pedido" : "Actualizar Pedido"}
-          </Button>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.25 }}>
+              <ShoppingCartOutlinedIcon fontSize="small" color="action" />
+              <Typography variant="subtitle2" fontWeight={700}>
+                Carrito del pedido
+              </Typography>
+            </Box>
+
+            <SupplierOrderItemsBoard
+              items={items}
+              packs={packs}
+              lots={lots}
+              ivaRate={0}
+              showIva={false}
+              tourIdPrefix="pedido-cliente"
+              helpText={
+                <>
+                  Creá una paca para agrupar productos que salen juntos. Podés poner vencimiento y el{" "}
+                  <strong>valor total de la paca</strong> para repartir precios unitarios.
+                </>
+              }
+              onRemoveItem={removeItem}
+              onUpdateItemField={updateItemField}
+              onToggleItemIva={toggleItemIva}
+              onDropItem={handleDropItem}
+              onCreatePack={createPack}
+              onUpdatePack={updatePack}
+              onRemovePack={removePack}
+              onMovePack={movePack}
+              onApplyPackTotal={applyPackTotal}
+              onCreateLot={createLot}
+              onUpdateLot={updateLot}
+              onRemoveLot={removeLot}
+            />
+
+            {items.length > 0 && (
+              <Box sx={{ mt: "auto", pt: 1, borderTop: 1, borderColor: "divider" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                  <Typography variant="subtitle1" fontWeight={700}>
+                    Total
+                  </Typography>
+                  <Typography variant="subtitle1" fontWeight={700}>
+                    {formatProductPrice(itemsTotal)}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+          </Box>
         </Grid>
       </Grid>
+
+      <Dialog
+        open={productDialogOpen}
+        onClose={() => setProductDialogOpen(false)}
+        fullWidth
+        maxWidth="lg"
+        scroll="paper"
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 2,
+            pt: 1,
+          }}
+        >
+          <DialogTitle sx={{ p: 0, fontWeight: 700, fontSize: "1.05rem" }}>
+            {productDialogMode === "edit" ? "Editar producto" : "Crear producto"}
+          </DialogTitle>
+          <IconButton aria-label="Cerrar" onClick={() => setProductDialogOpen(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        <DialogContent dividers>
+          <ProductForm
+            key={
+              productDialogOpen
+                ? productDialogMode === "edit"
+                  ? `edit-product-${currentProduct?.id || "x"}`
+                  : "new-customer-order-product"
+                : "closed"
+            }
+            isEditing={productDialogMode === "edit"}
+            datos={productDialogMode === "edit" ? currentProduct || {} : {}}
+            onClose={() => setProductDialogOpen(false)}
+            reload={handleProductSaved}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1, borderTop: 1, borderColor: "divider" }}>
+          <Button type="button" onClick={() => setProductDialogOpen(false)} color="inherit">
+            Cancelar
+          </Button>
+          <Box sx={{ flex: 1 }} />
+          <Button
+            type="submit"
+            form="eddeli-product-form"
+            variant="contained"
+            sx={{ minWidth: 160 }}
+          >
+            {productDialogMode === "edit" ? "Guardar cambios" : "Guardar producto"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <PrintFormatDialog
         open={printOpen}

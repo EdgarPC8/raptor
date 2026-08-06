@@ -49,6 +49,7 @@ import {
 } from "../../../../api/inventoryControlRequest";
 import { buildImageUrl } from "../../../../api/axios";
 import { useAuth } from "../../../../context/AuthContext";
+import SimpleDialog from "../../../../components/Dialogs/SimpleDialog";
 import {
   formatProductCategoryName,
   productMatchesCategoryFilter,
@@ -86,6 +87,15 @@ export default function ProductsByStoreView({
   const [editingId, setEditingId] = useState(null);
   const [editQty, setEditQty] = useState("");
   const [saving, setSaving] = useState(false);
+  const [renameDialog, setRenameDialog] = useState({
+    open: false,
+    exhibidor: null,
+    name: "",
+  });
+  const [deleteDialog, setDeleteDialog] = useState({
+    open: false,
+    exhibidor: null,
+  });
 
   const inventoryStores = useMemo(
     () =>
@@ -274,10 +284,26 @@ export default function ProductsByStoreView({
     }
   };
 
-  const renameExhibidor = async (ex) => {
-    const name = window.prompt("Nuevo nombre del exhibidor", ex.name);
-    if (!name?.trim() || name.trim() === ex.name) return;
-    const nextName = name.trim();
+  const openRenameExhibidor = (ex) => {
+    setRenameDialog({ open: true, exhibidor: ex, name: ex?.name || "" });
+  };
+
+  const closeRenameDialog = () => {
+    setRenameDialog({ open: false, exhibidor: null, name: "" });
+  };
+
+  const confirmRenameExhibidor = async () => {
+    const ex = renameDialog.exhibidor;
+    const nextName = String(renameDialog.name || "").trim();
+    if (!ex || !storeId) return;
+    if (!nextName) {
+      toastAuth({ message: "Escribe un nombre para el exhibidor.", variant: "warning" });
+      return;
+    }
+    if (nextName === ex.name) {
+      closeRenameDialog();
+      return;
+    }
     try {
       await updateStoreExhibidorRequest(Number(storeId), ex.id, {
         name: nextName,
@@ -297,19 +323,23 @@ export default function ProductsByStoreView({
         }
         return next;
       });
+      closeRenameDialog();
     } catch {
       /* ignore */
     }
   };
 
-  const removeExhibidor = async (ex) => {
-    if (
-      !window.confirm(
-        `¿Eliminar exhibidor "${ex.name}"? Los productos quedan sin exhibidor (stock intacto).`,
-      )
-    ) {
-      return;
-    }
+  const openDeleteExhibidor = (ex) => {
+    setDeleteDialog({ open: true, exhibidor: ex });
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialog({ open: false, exhibidor: null });
+  };
+
+  const confirmDeleteExhibidor = async () => {
+    const ex = deleteDialog.exhibidor;
+    if (!ex || !storeId) return;
     try {
       await deleteStoreExhibidorRequest(Number(storeId), ex.id);
       setExhibidores((prev) => prev.filter((e) => Number(e.id) !== Number(ex.id)));
@@ -322,6 +352,7 @@ export default function ProductsByStoreView({
         }
         return next;
       });
+      closeDeleteDialog();
     } catch {
       /* ignore */
     }
@@ -448,7 +479,7 @@ export default function ProductsByStoreView({
   };
 
   return (
-    <Paper sx={{ p: 2.5, borderRadius: 2 }}>
+    <Paper data-tour="productos-by-store" sx={{ p: 2.5, borderRadius: 2 }}>
       <Stack spacing={1.5} sx={{ mb: 2 }}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
@@ -464,7 +495,7 @@ export default function ProductsByStoreView({
             </Typography>
           </Stack>
 
-          <FormControl size="small" sx={{ minWidth: 240 }}>
+          <FormControl size="small" sx={{ minWidth: 240 }} data-tour="productos-store-select">
             <InputLabel id="products-by-store-label">Local</InputLabel>
             <Select
               labelId="products-by-store-label"
@@ -536,7 +567,7 @@ export default function ProductsByStoreView({
         </Stack>
 
         {storeId ? (
-          <Paper variant="outlined" sx={{ p: 1.25 }}>
+          <Paper variant="outlined" sx={{ p: 1.25 }} data-tour="productos-exhibidores">
             <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
               Exhibidores (organización)
             </Typography>
@@ -585,8 +616,8 @@ export default function ProductsByStoreView({
                     key={ex.id}
                     size="small"
                     label={ex.name}
-                    onClick={() => renameExhibidor(ex)}
-                    onDelete={() => void removeExhibidor(ex)}
+                    onClick={() => openRenameExhibidor(ex)}
+                    onDelete={() => openDeleteExhibidor(ex)}
                     deleteIcon={<DeleteIcon fontSize="small" />}
                     variant="outlined"
                   />
@@ -614,6 +645,7 @@ export default function ProductsByStoreView({
       ) : (
         <>
           <Box
+            data-tour="productos-by-store-table"
             sx={{
               overflow: "auto",
               border: 1,
@@ -828,6 +860,43 @@ export default function ProductsByStoreView({
           />
         </>
       )}
+
+      <SimpleDialog
+        open={renameDialog.open}
+        onClose={closeRenameDialog}
+        tittle="Renombrar exhibidor"
+        onClickAccept={confirmRenameExhibidor}
+        fullWidth
+        maxWidth="xs"
+      >
+        <TextField
+          autoFocus
+          fullWidth
+          size="small"
+          label="Nombre"
+          value={renameDialog.name}
+          onChange={(e) =>
+            setRenameDialog((prev) => ({ ...prev, name: e.target.value }))
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void confirmRenameExhibidor();
+            }
+          }}
+          placeholder="Ej. Vitrina 1, Mostrador…"
+        />
+      </SimpleDialog>
+
+      <SimpleDialog
+        open={deleteDialog.open}
+        onClose={closeDeleteDialog}
+        tittle="Eliminar exhibidor"
+        onClickAccept={confirmDeleteExhibidor}
+      >
+        ¿Eliminar exhibidor «{deleteDialog.exhibidor?.name || ""}»? Los productos quedan sin
+        exhibidor (el stock no se modifica).
+      </SimpleDialog>
     </Paper>
   );
 }

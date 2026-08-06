@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Box,
-  Button,
   IconButton,
   Stack,
   Tooltip,
@@ -39,6 +38,10 @@ export default function DocumentUploadButton({
   label = "Comprobante",
   buttonText = "Subir comprobante",
   canManage = true,
+  /** Solo iconos + tooltip (calendario de pedidos). */
+  compact = false,
+  /** Solo los 2 iconos (header del accordion), sin listar archivos. */
+  iconsOnly = false,
 }) {
   const { toast } = useAuth();
   const inputRef = useRef(null);
@@ -48,10 +51,11 @@ export default function DocumentUploadButton({
 
   const refresh = useCallback(() => {
     if (!entityType || entityId == null) return;
+    if (iconsOnly) return;
     listDocumentsRequest({ entityType, entityId })
       .then(({ data }) => setExisting(Array.isArray(data) ? data : []))
       .catch(() => setExisting([]));
-  }, [entityType, entityId]);
+  }, [entityType, entityId, iconsOnly]);
 
   useEffect(() => {
     refresh();
@@ -84,8 +88,8 @@ export default function DocumentUploadButton({
     }
   };
 
-  return (
-    <Box sx={{ width: "100%" }}>
+  const fileInputs = (
+    <>
       <input
         ref={inputRef}
         type="file"
@@ -101,6 +105,63 @@ export default function DocumentUploadButton({
         hidden
         onChange={handlePick}
       />
+    </>
+  );
+
+  const uploadIcons =
+    canManage ? (
+      <>
+        <Tooltip title={uploading ? "Subiendo…" : "Tomar foto"}>
+          <span>
+            <IconButton
+              type="button"
+              size="small"
+              color="primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                cameraRef.current?.click();
+              }}
+              onFocus={(e) => e.stopPropagation()}
+              disabled={uploading}
+              aria-label="Tomar foto"
+            >
+              <PhotoCameraIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title={buttonText || label || "Adjuntar archivo"}>
+          <span>
+            <IconButton
+              type="button"
+              size="small"
+              color="primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                inputRef.current?.click();
+              }}
+              onFocus={(e) => e.stopPropagation()}
+              disabled={uploading}
+              aria-label={buttonText || label}
+            >
+              <AttachFileIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </>
+    ) : null;
+
+  if (iconsOnly) {
+    return (
+      <>
+        {fileInputs}
+        {uploadIcons}
+      </>
+    );
+  }
+
+  return (
+    <Box sx={{ width: "100%" }}>
+      {fileInputs}
 
       <Stack spacing={0.75}>
         {existing.map((row) => {
@@ -156,41 +217,13 @@ export default function DocumentUploadButton({
         })}
 
         {canManage ? (
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Tooltip title="Tomar foto con la cámara">
-              <span>
-                <Button
-                  type="button"
-                  size="small"
-                  variant="contained"
-                  startIcon={<PhotoCameraIcon />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    cameraRef.current?.click();
-                  }}
-                  disabled={uploading}
-                >
-                  {uploading ? "Subiendo…" : "Tomar foto"}
-                </Button>
-              </span>
-            </Tooltip>
-            <Tooltip title={label}>
-              <span>
-                <Button
-                  type="button"
-                  size="small"
-                  variant="outlined"
-                  startIcon={<AttachFileIcon />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    inputRef.current?.click();
-                  }}
-                  disabled={uploading}
-                >
-                  {existing.length ? "Añadir archivo" : buttonText}
-                </Button>
-              </span>
-            </Tooltip>
+          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap alignItems="center">
+            {uploadIcons}
+            {!compact && existing.length === 0 ? (
+              <Typography variant="caption" color="text.secondary">
+                {label}
+              </Typography>
+            ) : null}
           </Stack>
         ) : null}
       </Stack>

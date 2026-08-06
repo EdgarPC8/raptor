@@ -30,6 +30,7 @@ export const SUBSCRIPTIONS_ENABLED =
 const BYPASS_SUBSCRIPTION = {
   subscribed: true,
   subscription: { modules: [] },
+  features: [],
   maintenance: false,
 };
 

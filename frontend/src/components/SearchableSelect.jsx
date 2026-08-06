@@ -3,6 +3,24 @@ import { Box, TextField, Autocomplete, CircularProgress } from "@mui/material";
 
 const EMPTY_MARKER = "__searchableSelect_empty__";
 
+/** ¿El texto de búsqueda coincide como prefijo de palabra (evita "sal" ⊂ "Universal")? */
+function textMatchesQuery(haystack, query) {
+  const h = String(haystack || "").toLowerCase();
+  const q = String(query || "").toLowerCase().trim();
+  if (!q) return true;
+  if (!h) return false;
+  // Prefijo de palabra: "sa" → Sal; "sal" → Sal / Pan de Sal; no "Universal".
+  try {
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`(?:^|[^\\p{L}\\p{N}_])${escaped}`, "iu");
+    return re.test(h);
+  } catch {
+    return h
+      .split(/[^a-z0-9áéíóúüñ]+/i)
+      .some((w) => w.startsWith(q));
+  }
+}
+
 export default function SearchableSelect({
   label = "Seleccionar",
   items = [],
@@ -38,9 +56,23 @@ export default function SearchableSelect({
   );
 
   const options = useMemo(() => {
-    if (emptyOption) return [emptyOption, ...items];
-    return items;
-  }, [items, emptyOption]);
+    // Evita filas duplicadas por el mismo id (rompe Autocomplete si el label se repite).
+    const seen = new Set();
+    const unique = [];
+    for (const item of items || []) {
+      if (!item || item[EMPTY_MARKER]) continue;
+      const key = String(getOptionValue(item));
+      if (!key || key === "undefined" || key === "null") {
+        unique.push(item);
+        continue;
+      }
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(item);
+    }
+    if (emptyOption) return [emptyOption, ...unique];
+    return unique;
+  }, [items, emptyOption, getOptionValue]);
 
   const resolveLabel = (option) => {
     if (!option) return "";
@@ -51,12 +83,13 @@ export default function SearchableSelect({
   const selectedOption = useMemo(() => {
     if (value === "" || value == null) return null;
     return (
-      items.find((i) => {
+      options.find((i) => {
+        if (i?.[EMPTY_MARKER]) return false;
         const ov = getOptionValue(i);
         return ov === value || String(ov) === String(value);
       }) ?? null
     );
-  }, [items, value, getOptionValue]);
+  }, [options, value, getOptionValue]);
 
   return (
     <Box sx={{ width: "100%" }}>
@@ -90,6 +123,11 @@ export default function SearchableSelect({
           }
         }}
         getOptionLabel={(option) => resolveLabel(option)}
+        getOptionKey={(option) =>
+          option?.[EMPTY_MARKER]
+            ? EMPTY_MARKER
+            : String(getOptionValue(option) ?? resolveLabel(option))
+        }
         isOptionEqualToValue={(a, b) => {
           if (!a && !b) return true;
           if (!a || !b) return false;
@@ -102,10 +140,9 @@ export default function SearchableSelect({
           if (!q) return opts;
           return opts.filter((opt) => {
             if (opt[EMPTY_MARKER]) return true;
-            const label = (resolveLabel(opt) || "").toLowerCase();
+            const label = resolveLabel(opt) || "";
             const extra = (getSearchText ? getSearchText(opt) : "") || "";
-            const haystack = `${label} ${String(extra).toLowerCase()}`.trim();
-            return haystack.includes(q);
+            return textMatchesQuery(`${label} ${extra}`, q);
           });
         }}
         noOptionsText={

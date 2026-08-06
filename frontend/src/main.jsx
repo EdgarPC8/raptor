@@ -1,4 +1,7 @@
 import React from "react";
+// Inicializa el motor styled de MUI antes de cualquier componente (evita
+// "styled_default is not a function" con el prebundle de Vite).
+import "@mui/material/styles/styled";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { SnackbarProvider } from "notistack";

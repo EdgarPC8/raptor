@@ -25,15 +25,31 @@ function rowAmountSum(row, products) {
 }
 
 function formatXLabel(date, granularity) {
-  const d = new Date(date);
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '—';
   if (granularity === 'month') {
     return d.toLocaleDateString('es-EC', { month: 'short', year: '2-digit' });
   }
   return d.toLocaleDateString('es-EC', { day: '2-digit', month: 'short' });
 }
 
-function ProductLegendList({ products, paletteColors }) {
+/** Acepta "yyyy-MM-dd" (día) o "yyyy-MM" (mes del modo Año). */
+function parseSeriesPointDate(dateKey) {
+  const raw = String(dateKey || '').trim();
+  if (/^\d{4}-\d{2}$/.test(raw)) {
+    const [y, m] = raw.split('-').map(Number);
+    return new Date(y, m - 1, 1, 12, 0, 0);
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    return new Date(`${raw.slice(0, 10)}T12:00:00`);
+  }
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function ProductLegendList({ products, paletteColors, metric = 'amount', onProductClick }) {
   if (!products.length) return null;
+  const clickable = typeof onProductClick === 'function';
 
   return (
     <Stack
@@ -48,7 +64,35 @@ function ProductLegendList({ products, paletteColors }) {
       {products.map((item, index) => {
         const color = paletteColors[index % paletteColors.length];
         return (
-          <Stack key={item.id} direction="row" spacing={1} alignItems="flex-start" sx={{ minWidth: 0 }}>
+          <Stack
+            key={item.id}
+            direction="row"
+            spacing={1}
+            alignItems="flex-start"
+            onClick={clickable ? () => onProductClick(item) : undefined}
+            role={clickable ? 'button' : undefined}
+            tabIndex={clickable ? 0 : undefined}
+            onKeyDown={
+              clickable
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onProductClick(item);
+                    }
+                  }
+                : undefined
+            }
+            sx={{
+              minWidth: 0,
+              borderRadius: 1,
+              px: 0.5,
+              py: 0.35,
+              cursor: clickable ? 'pointer' : 'default',
+              '&:hover': clickable
+                ? { bgcolor: (t) => alpha(t.palette.primary.main, 0.08) }
+                : undefined,
+            }}
+          >
             <Box
               sx={{
                 width: 12,
@@ -67,10 +111,16 @@ function ProductLegendList({ products, paletteColors }) {
               </Typography>
               {(item.totalAmt > 0 || item.totalQty > 0) && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.35 }}>
-                  {moneyFmt(item.totalAmt)}
-                  {item.totalQty > 0 ? ` · ${qtyFmt(item.totalQty)} u` : ''}
+                  {metric === 'qty'
+                    ? `${qtyFmt(item.totalQty)} u · ${moneyFmt(item.totalAmt)}`
+                    : `${moneyFmt(item.totalAmt)}${item.totalQty > 0 ? ` · ${qtyFmt(item.totalQty)} u` : ''}`}
                 </Typography>
               )}
+              {clickable ? (
+                <Typography variant="caption" color="primary.main" sx={{ display: 'block', mt: 0.15 }}>
+                  Ver detalle
+                </Typography>
+              ) : null}
             </Box>
           </Stack>
         );
@@ -87,46 +137,56 @@ export default function ProductSeriesChart({
   chartHeight = 250,
   showHeader = true,
   sideLegend = false,
+  metric = 'amount',
+  onProductClick,
 }) {
   const theme = useTheme();
   const products = bundle?.products ?? [];
   const granularity = bundle?.granularity ?? 'day';
+  const useQty = metric === 'qty';
 
   const paletteColors = React.useMemo(() => getChartSeriesColors(theme), [theme]);
   const axisStroke = theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.28)';
   const tickFill = theme.palette.text.secondary;
 
-  const { preparedData, qtyByIndex } = React.useMemo(() => {
+  const { preparedData, secondaryByIndex } = React.useMemo(() => {
     const amountRows = bundle?.datasetAmount ?? [];
     const qtyRows = bundle?.dataset ?? [];
-    const qtyByDate = new Map(qtyRows.map((r) => [r.date, r]));
-    const qtyIndex = [];
+    const primaryRows = useQty ? qtyRows : amountRows;
+    const secondaryRows = useQty ? amountRows : qtyRows;
+    const secondaryByDate = new Map(secondaryRows.map((r) => [r.date, r]));
+    const secondaryIndex = [];
     const rows = [];
 
-    for (const point of amountRows) {
-      const qtyPoint = qtyByDate.get(point.date) || {};
-      const newPoint = { date: new Date(`${point.date}T12:00:00`) };
-      const qtySlice = {};
+    for (const point of primaryRows) {
+      const secondaryPoint = secondaryByDate.get(point.date) || {};
+      const parsed = parseSeriesPointDate(point.date);
+      if (!parsed) continue;
+      const newPoint = { date: parsed };
+      const secondarySlice = {};
 
       for (const { id } of products) {
         const k = String(id);
-        const amt = point[k];
-        newPoint[k] = typeof amt === 'number' && !Number.isNaN(amt) && amt !== 0 ? amt : null;
-        qtySlice[k] = Number(qtyPoint[k] ?? 0);
+        const val = point[k];
+        newPoint[k] = typeof val === 'number' && !Number.isNaN(val) && val !== 0 ? val : null;
+        secondarySlice[k] = Number(secondaryPoint[k] ?? 0);
       }
 
       if (rowAmountSum(newPoint, products) <= 0) continue;
-      qtyIndex.push(qtySlice);
+      secondaryIndex.push(secondarySlice);
       rows.push(newPoint);
     }
 
-    return { preparedData: rows, qtyByIndex: qtyIndex };
-  }, [bundle, products]);
+    return { preparedData: rows, secondaryByIndex: secondaryIndex };
+  }, [bundle, products, useQty]);
 
-  const yFormatter = React.useCallback((v) => {
-    if (v == null || Number.isNaN(v) || v === 0) return '—';
-    return moneyFmt(v);
-  }, []);
+  const yFormatter = React.useCallback(
+    (v) => {
+      if (v == null || Number.isNaN(v) || v === 0) return '—';
+      return useQty ? `${qtyFmt(v)} u` : moneyFmt(v);
+    },
+    [useQty],
+  );
 
   const series = React.useMemo(
     () =>
@@ -153,22 +213,29 @@ export default function ProductSeriesChart({
       const dataIndex = params.series[0]?.dataIndex ?? 0;
       const row = preparedData[dataIndex];
       if (!row) return '';
-      const dateStr = format(row.date, "EEEE, d 'de' MMMM yyyy", { locale: es });
-      const qtySlice = qtyByIndex[dataIndex] || {};
+      const dateStr =
+        granularity === 'month'
+          ? format(row.date, 'MMMM yyyy', { locale: es })
+          : format(row.date, "EEEE, d 'de' MMMM yyyy", { locale: es });
+      const secondarySlice = secondaryByIndex[dataIndex] || {};
 
       const lines = params.series
         .map((s, i) => {
           const id = s.id;
-          const amt = s.data?.[dataIndex];
-          if (amt == null || Number.isNaN(amt)) return '';
-          const qty = qtySlice[id] ?? 0;
+          const primary = s.data?.[dataIndex];
+          if (primary == null || Number.isNaN(primary)) return '';
+          const secondary = secondarySlice[id] ?? 0;
           const color = paletteColors[i % paletteColors.length];
+          const primaryLine = useQty ? `${qtyFmt(primary)} u` : moneyFmt(primary);
+          const secondaryLine = useQty
+            ? moneyFmt(secondary)
+            : `Cant. ${qtyFmt(secondary)}`;
           return `
             <div style="display:flex;align-items:flex-start;gap:8px;margin:4px 0;">
               <span style="width:10px;height:10px;border-radius:2px;background:${color};margin-top:4px;flex-shrink:0;"></span>
               <div style="flex:1;min-width:0;">
                 <div style="font-weight:600;">${s.label}</div>
-                <div style="font-size:12px;opacity:0.9;">${moneyFmt(amt)} · Cant. ${qtyFmt(qty)}</div>
+                <div style="font-size:12px;opacity:0.9;">${primaryLine} · ${secondaryLine}</div>
               </div>
             </div>`;
         })
@@ -176,7 +243,7 @@ export default function ProductSeriesChart({
 
       return `<div style="padding:10px 12px;max-width:280px;"><div style="font-weight:700;margin-bottom:6px;">${dateStr}</div>${lines}</div>`;
     },
-    [preparedData, qtyByIndex, paletteColors]
+    [preparedData, secondaryByIndex, paletteColors, granularity, useQty]
   );
 
   const periodHint = bundle?.periodLabel ? `${bundle.periodLabel}. ` : '';
@@ -259,7 +326,12 @@ export default function ProductSeriesChart({
                 Cargando…
               </Typography>
             ) : (
-              <ProductLegendList products={products} paletteColors={paletteColors} />
+              <ProductLegendList
+                products={products}
+                paletteColors={paletteColors}
+                metric={metric}
+                onProductClick={onProductClick}
+              />
             )}
           </Grid>
           <Grid item xs={12} md={8.5} lg={9} sx={{ minWidth: 0 }}>

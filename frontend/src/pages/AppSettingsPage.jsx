@@ -26,6 +26,12 @@ import StorefrontIcon from "@mui/icons-material/Storefront";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
+import { useSubscriptions } from "../hooks/useSubscriptions.js";
+import {
+  FEATURE_STATUS_HINT,
+  getFeatureStatus,
+  isFeatureUnlocked,
+} from "../utils/entitlementFeatures.js";
 import { updateAppSettings } from "../api/appSettingsRequest.js";
 import { uploadImageRequest, deleteImageRequest } from "../api/imgRequest.js";
 import { buildImageUrl } from "../api/axios.js";
@@ -48,6 +54,7 @@ const TABS = [
 export default function AppSettingsPage() {
   const { user, toast } = useAuth();
   const { settings, activeApp, loading, reload, setSettings } = useAppSettings();
+  const { subscription } = useSubscriptions();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const tab = TABS.some((t) => t.id === tabParam) ? tabParam : "app";
@@ -97,10 +104,27 @@ export default function AppSettingsPage() {
         showPublicCatalog: settings.showPublicCatalog !== false,
         showPublicStoresPropia: settings.showPublicStoresPropia !== false,
         showPublicStoresVitrina: settings.showPublicStoresVitrina !== false,
-        multiStockEnabled: settings.multiStockEnabled !== false,
+        multiStockEnabled: Boolean(settings.multiStockEnabled),
       });
     }
   }, [settings]);
+
+  const multiStockFeatureStatus = useMemo(
+    () => getFeatureStatus(subscription, "multi_stock"),
+    [subscription],
+  );
+  const multiStockUnlocked = useMemo(
+    () =>
+      isFeatureUnlocked(multiStockFeatureStatus, {
+        isProgrammer: user?.loginRol === "Programador",
+      }),
+    [multiStockFeatureStatus, user?.loginRol],
+  );
+  const multiStockAlreadyOn = Boolean(form?.multiStockEnabled);
+  const multiStockCanToggleOff =
+    multiStockAlreadyOn && user?.loginRol === "Programador";
+  const multiStockSwitchDisabled =
+    !multiStockUnlocked || (multiStockAlreadyOn && !multiStockCanToggleOff);
 
   const tabIndex = useMemo(() => TABS.findIndex((t) => t.id === tab), [tab]);
 
@@ -532,36 +556,49 @@ export default function AppSettingsPage() {
               </Box>
 
               <Divider />
-              <Box data-tour="config-multistock">
-                <Typography variant="subtitle2" fontWeight={700}>
-                  Inventario
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: -0.5, mb: 0.5 }}>
-                  Multistock: stock por Bodega y sucursales (traspasos). Sin multistock: stock
-                  general editable en Productos.
-                </Typography>
-                <FormGroup>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={Boolean(form.multiStockEnabled)}
-                        onChange={onToggle("multiStockEnabled")}
-                      />
-                    }
-                    label="Activar multistock (stock por local)"
-                  />
-                </FormGroup>
-                {form.multiStockEnabled ? (
-                  <Alert severity="info" sx={{ py: 0.5, mt: 0.5 }}>
-                    En Productos el stock se muestra como suma. Ajustes y traspasos se hacen en
-                    Locales.
-                  </Alert>
-                ) : (
-                  <Alert severity="warning" sx={{ py: 0.5, mt: 0.5 }}>
-                    Modo clásico: en Productos puedes editar el stock con el check de ajuste.
-                  </Alert>
-                )}
-              </Box>
+              {multiStockFeatureStatus !== "hidden" ? (
+                <Box data-tour="config-multistock">
+                  <Typography variant="subtitle2" fontWeight={700}>
+                    Inventario
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: -0.5, mb: 0.5 }}>
+                    Multistock: stock por Bodega y sucursales (traspasos). Sin multistock: stock
+                    general editable en Productos. El gestor desbloquea la opción; vos la activás
+                    aquí. Una vez activada no se puede volver a un solo local.
+                  </Typography>
+                  <FormGroup>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={Boolean(form.multiStockEnabled)}
+                          disabled={multiStockSwitchDisabled}
+                          onChange={onToggle("multiStockEnabled")}
+                        />
+                      }
+                      label="Activar multistock (stock por local)"
+                    />
+                  </FormGroup>
+                  {!multiStockUnlocked ? (
+                    <Alert severity="info" sx={{ py: 0.5, mt: 0.5 }}>
+                      {FEATURE_STATUS_HINT[multiStockFeatureStatus] ||
+                        "Esta opción aún no está disponible para tu instalación."}
+                    </Alert>
+                  ) : multiStockAlreadyOn ? (
+                    <Alert severity="info" sx={{ py: 0.5, mt: 0.5 }}>
+                      En Productos el stock se muestra como suma. Ajustes y traspasos se hacen en
+                      Locales.
+                      {multiStockCanToggleOff
+                        ? " (Programador puede desactivar en soporte.)"
+                        : " Una vez activado no se puede desactivar desde aquí."}
+                    </Alert>
+                  ) : (
+                    <Alert severity="warning" sx={{ py: 0.5, mt: 0.5 }}>
+                      Modo clásico: en Productos puedes editar el stock con el check de ajuste.
+                      Activá multistock solo cuando vayas a manejar varios locales.
+                    </Alert>
+                  )}
+                </Box>
+              ) : null}
 
               <Divider />
               <Box data-tour="config-public">

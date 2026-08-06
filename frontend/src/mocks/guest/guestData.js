@@ -795,27 +795,46 @@ const guestData = {
           }));
         const datasetQty = [];
         const datasetAmount = [];
-        for (let i = 6; i >= 0; i -= 1) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          const date = d.toISOString().slice(0, 10);
-          const qtyPoint = { date };
-          const amtPoint = { date };
-          top.forEach((p, pi) => {
-            const qty = 10 + pi * 5 + (6 - i) * 2;
-            qtyPoint[String(p.id)] = qty;
-            amtPoint[String(p.id)] = Number(
-              (qty * (this.products.find((x) => x.id === p.id)?.price || 1)).toFixed(2),
-            );
-          });
-          datasetQty.push(qtyPoint);
-          datasetAmount.push(amtPoint);
+        const isYear = period === "year";
+        if (isYear) {
+          const y = new Date().getFullYear();
+          for (let m = 1; m <= 12; m += 1) {
+            const date = `${y}-${String(m).padStart(2, "0")}`;
+            const qtyPoint = { date };
+            const amtPoint = { date };
+            top.forEach((p, pi) => {
+              const qty = 40 + pi * 15 + m * 3;
+              qtyPoint[String(p.id)] = qty;
+              amtPoint[String(p.id)] = Number(
+                (qty * (this.products.find((x) => x.id === p.id)?.price || 1)).toFixed(2),
+              );
+            });
+            datasetQty.push(qtyPoint);
+            datasetAmount.push(amtPoint);
+          }
+        } else {
+          for (let i = 6; i >= 0; i -= 1) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const date = d.toISOString().slice(0, 10);
+            const qtyPoint = { date };
+            const amtPoint = { date };
+            top.forEach((p, pi) => {
+              const qty = 10 + pi * 5 + (6 - i) * 2;
+              qtyPoint[String(p.id)] = qty;
+              amtPoint[String(p.id)] = Number(
+                (qty * (this.products.find((x) => x.id === p.id)?.price || 1)).toFixed(2),
+              );
+            });
+            datasetQty.push(qtyPoint);
+            datasetAmount.push(amtPoint);
+          }
         }
         const labels = { week: "Última semana", month: "Este mes", year: "Este año" };
         const sales = {
           period,
           periodLabel: labels[period] || labels.month,
-          granularity: period === "year" ? "month" : "day",
+          granularity: isYear ? "month" : "day",
           rankBand: 1,
           rankStart: 1,
           rankEnd: top.length,
@@ -828,6 +847,7 @@ const guestData = {
         return {
           period,
           band: 1,
+          sortBy: params.sortBy || "amount",
           rankStart: 1,
           rankEnd: top.length,
           rankBandSize: 10,
@@ -836,6 +856,133 @@ const guestData = {
           periodLabel: sales.periodLabel,
           granularity: sales.granularity,
           sales,
+        };
+      }
+      case "productSeriesDetail": {
+        const productId = Number(params.productId) || this.products?.[0]?.id || 1;
+        const product = (this.products || []).find((p) => Number(p.id) === productId) || {
+          id: productId,
+          name: `Producto #${productId}`,
+          price: 1,
+          stock: 40,
+          minStock: 10,
+          supplierPrice: 0.4,
+        };
+        const y = new Date().getFullYear();
+        const series = [];
+        for (let m = 1; m <= 8; m += 1) {
+          const key = `${y - (m > 6 ? 1 : 0)}-${String(((m - 1) % 12) + 1).padStart(2, "0")}`;
+          const qty = 40 + m * 10;
+          series.push({
+            key,
+            label: key,
+            amount: Number((qty * (product.price || 1)).toFixed(2)),
+            qty,
+            payments: 3 + (m % 2),
+          });
+        }
+        const peakByAmount = [...series].sort((a, b) => b.amount - a.amount)[0];
+        const peakByQty = [...series].sort((a, b) => b.qty - a.qty)[0];
+        const totalAmt = series.reduce((s, r) => s + r.amount, 0);
+        const totalQty = series.reduce((s, r) => s + r.qty, 0);
+        const weekdayLabels = [
+          "Domingo",
+          "Lunes",
+          "Martes",
+          "Miércoles",
+          "Jueves",
+          "Viernes",
+          "Sábado",
+        ];
+        const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
+        const weekdayStats = weekdayOrder.map((wd, i) => ({
+          weekday: wd,
+          label: weekdayLabels[wd],
+          amount: Number((totalAmt * (0.08 + (i % 5) * 0.03)).toFixed(2)),
+          qty: Math.round(totalQty * (0.08 + (i % 5) * 0.03)),
+          payments: 2 + (i % 3),
+          daysWithSales: 4 + (i % 6),
+          avgAmountPerOccurrence: Number(((totalAmt * 0.1) / 2).toFixed(2)),
+        }));
+        const peakWeekdayByAmount = [...weekdayStats].sort((a, b) => b.amount - a.amount)[0];
+        const peakWeekdayByQty = [...weekdayStats].sort((a, b) => b.qty - a.qty)[0];
+        const calendarDays = 240;
+        const activeDays = 90;
+        const qtyPerDay = Number((totalQty / calendarDays).toFixed(2));
+        const unitCost = Number(product.supplierPrice || 0.4);
+        const estimatedCost = Number((unitCost * totalQty).toFixed(2));
+        const estimatedMargin = Number((totalAmt - estimatedCost).toFixed(2));
+        const first = new Date();
+        first.setMonth(first.getMonth() - 8);
+        return {
+          product: {
+            id: product.id,
+            name: product.name,
+            barcode: product.barcode || null,
+            sku: product.sku || null,
+            price: product.price || null,
+            supplierPrice: unitCost,
+            stock: Number(product.stock || 40),
+            minStock: Number(product.minStock || 10),
+          },
+          period: "all",
+          periodLabel: `Historial desde ${first.toLocaleDateString("es-EC")}`,
+          granularity: "month",
+          firstSaleAt: first.toISOString(),
+          lastSaleAt: new Date().toISOString(),
+          totals: {
+            amount: Number(totalAmt.toFixed(2)),
+            qty: totalQty,
+            payments: series.reduce((s, r) => s + r.payments, 0),
+            activeBuckets: series.length,
+            avgAmountPerBucket: Number((totalAmt / series.length).toFixed(2)),
+            avgQtyPerBucket: Number((totalQty / series.length).toFixed(2)),
+            calendarDays,
+            activeDays,
+            avgAmountPerCalendarDay: Number((totalAmt / calendarDays).toFixed(2)),
+            avgQtyPerCalendarDay: qtyPerDay,
+            avgAmountPerActiveDay: Number((totalAmt / activeDays).toFixed(2)),
+            avgQtyPerActiveDay: Number((totalQty / activeDays).toFixed(2)),
+            pctDaysWithSales: Number(((activeDays / calendarDays) * 100).toFixed(2)),
+          },
+          velocity: {
+            qtyPerDay,
+            amountPerDay: Number((totalAmt / calendarDays).toFixed(2)),
+            qtyPerActiveDay: Number((totalQty / activeDays).toFixed(2)),
+            pctDaysWithSales: Number(((activeDays / calendarDays) * 100).toFixed(2)),
+            stock: Number(product.stock || 40),
+            minStock: Number(product.minStock || 10),
+            daysOfCover: qtyPerDay > 0 ? Number(((product.stock || 40) / qtyPerDay).toFixed(2)) : null,
+            belowMinStock: false,
+            label: "Constante",
+          },
+          margin: {
+            unitCost,
+            unitPrice: Number(product.price || 1),
+            estimatedCost,
+            estimatedRevenue: Number(totalAmt.toFixed(2)),
+            estimatedMargin,
+            marginPct: totalAmt > 0 ? Number(((estimatedMargin / totalAmt) * 100).toFixed(2)) : 0,
+            note: "Margen estimado = ingresos − (precio proveedor × cantidad).",
+          },
+          comparison: {
+            currentLabel: "Últimos 30 días",
+            previousLabel: "30 días previos",
+            current: { amount: Number((totalAmt * 0.18).toFixed(2)), qty: Math.round(totalQty * 0.15), payments: 12, activeDays: 18 },
+            previous: { amount: Number((totalAmt * 0.14).toFixed(2)), qty: Math.round(totalQty * 0.12), payments: 10, activeDays: 15 },
+            amountChangePct: 28.5,
+            qtyChangePct: 25.0,
+            activeDaysChangePct: 20.0,
+          },
+          peakByAmount,
+          peakByQty,
+          lowByAmount: [...series].sort((a, b) => a.amount - b.amount)[0],
+          peakWeekdayByAmount,
+          peakWeekdayByQty,
+          weekdayStats,
+          topDays: [...series].sort((a, b) => b.amount - a.amount).slice(0, 5),
+          topCalendarDays: [...series].sort((a, b) => b.amount - a.amount).slice(0, 5),
+          series,
         };
       }
       default:

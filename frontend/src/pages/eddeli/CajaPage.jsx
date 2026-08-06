@@ -318,6 +318,20 @@ export default function CajaPage() {
         nextProducts = body;
       }
     }
+    // Caja solo vende productos finales (no insumos raw ni intermedios).
+    // Además deduplica por id por si la API repite filas.
+    {
+      const seen = new Set();
+      nextProducts = nextProducts.filter((p) => {
+        if (!p || p.isActive === false || p.isActive === 0) return false;
+        const type = String(p.type || "final").toLowerCase();
+        if (type === "raw" || type === "intermediate") return false;
+        const id = String(p.id);
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+    }
     if (!nextTierGroups.length && tierGroupsRes.status === "fulfilled") {
       nextTierGroups = tierGroupsRes.value.data || [];
     }

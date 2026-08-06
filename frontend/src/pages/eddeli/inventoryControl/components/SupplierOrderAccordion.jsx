@@ -25,31 +25,31 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import PaymentsIcon from "@mui/icons-material/Payments";
-import AddIcon from "@mui/icons-material/Add";
+import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
 import EditCalendarIcon from "@mui/icons-material/EditCalendar";
+import EditIcon from "@mui/icons-material/Edit";
+import CloseIcon from "@mui/icons-material/Close";
 import {
-  addSupplierOrderItemRequest,
   deleteSupplierOrderRequest,
   markSupplierOrderReceivedRequest,
   paySupplierOrderRequest,
   updateSupplierOrderRequest,
 } from "../../../../api/ordersRequest";
 import SimpleDialog from "../../../../components/Dialogs/SimpleDialog";
-import SearchableSelect from "../../../../components/SearchableSelect";
 import { useAuth } from "../../../../context/AuthContext";
 import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
 import { formatDateTime } from "../../../../helpers/functions.js";
 import DocumentAttachmentIcon from "./DocumentAttachmentIcon";
 import DocumentUploadButton from "./DocumentUploadButton";
-import ProductPriceReference, {
-  getDefaultDistributorPrice,
+import ProductForm from "./ProductForm.jsx";
+import {
   getProductUnitLabel,
   formatOrderLineTotal,
   formatProductPrice,
   formatUnitPrice,
 } from "./ProductPriceReference";
 import { useEffect, useMemo, useState } from "react";
-import { getStoresRequest } from "../../../../api/inventoryControlRequest.js";
+import { getAllProductsAll, getStoresRequest } from "../../../../api/inventoryControlRequest.js";
 import {
   locationKindLabel,
   normalizeLocationKind,
@@ -151,12 +151,14 @@ export default function SupplierOrderAccordion({
   const isProgramador = user?.loginRol === "Programador";
   const [openDelete, setOpenDelete] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [addDraft, setAddDraft] = useState({ productId: "", quantity: "", unitPrice: "" });
   const [dateDialogOpen, setDateDialogOpen] = useState(false);
   const [dateDraft, setDateDraft] = useState({ receivedAt: "", paidAt: "" });
 
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState("");
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [productDialogDatos, setProductDialogDatos] = useState(null);
+  const [productDialogBusy, setProductDialogBusy] = useState(false);
   const [payDate, setPayDate] = useState(nowLocalDateTime());
   const [payMethod, setPayMethod] = useState("efectivo");
   const [payNote, setPayNote] = useState("");
@@ -189,6 +191,41 @@ export default function SupplierOrderAccordion({
     } finally {
       setBusy(false);
     }
+  };
+
+  const openEditProduct = async (item) => {
+    if (!canManage) return;
+    const productId = Number(item?.productId ?? item?.ERP_inventory_product?.id) || null;
+    if (!productId) {
+      toast?.({ message: "Este ítem no tiene producto asociado.", variant: "warning" });
+      return;
+    }
+    setProductDialogBusy(true);
+    try {
+      let full = products.find((p) => Number(p.id) === Number(productId));
+      if (!full) {
+        const { data } = await getAllProductsAll();
+        const list = Array.isArray(data) ? data : data?.products || [];
+        full = list.find((p) => Number(p.id) === Number(productId));
+      }
+      if (!full) {
+        toast?.({ message: "No se encontró el producto para editar.", variant: "error" });
+        return;
+      }
+      setProductDialogDatos(full);
+      setProductDialogOpen(true);
+    } catch (e) {
+      console.error(e);
+      toast?.({ message: "No se pudo cargar el producto.", variant: "error" });
+    } finally {
+      setProductDialogBusy(false);
+    }
+  };
+
+  const handleProductDialogSaved = async () => {
+    setProductDialogOpen(false);
+    setProductDialogDatos(null);
+    await onReload?.();
   };
 
   const handleReceived = () => {
@@ -350,31 +387,6 @@ export default function SupplierOrderAccordion({
     }
   };
 
-  const handleAddProduct = async () => {
-    const productId = Number(addDraft.productId);
-    const quantity = Number(String(addDraft.quantity ?? "").replace(",", "."));
-    const unitPrice = Number(String(addDraft.unitPrice ?? "").replace(",", "."));
-    if (!productId || !Number.isFinite(quantity) || quantity <= 0) {
-      void toast?.({ message: "Selecciona producto y cantidad válidos.", variant: "warning" });
-      return;
-    }
-    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-      void toast?.({ message: "Precio unitario inválido.", variant: "warning" });
-      return;
-    }
-    setBusy(true);
-    try {
-      await toast({
-        promise: addSupplierOrderItemRequest(order.id, { productId, quantity, unitPrice }),
-      });
-      setAddDraft({ productId: "", quantity: "", unitPrice: "" });
-      await onReload?.();
-    } catch {
-      /* toast */
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <>
@@ -578,12 +590,116 @@ export default function SupplierOrderAccordion({
                 />
               ) : null}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+            <Box
+              sx={{ display: "flex", alignItems: "center", gap: 0.15, flexShrink: 0, flexWrap: "wrap" }}
+              onClick={(e) => e.stopPropagation()}
+            >
               <DocumentAttachmentIcon
                 entityType="supplier_order"
                 entityId={order.id}
                 title="Ver factura / nota proveedor"
               />
+              {canManage && (
+                <DocumentUploadButton
+                  entityType="supplier_order"
+                  entityId={order.id}
+                  label="Factura / nota proveedor"
+                  buttonText="Adjuntar factura"
+                  canManage={canManage}
+                  iconsOnly
+                />
+              )}
+              {canManage && !order.receivedAt && (
+                <Tooltip title="Marcar pedido como recibido">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="warning"
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReceived();
+                      }}
+                      onFocus={(e) => e.stopPropagation()}
+                      aria-label="Marcar recibido"
+                    >
+                      <LocalShippingIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )}
+              {canManage && !fullyPaid && (
+                <>
+                  <Tooltip title="Abonar a proveedor">
+                    <span>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        disabled={busy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPayDialog(false);
+                        }}
+                        onFocus={(e) => e.stopPropagation()}
+                        aria-label="Abonar"
+                      >
+                        <PaymentsIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Liquidar todo el saldo">
+                    <span>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        disabled={busy || remaining <= 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPayDialog(true);
+                        }}
+                        onFocus={(e) => e.stopPropagation()}
+                        aria-label="Liquidar todo"
+                      >
+                        <MonetizationOnIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </>
+              )}
+              {canManage && isProgramador && (
+                <Tooltip title="Editar fechas de entrega y pago">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="secondary"
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDateDialog();
+                      }}
+                      onFocus={(e) => e.stopPropagation()}
+                      aria-label="Editar fechas"
+                    >
+                      <EditCalendarIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )}
+              {canOpenEditModal && (
+                <Tooltip title="Editar pedido a proveedor">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(order);
+                    }}
+                    onFocus={(e) => e.stopPropagation()}
+                    aria-label="Editar pedido proveedor"
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
               {canManage && !order.receivedAt && (
                 <Tooltip title="Eliminar">
                   <IconButton
@@ -592,8 +708,9 @@ export default function SupplierOrderAccordion({
                       e.stopPropagation();
                       setOpenDelete(true);
                     }}
+                    onFocus={(e) => e.stopPropagation()}
                   >
-                    <DeleteForeverIcon />
+                    <DeleteForeverIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
               )}
@@ -624,7 +741,7 @@ export default function SupplierOrderAccordion({
             const rate = Number(item.taxRate || 0);
             const lineTotal = lineBase * (1 + rate / 100);
             return (
-              <Typography key={item.id} variant="body2">
+              <Typography key={item.id} variant="body2" sx={{ mb: 0.5 }}>
                 • {item.ERP_inventory_product?.name || "Producto"} — {item.quantity} {unit} ×{" "}
                 {formatUnitPrice(item.unitPrice)}
                 {rate > 0 ? ` + IVA ${rate}%` : ""} = {formatProductPrice(lineTotal)}
@@ -666,171 +783,72 @@ export default function SupplierOrderAccordion({
             </>
           )}
 
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="subtitle2" gutterBottom>
-            Factura / evidencia del proveedor
-          </Typography>
-          <DocumentUploadButton
-            entityType="supplier_order"
-            entityId={order.id}
-            label="Factura / nota proveedor"
-            buttonText="Subir factura"
-            canManage={canManage}
-          />
-
-          {canManage && (
-            <Box sx={{ mt: 2, display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
-              {!order.receivedAt && (
-                <Button
-                  size="small"
-                  variant="contained"
-                  color="warning"
-                  startIcon={<LocalShippingIcon />}
-                  disabled={busy}
-                  onClick={handleReceived}
-                >
-                  Marcar recibido
-                </Button>
-              )}
-              {order.receivedAt && order.receivedStoreId != null ? (
-                <Chip
-                  size="small"
-                  color="secondary"
-                  variant="outlined"
-                  label={`Stock en: ${receivedStoreLabel || `local #${order.receivedStoreId}`}`}
-                />
-              ) : null}
-              {!fullyPaid && (
-                <>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    color="error"
-                    startIcon={<PaymentsIcon />}
-                    disabled={busy}
-                    onClick={() => openPayDialog(false)}
-                  >
-                    Abonar
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="error"
-                    disabled={busy || remaining <= 0}
-                    onClick={() => openPayDialog(true)}
-                  >
-                    Liquidar todo
-                  </Button>
-                </>
-              )}
-              {canOpenEditModal && (
-                <Button size="small" variant="outlined" onClick={() => onEdit(order)}>
-                  Editar
-                </Button>
-              )}
-              {isProgramador && (
-                <Tooltip title="Editar fechas de entrega y pago">
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="secondary"
-                    startIcon={<EditCalendarIcon />}
-                    disabled={busy}
-                    onClick={openDateDialog}
-                  >
-                    Editar fechas
-                  </Button>
-                </Tooltip>
-              )}
-            </Box>
-          )}
-
-          {canManage && !order.receivedAt && products.length > 0 && (
-            <Box
-              sx={{
-                mt: 2,
-                p: 1.5,
-                border: "1px dashed",
-                borderColor: "divider",
-                borderRadius: 1,
-              }}
-            >
-              <Typography variant="subtitle2" gutterBottom>
-                Añadir producto a este pedido
-              </Typography>
-              <Grid container spacing={1} alignItems="flex-end">
-                <Grid item xs={12} sm={5}>
-                  <SearchableSelect
-                    label="Producto"
-                    items={products}
-                    value={addDraft.productId}
-                    onChange={(val) => {
-                      const p = products.find((x) => String(x.id) === String(val));
-                      setAddDraft((prev) => ({
-                        ...prev,
-                        productId: val != null && val !== "" ? String(val) : "",
-                        unitPrice:
-                          p != null ? String(getDefaultDistributorPrice(p)) : prev.unitPrice,
-                      }));
-                    }}
-                    getOptionLabel={(p) => p?.name ?? ""}
-                    getOptionValue={(p) => p?.id ?? ""}
-                    placeholder="Buscar producto…"
-                  />
-                  {(() => {
-                    const p = addDraft.productId
-                      ? products.find((x) => String(x.id) === String(addDraft.productId))
-                      : null;
-                    return p ? (
-                      <ProductPriceReference
-                        product={p}
-                        compact
-                        quantity={addDraft.quantity}
-                        unitPrice={addDraft.unitPrice}
-                        variant="supplier"
-                      />
-                    ) : null;
-                  })()}
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <TextField
-                    label="Cantidad"
-                    type="number"
-                    inputProps={{ min: 0.01, step: "any" }}
-                    size="small"
-                    fullWidth
-                    value={addDraft.quantity}
-                    onChange={(e) => setAddDraft((p) => ({ ...p, quantity: e.target.value }))}
-                  />
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <TextField
-                    label="Precio unitario"
-                    type="number"
-                    inputProps={{ min: 0, step: "any" }}
-                    size="small"
-                    fullWidth
-                    value={addDraft.unitPrice}
-                    onChange={(e) => setAddDraft((p) => ({ ...p, unitPrice: e.target.value }))}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={1}>
-                  <Tooltip title="Agregar producto">
-                    <IconButton
-                      color="primary"
-                      disabled={busy}
-                      onClick={() => void handleAddProduct()}
-                      sx={{ border: 1, borderColor: "primary.main", borderRadius: 1 }}
-                    >
-                      <AddIcon />
-                    </IconButton>
-                  </Tooltip>
-                </Grid>
-              </Grid>
-            </Box>
-          )}
+          {order.receivedAt && order.receivedStoreId != null ? (
+            <Chip
+              size="small"
+              color="secondary"
+              variant="outlined"
+              label={`Stock en: ${receivedStoreLabel || `local #${order.receivedStoreId}`}`}
+              sx={{ mt: 1, height: 24, fontSize: "0.65rem" }}
+            />
+          ) : null}
         </AccordionDetails>
       </Accordion>
+
+      <Dialog
+        open={productDialogOpen}
+        onClose={() => {
+          setProductDialogOpen(false);
+          setProductDialogDatos(null);
+        }}
+        fullWidth
+        maxWidth="lg"
+        scroll="paper"
+      >
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2, pt: 1 }}>
+          <DialogTitle sx={{ p: 0, fontWeight: 700, fontSize: "1.05rem" }}>
+            Editar producto
+          </DialogTitle>
+          <IconButton
+            aria-label="Cerrar"
+            onClick={() => {
+              setProductDialogOpen(false);
+              setProductDialogDatos(null);
+            }}
+            size="small"
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        <DialogContent dividers>
+          <ProductForm
+            key={productDialogOpen ? `edit-product-${productDialogDatos?.id || "x"}` : "closed"}
+            isEditing
+            datos={productDialogDatos || {}}
+            onClose={() => {
+              setProductDialogOpen(false);
+              setProductDialogDatos(null);
+            }}
+            reload={handleProductDialogSaved}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1, borderTop: 1, borderColor: "divider" }}>
+          <Button
+            type="button"
+            onClick={() => {
+              setProductDialogOpen(false);
+              setProductDialogDatos(null);
+            }}
+            color="inherit"
+          >
+            Cancelar
+          </Button>
+          <Box sx={{ flex: 1 }} />
+          <Button type="submit" form="eddeli-product-form" variant="contained" sx={{ minWidth: 160 }}>
+            Guardar cambios
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }
