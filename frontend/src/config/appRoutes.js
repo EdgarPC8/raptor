@@ -199,3 +199,35 @@ export const LEGACY_ROUTE_REDIRECTS = [
   ["/punto_venta", APP_ROUTES.public.stores],
   ["/backery", APP_ROUTES.public.catalog],
 ];
+
+/** Normaliza path de menú / entitlement (quita query y slash final). */
+export function normalizeAppPath(path) {
+  return String(path || "")
+    .split("?")[0]
+    .replace(/\/+$/, "") || "/";
+}
+
+/**
+ * Convierte keys legacy del gestor (`/inventory/lotes`, etc.) a la ruta canónica
+ * en español (`/inventario/lotes`). Así el status de sección aplica bien.
+ */
+export function canonicalizeAppPath(path) {
+  const p = normalizeAppPath(path);
+  for (const [from, to] of LEGACY_ROUTE_REDIRECTS) {
+    const fromN = normalizeAppPath(from);
+    if (p === fromN) return normalizeAppPath(to);
+    if (p.startsWith(`${fromN}/`)) {
+      const rest = p.slice(fromN.length);
+      return `${normalizeAppPath(to)}${rest}`;
+    }
+  }
+  return p;
+}
+
+/** ¿Misma sección? Compara path actual vs key del entitlement (con alias legacy). */
+export function appPathsMatch(pathname, sectionKey) {
+  if (!sectionKey) return false;
+  const path = canonicalizeAppPath(pathname);
+  const key = canonicalizeAppPath(sectionKey);
+  return path === key || path.startsWith(`${key}/`);
+}

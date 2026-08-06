@@ -19,7 +19,7 @@ import {
 import SectionMaintenanceBlocked from "../pages/SectionMaintenanceBlocked.jsx";
 import SectionPlannedBlocked from "../pages/SectionPlannedBlocked.jsx";
 import { APP_ID } from "../config/appInfo.js";
-import { APP_ROUTES } from "../config/appRoutes.js";
+import { APP_ROUTES, appPathsMatch } from "../config/appRoutes.js";
 
 /** Rutas base / sistema: accesibles con sesión aunque no haya plan activo. */
 const SUBSCRIPTION_FREE_EXACT = new Set([
@@ -146,15 +146,11 @@ export default function ProtectedRoute({ requiredRol }) {
   }
 
   // Exacto o prefijo (rutas anidadas: /editor/123, /publicidad/campanas/:id, ?query).
-  const sectionMatches = (sectionKey) => {
-    if (!sectionKey) return false;
-    const key = String(sectionKey).split("?")[0];
-    return path === key || path.startsWith(`${key}/`);
-  };
+  // Incluye alias legacy del gestor (/inventory/lotes → /inventario/lotes).
   const hasAccess = subscription.subscription?.modules?.find((m) => {
     if (m.status === "hidden") return false;
     return m.sections.some(
-      (s) => s.status !== "hidden" && sectionMatches(s.key),
+      (s) => s.status !== "hidden" && appPathsMatch(path, s.key),
     );
   });
 

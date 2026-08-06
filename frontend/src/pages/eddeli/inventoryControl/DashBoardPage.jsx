@@ -23,6 +23,10 @@ import YearFinanceOverviewChart from "./components/Charts/YearFinanceOverviewCha
 import GuestDemoBanner from "../../../components/GuestDemoBanner.jsx";
 import { dashboardPanelSx, dashboardPageSx } from "./components/dashboardPanelStyles.js";
 import DeferredMount from "./components/DeferredMount.jsx";
+import { useAuth } from "../../../context/AuthContext.jsx";
+import { useSubscriptions } from "../../../hooks/useSubscriptions.js";
+import { isSectionUiEnabled } from "../../../config/sectionMaintenanceAccess.js";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
 
 const paperSx = {
   ...dashboardPanelSx,
@@ -59,6 +63,14 @@ const defaultRecurring = {
 };
 
 export const DashBoardPage = () => {
+  const { user } = useAuth();
+  const { subscription } = useSubscriptions();
+  const subModules = subscription?.subscription?.modules;
+  const batchesUiEnabled = isSectionUiEnabled(
+    APP_ROUTES.inventory.batches,
+    user?.loginRol,
+    subModules,
+  );
   const [loadingHero, setLoadingHero] = useState(true);
   const [loadingRest, setLoadingRest] = useState(true);
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0 });
@@ -162,7 +174,7 @@ export const DashBoardPage = () => {
       <Grid container spacing={{ xs: 1.5, sm: 2 }}>
         <Grid item xs={12} lg={8}>
           <Grid container spacing={{ xs: 1.5, sm: 2 }} alignItems="flex-start">
-            <Grid item xs={12} md={6} sx={{ minWidth: 0 }}>
+            <Grid item xs={12} md={batchesUiEnabled ? 6 : 12} sx={{ minWidth: 0 }}>
               {loadingRest ? (
                 <PanelSkeleton height={260} />
               ) : (
@@ -172,13 +184,15 @@ export const DashBoardPage = () => {
                 />
               )}
             </Grid>
-            <Grid item xs={12} md={6} sx={{ minWidth: 0 }}>
-              {loadingRest ? (
-                <PanelSkeleton height={260} />
-              ) : (
-                <DashboardBatchesPanel batchesAlerts={batchesAlerts} />
-              )}
-            </Grid>
+            {batchesUiEnabled && (
+              <Grid item xs={12} md={6} sx={{ minWidth: 0 }}>
+                {loadingRest ? (
+                  <PanelSkeleton height={260} />
+                ) : (
+                  <DashboardBatchesPanel batchesAlerts={batchesAlerts} />
+                )}
+              </Grid>
+            )}
           </Grid>
         </Grid>
 

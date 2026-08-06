@@ -457,6 +457,7 @@ export const APP_MODULE_GROUPS = [
         name: "Lotes y vencimientos",
         path: APP_ROUTES.inventory.batches,
         roles: ["Programador", "Administrador"],
+        status: "planned",
         description:
           "Control de lotes por producto con fechas de vencimiento, alertas y baja por caducidad.",
         functions: [

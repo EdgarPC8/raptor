@@ -9,6 +9,11 @@ import {
   resolveModuleStatus,
   resolveGroupModuleStatus,
 } from "./appModulesCatalog.js";
+import {
+  canonicalizeAppPath,
+  normalizeAppPath,
+  appPathsMatch,
+} from "./appRoutes.js";
 
 /** Producción: build de deploy (Vite prod) o API_MODE=production. */
 export function isAppInProduction() {
@@ -23,9 +28,7 @@ export function canBypassSectionMaintenance(loginRol) {
 }
 
 function normalizePath(path) {
-  return String(path || "")
-    .split("?")[0]
-    .replace(/\/+$/, "") || "/";
+  return canonicalizeAppPath(path);
 }
 
 /** Alias legacy que deben bloquearse con el módulo en mantenimiento. */
@@ -133,6 +136,7 @@ function findSectionByPath(pathname, subscriptionModules, list, paths) {
   const granular =
     Array.isArray(subscriptionModules) && subscriptionModules.length > 0;
   // Con entitlement del gestor: match exacto por sección (sin propagar a subrutas).
+  // Paths del índice ya están canónicos (legacy → español).
   const match = granular
     ? paths.find((mp) => p === mp)
     : paths.find((mp) => p === mp || p.startsWith(`${mp}/`));
@@ -411,3 +415,21 @@ export function isMenuLinkHidden(link, subscriptionModules) {
   if (!isAppInProduction()) return false;
   return isPathHidden(link);
 }
+
+/**
+ * ¿Mostrar UI embebida de la sección (panel dashboard, etc.)?
+ * Respeta planned / maintenance / hidden del gestor (y bypass de Programador).
+ */
+export function isSectionUiEnabled(pathname, loginRol, subscriptionModules) {
+  if (shouldBlockHiddenPath(pathname, subscriptionModules)) return false;
+  if (shouldBlockMaintenancePath(pathname, loginRol, subscriptionModules)) {
+    return false;
+  }
+  if (shouldBlockPlannedPath(pathname, loginRol, subscriptionModules)) {
+    return false;
+  }
+  return true;
+}
+
+/** Reexport para consumidores que ya usan appPathsMatch. */
+export { appPathsMatch, normalizeAppPath };
