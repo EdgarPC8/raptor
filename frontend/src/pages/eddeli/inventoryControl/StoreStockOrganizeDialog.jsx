@@ -468,8 +468,8 @@ export function StoreStockManager({
                   label="Producto"
                   items={catalog}
                   value={adjustProductId}
+                  productMeta
                   onChange={(v) => setAdjustProductId(v === "" || v == null ? "" : String(v))}
-                  getOptionLabel={(item) => item?.name || ""}
                   getSearchText={(item) =>
                     `${item?.name || ""} ${item?.sku || ""} ${item?.barcode || ""} ${item?.id || ""}`
                   }

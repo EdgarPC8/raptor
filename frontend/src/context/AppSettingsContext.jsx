@@ -8,6 +8,10 @@ import {
 import { buildImageUrl, socket } from "../api/axios.js";
 import { SHELL_ONLY } from "../config/deployEnv.js";
 import { RAPTOR_LOGO_URL } from "../config/raptorBrand.js";
+import {
+  normalizeMoneyDisplayDecimals,
+  normalizeMoneyRoundingMode,
+} from "../utils/moneyFormat.js";
 
 const AppSettingsContext = createContext(null);
 
@@ -74,6 +78,15 @@ function toActiveApp(settings, { offline = false } = {}) {
     multiStockEnabled: unconfigured
       ? false
       : Boolean(resolved.multiStockEnabled),
+    showProductCostInSelect: unconfigured
+      ? false
+      : Boolean(resolved.showProductCostInSelect),
+    moneyDisplayDecimals: unconfigured
+      ? 2
+      : normalizeMoneyDisplayDecimals(resolved.moneyDisplayDecimals, 2),
+    moneyRoundingMode: unconfigured
+      ? "up"
+      : normalizeMoneyRoundingMode(resolved.moneyRoundingMode, "up"),
     year: new Date().getFullYear(),
     background: "#F0F9FB",
   };

@@ -503,6 +503,25 @@ export const deleteBatchRequest = async (id) => {
   });
 };
 
+export const getInventoryValueSummaryRequest = async (params = {}) => {
+  if (isGuestDataMode()) {
+    return {
+      data: {
+        multiStockEnabled: false,
+        storeId: null,
+        storeName: null,
+        summary: { productCount: 0, quantity: 0, valueCost: 0, valueSale: 0, margin: 0 },
+        byStore: [],
+        items: [],
+      },
+    };
+  }
+  return axios.get("/inventory/value-summary", {
+    params,
+    headers: { Authorization: jwt() },
+  });
+};
+
 
 
 export const getAllCustomersRequest = async () => {

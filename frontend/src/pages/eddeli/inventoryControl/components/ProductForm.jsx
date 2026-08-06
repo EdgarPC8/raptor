@@ -42,6 +42,16 @@ import { useBarcodeScanner } from "../../../../hooks/useBarcodeScanner.js";
 import { normalizeProductBarcode, normalizePackageTiers } from "../../../../utils/productLookup.js";
 
 import { mediaStoragePath } from "../../../../utils/mediaPaths.js";
+import {
+  toStorageMoney,
+  MONEY_INPUT_MAX_DECIMALS,
+} from "../../../../utils/moneyFormat.js";
+import TourHelpButton from "../../../../components/TourHelpButton.jsx";
+import { usePageTour } from "../../../../hooks/usePageTour.js";
+import {
+  PRODUCTO_FORM_TOUR_ID,
+  getProductoFormTourSteps,
+} from "../../../../tours/productoFormTour.js";
 
 const PRODUCT_NUMERIC_FIELDS = [
   "price",
@@ -261,11 +271,33 @@ function CropperDialog({
   );
 }
 
+const denseFieldSx = {
+  "& .MuiInputBase-root": { fontSize: "0.8125rem" },
+  "& .MuiInputBase-input": { py: 0.35 },
+  "& .MuiInputLabel-root": { fontSize: "0.8125rem" },
+  "& .MuiFormHelperText-root": { mt: 0.15, fontSize: "0.65rem", lineHeight: 1.2 },
+  "& .MuiInputAdornment-root .MuiTypography-root": { fontSize: "0.75rem", fontWeight: 700 },
+};
+
+const moneyAdornment = (
+  <InputAdornment position="start">
+    <Typography component="span" color="text.secondary" sx={{ fontSize: "0.75rem", fontWeight: 700 }}>
+      $
+    </Typography>
+  </InputAdornment>
+);
+
 /* ===================== FORM DE PRODUCTO ===================== */
 function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
   const { toast: toastAuth } = useAuth();
   const { activeApp } = useAppSettings();
   const multiStockEnabled = activeApp?.multiStockEnabled !== false;
+  const { startTour } = usePageTour({
+    tourId: PRODUCTO_FORM_TOUR_ID,
+    getSteps: getProductoFormTourSteps,
+    enabled: true,
+    autoDelayMs: 500,
+  });
   const { handleSubmit, register, reset, setValue, watch } = useForm({
     defaultValues: PRODUCT_FORM_DEFAULTS,
   });
@@ -493,9 +525,11 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
     fd.append("unitId", String(unitId));
     if (data.categoryId) fd.append("categoryId", String(data.categoryId));
 
+    const MONEY_FIELDS = new Set(["price", "supplierPrice", "distributorPrice"]);
     PRODUCT_NUMERIC_FIELDS.forEach((field) => {
       if (field === "stock" && multiStockEnabled && isEditing) return;
-      fd.append(field, String(toNumOrZero(data[field])));
+      const n = toNumOrZero(data[field]);
+      fd.append(field, String(MONEY_FIELDS.has(field) ? toStorageMoney(n) : n));
     });
   
     fd.append("wholesaleRules", JSON.stringify(wholesaleRules || []));
@@ -549,25 +583,39 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
         handleSubmit(submitForm)(e);
       }}
     >
-      <Grid container spacing={1} columnSpacing={1.5}>
-        {/* Fila 1: nombre, código, imagen */}
-        <Grid item xs={12} md={5} data-tour="producto-form-identity">
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{ mb: 0.25, mt: -0.25 }}
+      >
+        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+          {isEditing ? "Editá los campos y guardá" : "Completá los campos y guardá"}
+        </Typography>
+        <TourHelpButton onClick={startTour} title="Tutorial de cada campo del producto" />
+      </Stack>
+
+      <Grid container spacing={0.75} columnSpacing={1}>
+        <Grid item xs={12} sm={5} md={5} data-tour="producto-form-name">
           <TextField
             label="Nombre"
             size="small"
             fullWidth
+            required
             variant="standard"
-            margin="dense"
+            margin="none"
+            sx={denseFieldSx}
             {...register("name")}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={9} sm={4} md={4} data-tour="producto-form-barcode">
           <TextField
-            label="Código de barras"
+            label="Cód. barras"
             size="small"
             fullWidth
             variant="standard"
-            margin="dense"
+            margin="none"
+            sx={denseFieldSx}
             value={watch("barcode") || ""}
             inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
             placeholder="Opcional"
@@ -582,6 +630,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
                       edge="end"
                       size="small"
                       color={usbScanMode ? "primary" : "default"}
+                      sx={{ p: 0.35 }}
                       onClick={() => {
                         setUsbScanMode((active) => {
                           const next = !active;
@@ -595,7 +644,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
                         });
                       }}
                     >
-                      <QrCodeScannerIcon fontSize="small" />
+                      <QrCodeScannerIcon sx={{ fontSize: 18 }} />
                     </IconButton>
                   </Tooltip>
                 </InputAdornment>
@@ -603,24 +652,24 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
             }}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ height: "100%", pt: 0.5 }}>
+        <Grid item xs={3} sm={3} md={3} data-tour="producto-form-image">
+          <Stack direction="row" alignItems="center" spacing={0.25} sx={{ height: "100%", pt: 0.75 }}>
             <Tooltip title="Galería">
-              <IconButton component="label" size="small" color={selectedFile || currentImage ? "primary" : "default"}>
-                <ImageIcon fontSize="small" />
+              <IconButton component="label" size="small" sx={{ p: 0.4 }} color={selectedFile || currentImage ? "primary" : "default"}>
+                <ImageIcon sx={{ fontSize: 18 }} />
                 <input ref={fileRef} hidden type="file" accept="image/*" onChange={handlePickImage} />
               </IconButton>
             </Tooltip>
             <Tooltip title="Cámara">
-              <IconButton component="label" size="small" color={selectedFile || currentImage ? "primary" : "default"}>
-                <PhotoCameraIcon fontSize="small" />
+              <IconButton component="label" size="small" sx={{ p: 0.4 }} color={selectedFile || currentImage ? "primary" : "default"}>
+                <PhotoCameraIcon sx={{ fontSize: 18 }} />
                 <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={handlePickImage} />
               </IconButton>
             </Tooltip>
             {(selectedFile || currentImage) && (
               <Tooltip title="Quitar imagen">
-                <IconButton size="small" color="error" onClick={clearPreview}>
-                  <DeleteOutlineIcon fontSize="small" />
+                <IconButton size="small" color="error" onClick={clearPreview} sx={{ p: 0.35 }}>
+                  <DeleteOutlineIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
             )}
@@ -629,31 +678,33 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
                 component="img"
                 src={currentImage}
                 alt=""
-                sx={{ width: 40, height: 40, objectFit: "cover", borderRadius: 1, border: 1, borderColor: "divider", ml: 0.5 }}
+                sx={{ width: 32, height: 32, objectFit: "cover", borderRadius: 0.75, border: 1, borderColor: "divider" }}
               />
             ) : null}
           </Stack>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} data-tour="producto-form-desc">
           <TextField
             label="Descripción"
             size="small"
             fullWidth
             variant="standard"
-            margin="dense"
+            margin="none"
+            sx={denseFieldSx}
             {...register("desc")}
           />
         </Grid>
 
-        <Grid item xs={6} sm={3} data-tour="producto-form-classify">
+        <Grid item xs={4} sm={3} data-tour="producto-form-type">
           <TextField
             label="Tipo"
             select
             size="small"
             fullWidth
             variant="standard"
-            margin="dense"
+            margin="none"
+            sx={denseFieldSx}
             value={watch("type") ?? "final"}
             {...register("type")}
           >
@@ -662,160 +713,35 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
             <MenuItem value="final">Final</MenuItem>
           </TextField>
         </Grid>
-        <Grid item xs={6} sm={3}>
+        <Grid item xs={4} sm={3} data-tour="producto-form-unit">
           <TextField
             label="Unidad"
             select
             size="small"
             fullWidth
             variant="standard"
-            margin="dense"
+            margin="none"
+            sx={denseFieldSx}
             value={watch("unitId") || ""}
             {...register("unitId")}
           >
             {Array.isArray(units) &&
               units.map((u) => (
                 <MenuItem key={u.id} value={u.id}>
-                  {u.name} ({u.abbreviation})
+                  {u.abbreviation || u.name}
                 </MenuItem>
               ))}
           </TextField>
         </Grid>
-        <Grid item xs={12} sm={6}>
-          <SearchableSelect
-            label="Categoría"
-            items={categoryOptions}
-            value={watch("categoryId") || ""}
-            getOptionLabel={(item) => item.optionLabel || item.name || ""}
-            onChange={(val) =>
-              setValue("categoryId", val, { shouldValidate: true, shouldDirty: true })
-            }
-            emptyOptionLabel="Sin categoría"
-            placeholder="Buscar categoría..."
-          />
-        </Grid>
-
-        <Grid item xs={6} sm={3} data-tour="producto-form-prices">
-          <TextField
-            label="P. proveedor"
-            type="number"
-            size="small"
-            fullWidth
-            variant="standard"
-            margin="dense"
-            inputProps={{ step: "any", min: 0 }}
-            placeholder="0"
-            {...register("supplierPrice")}
-          />
-        </Grid>
-        <Grid item xs={6} sm={3}>
-          <TextField
-            label="P. distribuidor"
-            type="number"
-            size="small"
-            fullWidth
-            variant="standard"
-            margin="dense"
-            inputProps={{ step: "any", min: 0 }}
-            placeholder="0"
-            {...register("distributorPrice")}
-          />
-        </Grid>
-        <Grid item xs={6} sm={3}>
-          <TextField
-            label="P. venta"
-            type="number"
-            size="small"
-            fullWidth
-            variant="standard"
-            margin="dense"
-            inputProps={{ step: "any", min: 0 }}
-            placeholder="0"
-            {...register("price")}
-          />
-        </Grid>
-        <Grid item xs={6} sm={3}>
-          <TextField
-            label="IVA (%)"
-            type="number"
-            size="small"
-            fullWidth
-            variant="standard"
-            margin="dense"
-            inputProps={{ step: "0.01", min: 0 }}
-            placeholder="0"
-            helperText="0 = sin IVA · 15 = con IVA"
-            {...register("taxRate")}
-          />
-        </Grid>
-        <Grid item xs={6} sm={3}>
-          <TextField
-            label="Peso neto"
-            type="number"
-            size="small"
-            fullWidth
-            variant="standard"
-            margin="dense"
-            inputProps={{ step: "any", min: 0 }}
-            placeholder="0"
-            {...register("netWeight")}
-          />
-        </Grid>
-
-        <Grid item xs={4} sm={3} data-tour="producto-form-stock">
-          <TextField
-            label="Stock mín."
-            type="number"
-            size="small"
-            fullWidth
-            variant="standard"
-            margin="dense"
-            inputProps={{ min: 0 }}
-            placeholder="0"
-            {...register("minStock")}
-          />
-        </Grid>
-        <Grid item xs={4} sm={3}>
-          <TextField
-            label={multiStockEnabled && isEditing ? "Stock total (suma)" : "Stock actual"}
-            type="number"
-            size="small"
-            fullWidth
-            variant="standard"
-            margin="dense"
-            inputProps={{ min: 0, readOnly: Boolean(multiStockEnabled && isEditing) }}
-            placeholder="0"
-            helperText={
-              multiStockEnabled
-                ? isEditing
-                  ? "Suma por locales. Ajustá en Locales."
-                  : "Al crear entra a Bodega (multistock)."
-                : undefined
-            }
-            {...register("stock")}
-          />
-        </Grid>
-        <Grid item xs={4} sm={3}>
-          <TextField
-            label="Peso prom. (g)"
-            type="number"
-            size="small"
-            fullWidth
-            variant="standard"
-            margin="dense"
-            inputProps={{ step: "any", min: 0 }}
-            placeholder="0"
-            {...register("standardWeightGrams")}
-          />
-        </Grid>
-        <Grid item xs={6} sm={3}>
+        <Grid item xs={4} sm={2} data-tour="producto-form-crop">
           <TextField
             label="Recorte"
             select
             size="small"
             fullWidth
             variant="standard"
-            margin="dense"
+            margin="none"
+            sx={denseFieldSx}
             value={aspectKey}
             onChange={(e) => setAspectKey(e.target.value)}
           >
@@ -825,28 +751,174 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
             <MenuItem value="16:9">16:9</MenuItem>
           </TextField>
         </Grid>
+        <Grid item xs={12} sm={4} data-tour="producto-form-category">
+          <Box sx={{ "& .MuiInputBase-root": { fontSize: "0.8125rem" } }}>
+            <SearchableSelect
+              label="Categoría"
+              items={categoryOptions}
+              value={watch("categoryId") || ""}
+              getOptionLabel={(item) => item.optionLabel || item.name || ""}
+              onChange={(val) =>
+                setValue("categoryId", val, { shouldValidate: true, shouldDirty: true })
+              }
+              emptyOptionLabel="Sin categoría"
+              placeholder="Buscar…"
+            />
+          </Box>
+        </Grid>
 
-        {/* Tramos paquete — fila compacta */}
+        <Grid item xs={4} sm={2} data-tour="producto-form-supplier-price">
+          <TextField
+            label="Prov."
+            type="number"
+            size="small"
+            fullWidth
+            variant="standard"
+            margin="none"
+            sx={denseFieldSx}
+            inputProps={{
+              step: Number(`1e-${MONEY_INPUT_MAX_DECIMALS}`),
+              min: 0,
+            }}
+            placeholder="0"
+            {...register("supplierPrice")}
+            InputProps={{ startAdornment: moneyAdornment }}
+          />
+        </Grid>
+        <Grid item xs={4} sm={2} data-tour="producto-form-distributor-price">
+          <TextField
+            label="Dist."
+            type="number"
+            size="small"
+            fullWidth
+            variant="standard"
+            margin="none"
+            sx={denseFieldSx}
+            inputProps={{
+              step: Number(`1e-${MONEY_INPUT_MAX_DECIMALS}`),
+              min: 0,
+            }}
+            placeholder="0"
+            {...register("distributorPrice")}
+            InputProps={{ startAdornment: moneyAdornment }}
+          />
+        </Grid>
+        <Grid item xs={4} sm={2} data-tour="producto-form-sale-price">
+          <TextField
+            label="Venta"
+            type="number"
+            size="small"
+            fullWidth
+            variant="standard"
+            margin="none"
+            sx={denseFieldSx}
+            inputProps={{
+              step: Number(`1e-${MONEY_INPUT_MAX_DECIMALS}`),
+              min: 0,
+            }}
+            placeholder="0"
+            {...register("price")}
+            InputProps={{ startAdornment: moneyAdornment }}
+          />
+        </Grid>
+        <Grid item xs={4} sm={2} data-tour="producto-form-tax">
+          <TextField
+            label="IVA %"
+            type="number"
+            size="small"
+            fullWidth
+            variant="standard"
+            margin="none"
+            sx={denseFieldSx}
+            inputProps={{ step: "0.01", min: 0 }}
+            placeholder="0"
+            {...register("taxRate")}
+          />
+        </Grid>
+        <Grid item xs={4} sm={2} data-tour="producto-form-min-stock">
+          <TextField
+            label="Stk mín"
+            type="number"
+            size="small"
+            fullWidth
+            variant="standard"
+            margin="none"
+            sx={denseFieldSx}
+            inputProps={{ min: 0 }}
+            placeholder="0"
+            {...register("minStock")}
+          />
+        </Grid>
+        <Grid item xs={4} sm={2} data-tour="producto-form-stock">
+          <TextField
+            label={multiStockEnabled && isEditing ? "Stk Σ" : "Stock"}
+            type="number"
+            size="small"
+            fullWidth
+            variant="standard"
+            margin="none"
+            sx={denseFieldSx}
+            inputProps={{ min: 0, readOnly: Boolean(multiStockEnabled && isEditing) }}
+            placeholder="0"
+            title={
+              multiStockEnabled
+                ? isEditing
+                  ? "Suma por locales. Ajustá en Locales."
+                  : "Al crear entra a Bodega (multistock)."
+                : undefined
+            }
+            {...register("stock")}
+          />
+        </Grid>
+        <Grid item xs={6} sm={3} data-tour="producto-form-net-weight">
+          <TextField
+            label="Peso neto"
+            type="number"
+            size="small"
+            fullWidth
+            variant="standard"
+            margin="none"
+            sx={denseFieldSx}
+            inputProps={{ step: "any", min: 0 }}
+            placeholder="0"
+            {...register("netWeight")}
+          />
+        </Grid>
+        <Grid item xs={6} sm={3} data-tour="producto-form-std-weight">
+          <TextField
+            label="Peso prom. g"
+            type="number"
+            size="small"
+            fullWidth
+            variant="standard"
+            margin="none"
+            sx={denseFieldSx}
+            inputProps={{ step: "any", min: 0 }}
+            placeholder="0"
+            {...register("standardWeightGrams")}
+          />
+        </Grid>
+
         <Grid item xs={12} data-tour="producto-form-packages">
-          <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
-            <Typography variant="caption" fontWeight={700} color="text.secondary">
-              Tramos paquete
+          <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ fontSize: "0.7rem" }}>
+              Paquetes
             </Typography>
-            <Button variant="text" size="small" sx={{ minWidth: 0, py: 0 }} onClick={addPackageTier}>
+            <Button variant="text" size="small" sx={{ minWidth: 0, py: 0, fontSize: "0.7rem" }} onClick={addPackageTier}>
               + tramo
             </Button>
             {packageTiers.map((tier, idx) => (
               <Stack
                 key={`pkg-${idx}`}
                 direction="row"
-                spacing={0.5}
+                spacing={0.4}
                 alignItems="center"
                 sx={{
                   border: "1px solid",
                   borderColor: "divider",
                   borderRadius: 1,
-                  px: 0.75,
-                  py: 0.25,
+                  px: 0.5,
+                  py: 0.15,
                 }}
               >
                 <TextField
@@ -858,10 +930,10 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
                   onChange={(e) =>
                     updatePackageTier(idx, "qty", Math.max(1, Number(e.target.value || 1)))
                   }
-                  sx={{ width: 56, "& .MuiInputBase-root": { fontSize: "0.8rem" } }}
+                  sx={{ width: 48, ...denseFieldSx }}
                 />
                 <TextField
-                  label="$ total"
+                  label="$ tot"
                   type="number"
                   size="small"
                   variant="standard"
@@ -870,37 +942,36 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
                     updatePackageTier(idx, "totalPrice", Math.max(0, Number(e.target.value || 0)))
                   }
                   inputProps={{ step: "0.01", min: 0 }}
-                  sx={{ width: 72, "& .MuiInputBase-root": { fontSize: "0.8rem" } }}
+                  sx={{ width: 56, ...denseFieldSx }}
                 />
-                <IconButton size="small" color="error" onClick={() => removePackageTier(idx)} sx={{ p: 0.25 }}>
-                  <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                <IconButton size="small" color="error" onClick={() => removePackageTier(idx)} sx={{ p: 0.2 }}>
+                  <DeleteOutlineIcon sx={{ fontSize: 14 }} />
                 </IconButton>
               </Stack>
             ))}
           </Stack>
         </Grid>
 
-        {/* Mayorista — fila compacta */}
-        <Grid item xs={12}>
-          <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
-            <Typography variant="caption" fontWeight={700} color="text.secondary">
+        <Grid item xs={12} data-tour="producto-form-wholesale">
+          <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ fontSize: "0.7rem" }}>
               Mayorista
             </Typography>
-            <Button variant="text" size="small" sx={{ minWidth: 0, py: 0 }} onClick={addTier}>
+            <Button variant="text" size="small" sx={{ minWidth: 0, py: 0, fontSize: "0.7rem" }} onClick={addTier}>
               + tramo
             </Button>
             {wholesaleRules.map((tier, idx) => (
               <Stack
                 key={`ws-${idx}`}
                 direction="row"
-                spacing={0.5}
+                spacing={0.4}
                 alignItems="center"
                 sx={{
                   border: "1px solid",
                   borderColor: "divider",
                   borderRadius: 1,
-                  px: 0.75,
-                  py: 0.25,
+                  px: 0.5,
+                  py: 0.15,
                 }}
               >
                 <TextField
@@ -912,10 +983,10 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
                   onChange={(e) =>
                     updateTier(idx, "minQty", Math.max(1, Number(e.target.value || 1)))
                   }
-                  sx={{ width: 56, "& .MuiInputBase-root": { fontSize: "0.8rem" } }}
+                  sx={{ width: 48, ...denseFieldSx }}
                 />
                 <TextField
-                  label="% desc."
+                  label="% off"
                   type="number"
                   size="small"
                   variant="standard"
@@ -923,10 +994,10 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
                   onChange={(e) =>
                     updateTier(idx, "discountPercent", Math.max(0, Number(e.target.value || 0)))
                   }
-                  sx={{ width: 64, "& .MuiInputBase-root": { fontSize: "0.8rem" } }}
+                  sx={{ width: 52, ...denseFieldSx }}
                 />
-                <IconButton size="small" color="error" onClick={() => removeTier(idx)} sx={{ p: 0.25 }}>
-                  <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                <IconButton size="small" color="error" onClick={() => removeTier(idx)} sx={{ p: 0.2 }}>
+                  <DeleteOutlineIcon sx={{ fontSize: 14 }} />
                 </IconButton>
               </Stack>
             ))}

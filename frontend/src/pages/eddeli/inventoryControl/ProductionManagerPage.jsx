@@ -228,10 +228,12 @@ export default function ProductionManagerPage() {
                 label="Seleccionar producto"
                 items={products}
                 value={selectedProductId}
+                productMeta
                 onChange={(id) => setSelectedProductId(String(id ?? ""))}
                 getOptionLabel={(p) => {
+                  if (!p) return "";
                   const tag = isIntermediateProduct(p) ? "Intermedio" : "Final";
-                  return `${p?.name ?? ""} (${tag})`;
+                  return `${p.name ?? ""} (${tag}) · stk ${Number(p.stock || 0)} · $${Number(p.price || 0).toFixed(2)}`;
                 }}
               />
               {selected && (

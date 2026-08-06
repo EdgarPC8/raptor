@@ -105,6 +105,9 @@ export default function AppSettingsPage() {
         showPublicStoresPropia: settings.showPublicStoresPropia !== false,
         showPublicStoresVitrina: settings.showPublicStoresVitrina !== false,
         multiStockEnabled: Boolean(settings.multiStockEnabled),
+        showProductCostInSelect: Boolean(settings.showProductCostInSelect),
+        moneyDisplayDecimals: Number(settings.moneyDisplayDecimals ?? 2),
+        moneyRoundingMode: settings.moneyRoundingMode || "up",
       });
     }
   }, [settings]);
@@ -556,49 +559,111 @@ export default function AppSettingsPage() {
               </Box>
 
               <Divider />
-              {multiStockFeatureStatus !== "hidden" ? (
-                <Box data-tour="config-multistock">
-                  <Typography variant="subtitle2" fontWeight={700}>
-                    Inventario
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: -0.5, mb: 0.5 }}>
-                    Multistock: stock por Bodega y sucursales (traspasos). Sin multistock: stock
-                    general editable en Productos. El gestor desbloquea la opción; vos la activás
-                    aquí. Una vez activada no se puede volver a un solo local.
-                  </Typography>
-                  <FormGroup>
+              <Box data-tour="config-inventario">
+                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                  Inventario y montos
+                </Typography>
+
+                <Grid container spacing={1.5} alignItems="flex-start">
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      select
+                      size="small"
+                      fullWidth
+                      label="Decimales a mostrar"
+                      value={Number(form.moneyDisplayDecimals ?? 2)}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          moneyDisplayDecimals: Number(e.target.value),
+                        }))
+                      }
+                      helperText="Solo pantalla (0–6)"
+                    >
+                      {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+                        <MenuItem key={n} value={n}>
+                          {n} decimal{n === 1 ? "" : "es"}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      select
+                      size="small"
+                      fullWidth
+                      label="Redondeo al mostrar"
+                      value={form.moneyRoundingMode || "up"}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          moneyRoundingMode: e.target.value,
+                        }))
+                      }
+                      helperText="Por defecto: hacia arriba"
+                    >
+                      <MenuItem value="up">Hacia arriba</MenuItem>
+                      <MenuItem value="down">Hacia abajo</MenuItem>
+                      <MenuItem value="nearest">Al más cercano</MenuItem>
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Alert severity="info" sx={{ py: 0.5, px: 1.25 }}>
+                      En BD se guardan hasta <strong>6</strong> decimales. Al
+                      cargar/editar podés ingresar hasta 5.
+                    </Alert>
+                  </Grid>
+                </Grid>
+
+                <FormGroup sx={{ mt: 1.25 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={Boolean(form.showProductCostInSelect)}
+                        onChange={onToggle("showProductCostInSelect")}
+                      />
+                    }
+                    label="Mostrar costo (prov.) en selects de producto"
+                  />
+                  {multiStockFeatureStatus !== "hidden" ? (
                     <FormControlLabel
                       control={
                         <Switch
+                          size="small"
                           checked={Boolean(form.multiStockEnabled)}
                           disabled={multiStockSwitchDisabled}
                           onChange={onToggle("multiStockEnabled")}
                         />
                       }
-                      label="Activar multistock (stock por local)"
+                      label="Multistock (stock por local)"
                     />
-                  </FormGroup>
-                  {!multiStockUnlocked ? (
-                    <Alert severity="info" sx={{ py: 0.5, mt: 0.5 }}>
-                      {FEATURE_STATUS_HINT[multiStockFeatureStatus] ||
-                        "Esta opción aún no está disponible para tu instalación."}
-                    </Alert>
-                  ) : multiStockAlreadyOn ? (
-                    <Alert severity="info" sx={{ py: 0.5, mt: 0.5 }}>
-                      En Productos el stock se muestra como suma. Ajustes y traspasos se hacen en
-                      Locales.
-                      {multiStockCanToggleOff
-                        ? " (Programador puede desactivar en soporte.)"
-                        : " Una vez activado no se puede desactivar desde aquí."}
-                    </Alert>
-                  ) : (
-                    <Alert severity="warning" sx={{ py: 0.5, mt: 0.5 }}>
-                      Modo clásico: en Productos puedes editar el stock con el check de ajuste.
-                      Activá multistock solo cuando vayas a manejar varios locales.
-                    </Alert>
-                  )}
-                </Box>
-              ) : null}
+                  ) : null}
+                </FormGroup>
+
+                {multiStockFeatureStatus !== "hidden" ? (
+                  <Box data-tour="config-multistock" sx={{ mt: 0.75 }}>
+                    {!multiStockUnlocked ? (
+                      <Alert severity="info" sx={{ py: 0.5 }}>
+                        {FEATURE_STATUS_HINT[multiStockFeatureStatus] ||
+                          "Multistock aún no disponible para tu instalación."}
+                      </Alert>
+                    ) : multiStockAlreadyOn ? (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Stock = suma por local. Ajustes en Locales.
+                        {multiStockCanToggleOff
+                          ? " Programador puede desactivar."
+                          : " No se puede desactivar una vez activo."}
+                      </Typography>
+                    ) : (
+                      <Typography variant="caption" color="warning.main" display="block">
+                        Modo clásico: stock editable en Productos. Activá multistock solo si
+                        manejás varios locales.
+                      </Typography>
+                    )}
+                  </Box>
+                ) : null}
+              </Box>
 
               <Divider />
               <Box data-tour="config-public">

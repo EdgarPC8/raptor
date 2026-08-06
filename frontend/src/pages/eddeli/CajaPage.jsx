@@ -94,6 +94,7 @@ import RestoreIcon from "@mui/icons-material/Restore";
 import TourHelpButton from "../../components/TourHelpButton.jsx";
 import { usePageTour } from "../../hooks/usePageTour.js";
 import { CAJA_TOUR_ID, getCajaTourSteps } from "../../tours/cajaTour.js";
+import { stockColor, stockFmt } from "../../utils/productSelectDisplay.jsx";
 
 const to2 = (n) => Number(Number(n || 0).toFixed(2));
 
@@ -624,6 +625,7 @@ export default function CajaPage() {
   const renderCajaProductOption = useCallback(
     (props, item) => {
       const tierKind = getProductTierVisualKind(item, effectiveTierGroups);
+      const stock = Number(item?.stock ?? 0);
       return (
         <li {...props} key={props.key}>
           <Box
@@ -632,7 +634,7 @@ export default function CajaPage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 2,
+              gap: 1.5,
               width: "100%",
               py: 0.25,
               pl: tierKind ? 1 : 0,
@@ -653,15 +655,23 @@ export default function CajaPage() {
             >
               {formatProductSearchLabel(item)}
             </Box>
-            <Typography
-              component="span"
-              variant="body2"
-              fontWeight={700}
-              color="primary.main"
-              sx={{ flexShrink: 0, ml: "auto", textAlign: "right" }}
-            >
-              {formatProductSalePrice(item)}
-            </Typography>
+            <Stack direction="row" spacing={0.5} alignItems="center" flexShrink={0}>
+              <Chip
+                size="small"
+                color={stockColor(stock, item?.minStock)}
+                label={`Stk ${stockFmt(stock)}`}
+                sx={{ height: 22, "& .MuiChip-label": { px: 0.75, fontSize: "0.7rem", fontWeight: 700 } }}
+              />
+              <Typography
+                component="span"
+                variant="body2"
+                fontWeight={700}
+                color="primary.main"
+                sx={{ textAlign: "right", minWidth: 56 }}
+              >
+                {formatProductSalePrice(item)}
+              </Typography>
+            </Stack>
           </Box>
         </li>
       );
@@ -2086,9 +2096,7 @@ export default function CajaPage() {
             items={productsByStockDesc}
             value={quickDownProductId}
             onChange={setQuickDownProductId}
-            getOptionLabel={(item) =>
-              `${item.name || "—"} · local ${item.stock ?? 0}${item.baseUnit?.abbreviation ? ` ${item.baseUnit.abbreviation}` : ""}`
-            }
+            productMeta
             getOptionValue={(item) => String(item.id)}
           />
           {quickDownProductId ? (

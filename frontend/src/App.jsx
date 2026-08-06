@@ -37,6 +37,9 @@ const UnitPage = lazy(
 const BatchesPage = lazy(
   () => import("./pages/eddeli/inventoryControl/BatchesPage.jsx"),
 );
+const InventoryValuePage = lazy(
+  () => import("./pages/eddeli/inventoryControl/InventoryValuePage.jsx"),
+);
 const MovementPage = lazy(
   () => import("./pages/eddeli/inventoryControl/MovementPage.jsx"),
 );
@@ -247,6 +250,7 @@ export default function App() {
               <Route path={APP_ROUTES.inventory.tierGroups} element={<LazyPage><TramosPage /></LazyPage>} />
               <Route path={APP_ROUTES.inventory.units} element={<LazyPage><UnitPage /></LazyPage>} />
               <Route path={APP_ROUTES.inventory.batches} element={<LazyPage><BatchesPage /></LazyPage>} />
+              <Route path={APP_ROUTES.inventory.value} element={<LazyPage><InventoryValuePage /></LazyPage>} />
               <Route path={APP_ROUTES.production.ingredients} element={<LazyPage><GenericIngredientsPage /></LazyPage>} />
               <Route path={APP_ROUTES.production.recipes} element={<LazyPage><RecipePage /></LazyPage>} />
               <Route path={APP_ROUTES.production.manufacturing} element={<LazyPage><ProductionManagerPage /></LazyPage>} />
@@ -442,6 +446,7 @@ export default function App() {
             <Route path={APP_ROUTES.inventory.tierGroups} element={<TramosPage />} />
             <Route path={APP_ROUTES.inventory.units} element={<UnitPage />} />
             <Route path={APP_ROUTES.inventory.batches} element={<BatchesPage />} />
+            <Route path={APP_ROUTES.inventory.value} element={<InventoryValuePage />} />
             <Route path={APP_ROUTES.inventory.movement} element={<MovementPage />} />
             <Route path={APP_ROUTES.production.recipes} element={<RecipePage />} />
             <Route

@@ -249,6 +249,7 @@ function RecipePage() {
             label="Producto (final o intermedio)"
             items={products}
             value={selectedProduct}
+            productMeta
             onChange={(val) => setSelectedProduct(val)}
           />
           {selectedMeta && (

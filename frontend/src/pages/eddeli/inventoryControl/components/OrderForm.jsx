@@ -580,6 +580,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
                     label="Producto"
                     items={products}
                     value={selectedProduct}
+                    productMeta
                     onChange={(val) => {
                       setSelectedProduct(val);
                       setValue("productId", val);
@@ -614,6 +615,9 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
                   product={currentProduct}
                   quantity={watchQuantity}
                   unitPrice={watchPrice}
+                  onApplyPrice={(price) =>
+                    setValue("price", price, { shouldDirty: true, shouldValidate: true })
+                  }
                 />
               </Grid>
             )}

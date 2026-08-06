@@ -42,6 +42,7 @@ import PeopleIcon from "@mui/icons-material/People";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import StraightenIcon from "@mui/icons-material/Straighten";
 import EventBusyIcon from "@mui/icons-material/EventBusy";
+import MonetizationOnOutlinedIcon from "@mui/icons-material/MonetizationOnOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import NotificationsIcon from "@mui/icons-material/Notifications";
@@ -298,6 +299,12 @@ const MENU_GROUPS = [
         name: "Lotes y vencimientos",
         link: APP_ROUTES.inventory.batches,
         icon: <EventBusyIcon />,
+        roles: ["Programador", "Administrador"],
+      },
+      {
+        name: "Valor de inventario",
+        link: APP_ROUTES.inventory.value,
+        icon: <MonetizationOnOutlinedIcon />,
         roles: ["Programador", "Administrador"],
       },
     ],

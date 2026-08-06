@@ -45,6 +45,10 @@ import {
   findEddeliProductByCode,
   normalizeProductBarcode,
 } from "../../../../utils/productLookup.js";
+import {
+  buildLastPurchaseByProductId,
+  getLastPurchaseForProduct,
+} from "../../../../utils/supplierLastPurchase.js";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
@@ -246,6 +250,8 @@ function SupplierOrderForm(
   const [onlySoldBySupplier, setOnlySoldBySupplier] = useState(false);
   const [soldProductIds, setSoldProductIds] = useState(() => new Set());
   const [loadingSoldProducts, setLoadingSoldProducts] = useState(false);
+  /** Cache de pedidos a proveedor para última compra y filtro por historial. */
+  const [supplierOrdersCache, setSupplierOrdersCache] = useState([]);
   const tourGenRef = useRef(0);
   const lotsRef = useRef([]);
   const { toast } = useAuth();
@@ -269,46 +275,66 @@ function SupplierOrderForm(
     return products.filter((p) => soldProductIds.has(Number(p.id)));
   }, [products, onlySoldBySupplier, selectedSupplier, soldProductIds]);
 
-  // Historial: productos que este proveedor ya vendió
+  const lastPurchaseByProductId = useMemo(
+    () => buildLastPurchaseByProductId(supplierOrdersCache),
+    [supplierOrdersCache],
+  );
+
+  const currentLastPurchase = useMemo(
+    () => getLastPurchaseForProduct(lastPurchaseByProductId, selectedProductId),
+    [lastPurchaseByProductId, selectedProductId],
+  );
+
+  // Historial de pedidos a proveedor (última compra + filtro “solo vendidos”)
   useEffect(() => {
-    if (!selectedSupplier) {
-      setSoldProductIds(new Set());
-      return;
-    }
     let cancelled = false;
-    setLoadingSoldProducts(true);
     (async () => {
       try {
         const { data } = await getAllSupplierOrdersRequest();
-        const ids = new Set();
-        const sid = Number(selectedSupplier);
-        for (const o of Array.isArray(data) ? data : []) {
-          if (Number(o.supplierId) !== sid) continue;
-          const lines = o.ERP_supplier_order_items || o.items || [];
-          for (const it of lines) {
-            const pid = Number(it.productId);
-            if (pid) ids.add(pid);
-          }
-        }
-        if (!cancelled) setSoldProductIds(ids);
+        if (!cancelled) setSupplierOrdersCache(Array.isArray(data) ? data : []);
       } catch {
-        if (!cancelled) setSoldProductIds(new Set());
-      } finally {
-        if (!cancelled) setLoadingSoldProducts(false);
+        if (!cancelled) setSupplierOrdersCache([]);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [selectedSupplier]);
+  }, []);
+
+  // Productos que este proveedor ya vendió (desde cache)
+  useEffect(() => {
+    if (!selectedSupplier) {
+      setSoldProductIds(new Set());
+      setLoadingSoldProducts(false);
+      return;
+    }
+    setLoadingSoldProducts(true);
+    const ids = new Set();
+    const sid = Number(selectedSupplier);
+    for (const o of supplierOrdersCache) {
+      if (Number(o.supplierId) !== sid) continue;
+      const lines = o.ERP_supplier_order_items || o.items || [];
+      for (const it of lines) {
+        const pid = Number(it.productId);
+        if (pid) ids.add(pid);
+      }
+    }
+    setSoldProductIds(ids);
+    setLoadingSoldProducts(false);
+  }, [selectedSupplier, supplierOrdersCache]);
 
   useEffect(() => {
     if (!selectedProductId) return;
+    const last = getLastPurchaseForProduct(lastPurchaseByProductId, selectedProductId);
+    if (last && Number.isFinite(Number(last.unitPrice)) && Number(last.unitPrice) >= 0) {
+      setValue("unitPrice", last.unitPrice);
+      return;
+    }
     const product = products.find((p) => p.id === Number(selectedProductId));
     if (product?.supplierPrice != null) {
       setValue("unitPrice", product.supplierPrice);
     }
-  }, [selectedProductId, products, setValue]);
+  }, [selectedProductId, products, setValue, lastPurchaseByProductId]);
 
   const fetchCatalog = async () => {
     const [prodRes, supRes] = await Promise.all([getAllProductsAll(), getAllSuppliersRequest()]);
@@ -327,9 +353,14 @@ function SupplierOrderForm(
     if (id != null) {
       setSelectedProduct(String(id));
       setValue("productId", String(id));
-      const updated = list.find((p) => Number(p.id) === Number(id));
-      if (updated?.supplierPrice != null) {
-        setValue("unitPrice", updated.supplierPrice);
+      const last = getLastPurchaseForProduct(lastPurchaseByProductId, id);
+      if (last && Number.isFinite(Number(last.unitPrice)) && Number(last.unitPrice) >= 0) {
+        setValue("unitPrice", last.unitPrice);
+      } else {
+        const updated = list.find((p) => Number(p.id) === Number(id));
+        if (updated?.supplierPrice != null) {
+          setValue("unitPrice", updated.supplierPrice);
+        }
       }
     }
   };
@@ -919,6 +950,7 @@ function SupplierOrderForm(
                     label="Producto"
                     items={productOptions}
                     value={selectedProduct}
+                    productMeta
                     onChange={(val) => {
                       setSelectedProduct(val);
                       setValue("productId", val);
@@ -967,6 +999,10 @@ function SupplierOrderForm(
                   quantity={watchQuantity}
                   unitPrice={watchUnitPrice}
                   variant="supplier"
+                  lastPurchase={currentLastPurchase}
+                  onApplyPrice={(price) =>
+                    setValue("unitPrice", price, { shouldDirty: true, shouldValidate: true })
+                  }
                 />
               </Grid>
             )}

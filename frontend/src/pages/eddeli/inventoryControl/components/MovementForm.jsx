@@ -1034,6 +1034,7 @@ function MovementForm({
                       items={filteredProductOptions}
                       value={selectedProductId || ""}
                       disabled={isEdit}
+                      productMeta
                       onChange={(val) => {
                         const nextId =
                           val && typeof val === "object"
@@ -1044,7 +1045,6 @@ function MovementForm({
                           shouldDirty: true,
                         });
                       }}
-                      getOptionLabel={(opt) => opt?.name ?? ""}
                       getOptionValue={(opt) => opt?.id ?? ""}
                       placeholder={
                         isApertura ? "Quintal de harina, arroba…" : "Busca un producto…"

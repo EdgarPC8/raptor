@@ -44,6 +44,7 @@ export const APP_ROUTES = {
     units: "/inventario/unidades",
     warehouses: "/inventario/bodegas",
     batches: "/inventario/lotes",
+    value: "/inventario/valor",
   },
   production: {
     ingredients: "/produccion/insumos",
@@ -143,6 +144,8 @@ export const LEGACY_ROUTE_REDIRECTS = [
   ["/inventory/warehouses", APP_ROUTES.inventory.warehouses],
   ["/inventory/lotes", APP_ROUTES.inventory.batches],
   ["/inventory/batches", APP_ROUTES.inventory.batches],
+  ["/inventory/valor", APP_ROUTES.inventory.value],
+  ["/inventory/value", APP_ROUTES.inventory.value],
   // Producción
   ["/production/ingredients", APP_ROUTES.production.ingredients],
   ["/production/recipes", APP_ROUTES.production.recipes],

@@ -144,6 +144,7 @@ function RecipeForm({ isEditing = false, datos = [], onClose, reload, productFin
             label="Componente de receta"
             items={componentOptions}
             value={watch("productRawId")}
+            productMeta
             getOptionLabel={(item) => item.optionLabel || item.name}
             onChange={(val) => {
               setValue("productRawId", val, { shouldValidate: true, shouldDirty: true });

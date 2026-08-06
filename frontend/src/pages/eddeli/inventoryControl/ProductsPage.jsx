@@ -56,10 +56,6 @@ import {
 import { useAppSettings } from "../../../context/AppSettingsContext.jsx";
 import { usePageTour } from "../../../hooks/usePageTour.js";
 import { PRODUCTOS_TOUR_ID, getProductosTourSteps } from "../../../tours/productosTour.js";
-import {
-  PRODUCTO_FORM_TOUR_ID,
-  getProductoFormTourSteps,
-} from "../../../tours/productoFormTour.js";
 
 function ProductsPage() {
   const { activeApp } = useAppSettings();
@@ -216,13 +212,6 @@ function ProductsPage() {
     onDestroyed: resetPageTourDemo,
   });
 
-  const { startTour: startFormTour } = usePageTour({
-    tourId: PRODUCTO_FORM_TOUR_ID,
-    getSteps: getProductoFormTourSteps,
-    enabled: openDialog && !isEditing,
-    autoDelayMs: 450,
-  });
-
   const startTour = useCallback(() => {
     resetPageTourDemo();
     window.setTimeout(() => startTourBase(), 80);
@@ -359,14 +348,14 @@ function ProductsPage() {
         open={openDialog}
         onClose={closeProductDialog}
         fullWidth
-        maxWidth="lg"
+        maxWidth="md"
         scroll="paper"
         PaperProps={{
           sx: {
             maxHeight: "98vh",
             display: "flex",
             flexDirection: "column",
-            width: { xs: "100%", sm: "min(1080px, 98vw)" },
+            width: { xs: "100%", sm: "min(720px, 96vw)" },
           },
         }}
       >
@@ -385,12 +374,6 @@ function ProductsPage() {
             {titleUserDialog}
           </DialogTitle>
           <Stack direction="row" alignItems="center" spacing={0.5}>
-            {!isEditing ? (
-              <TourHelpButton
-                onClick={startFormTour}
-                title="Ver tutorial de este formulario"
-              />
-            ) : null}
             <IconButton aria-label="Cerrar" onClick={closeProductDialog} size="small">
               <CloseIcon />
             </IconButton>

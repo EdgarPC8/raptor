@@ -467,6 +467,20 @@ export const APP_MODULE_GROUPS = [
           { name: "Baja por caducidad", description: "Descontar stock con motivo SALIDA_CADUCADO y dejar el lote en historial." },
         ],
       },
+      {
+        name: "Valor de inventario",
+        path: APP_ROUTES.inventory.value,
+        roles: ["Programador", "Administrador"],
+        description:
+          "Cuánto vale el stock del negocio a costo y a precio de venta. Con multistock, filtro por local/bodega.",
+        functions: [
+          { name: "Resumen general", description: "Totales de costo y venta de todo el inventario." },
+          { name: "Valor por costo", description: "Suma stock × precio de proveedor / costo." },
+          { name: "Valor a precio de venta", description: "Suma stock × precio de venta al público." },
+          { name: "Filtro por local", description: "Con multistock, ver valor de Bodega o de cada sucursal." },
+          { name: "Detalle por producto", description: "Tabla con cantidad y aportes al valor total." },
+        ],
+      },
     ],
   },
   {

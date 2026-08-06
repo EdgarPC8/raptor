@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Box, TextField, Autocomplete, CircularProgress } from "@mui/material";
+import {
+  productSelectLabel,
+  renderProductSelectOption,
+} from "../utils/productSelectDisplay.jsx";
+import { useAppSettings } from "../context/AppSettingsContext.jsx";
 
 const EMPTY_MARKER = "__searchableSelect_empty__";
 
@@ -26,7 +31,7 @@ export default function SearchableSelect({
   items = [],
   value = "",
   onChange,
-  getOptionLabel: getOptionLabelProp = (item) => item?.name ?? "",
+  getOptionLabel: getOptionLabelProp,
   getOptionValue = (item) => item?.id,
   placeholder = "Buscar...",
   onSearchChange,
@@ -39,9 +44,27 @@ export default function SearchableSelect({
   disabled = false,
   /** Tras elegir una opción, vacía el campo (útil en caja: agregar y seguir buscando). */
   clearInputOnSelect = false,
+  /**
+   * Muestra stock + precio con colores junto al nombre (listas de productos).
+   * Si no pasás getOptionLabel/renderOption, usa el formato de producto.
+   */
+  productMeta = false,
 }) {
+  const { activeApp } = useAppSettings();
+  const showProductCost = Boolean(activeApp?.showProductCostInSelect);
   const [inputLen, setInputLen] = useState(0);
   const [inputValue, setInputValue] = useState("");
+
+  const resolvedGetOptionLabel =
+    getOptionLabelProp ||
+    (productMeta ? productSelectLabel : (item) => item?.name ?? "");
+
+  const resolvedRenderOption = useMemo(() => {
+    if (renderOptionProp) return renderOptionProp;
+    if (!productMeta) return undefined;
+    return (props, option) =>
+      renderProductSelectOption(props, option, { showCost: showProductCost });
+  }, [renderOptionProp, productMeta, showProductCost]);
 
   useEffect(() => {
     if (value === "" || value == null) {
@@ -77,7 +100,7 @@ export default function SearchableSelect({
   const resolveLabel = (option) => {
     if (!option) return "";
     if (option[EMPTY_MARKER]) return emptyOptionLabel || "";
-    return getOptionLabelProp(option) ?? "";
+    return resolvedGetOptionLabel(option) ?? "";
   };
 
   const selectedOption = useMemo(() => {
@@ -151,7 +174,7 @@ export default function SearchableSelect({
             : "No se encontraron resultados"
         }
         renderOption={
-          renderOptionProp
+          resolvedRenderOption
             ? (props, option) => {
                 if (option[EMPTY_MARKER]) {
                   return (
@@ -160,7 +183,7 @@ export default function SearchableSelect({
                     </li>
                   );
                 }
-                return renderOptionProp(props, option);
+                return resolvedRenderOption(props, option);
               }
             : undefined
         }

@@ -392,7 +392,31 @@ function GroupForm({ open, onClose, initial, products, onSubmit, saving }) {
                       </MenuItem>
                       {products.map((p) => (
                         <MenuItem key={p.id} value={p.id}>
-                          {p.name} — ${Number(p.price || 0).toFixed(2)}
+                          <Stack direction="row" spacing={1} alignItems="center" sx={{ width: "100%" }}>
+                            <Typography variant="body2" sx={{ flex: 1 }} noWrap>
+                              {p.name}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              color={
+                                Number(p.stock || 0) <= 0
+                                  ? "error"
+                                  : Number(p.minStock || 0) > 0 &&
+                                      Number(p.stock || 0) <= Number(p.minStock || 0)
+                                    ? "warning"
+                                    : "success"
+                              }
+                              label={`Stk ${Number(p.stock || 0)}`}
+                              sx={{ height: 20, "& .MuiChip-label": { px: 0.6, fontSize: "0.68rem", fontWeight: 700 } }}
+                            />
+                            <Chip
+                              size="small"
+                              color="primary"
+                              variant="outlined"
+                              label={`$${Number(p.price || 0).toFixed(2)}`}
+                              sx={{ height: 20, "& .MuiChip-label": { px: 0.6, fontSize: "0.68rem", fontWeight: 700 } }}
+                            />
+                          </Stack>
                         </MenuItem>
                       ))}
                     </Select>

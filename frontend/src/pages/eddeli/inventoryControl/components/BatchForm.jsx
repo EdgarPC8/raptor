@@ -22,14 +22,12 @@ import {
   getStoresRequest,
 } from "../../../../api/inventoryControlRequest";
 import { storeHoldsInventory } from "../../../../utils/storeLocationKind.js";
-
-const stockFmt = (v) =>
-  new Intl.NumberFormat("es-EC", { maximumFractionDigits: 2 }).format(Number(v || 0));
-
-function productOptionLabel(p) {
-  if (!p) return "";
-  return `${p.name} · stock ${stockFmt(p.stock)}`;
-}
+import {
+  productSelectLabel,
+  renderProductSelectOption,
+  stockFmt,
+} from "../../../../utils/productSelectDisplay.jsx";
+import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
 
 function BatchForm({
   isEditing = false,
@@ -40,6 +38,8 @@ function BatchForm({
   multiStockEnabled = false,
 }) {
   const { toast: toastAuth } = useAuth();
+  const { activeApp } = useAppSettings();
+  const showProductCost = Boolean(activeApp?.showProductCostInSelect);
   const { handleSubmit, register, reset, setValue, control, watch } = useForm({
     defaultValues: {
       productId: null,
@@ -203,7 +203,7 @@ function BatchForm({
                 <Autocomplete
                   options={products}
                   loading={loadingProducts}
-                  getOptionLabel={productOptionLabel}
+                  getOptionLabel={productSelectLabel}
                   filterOptions={(opts, state) => {
                     const q = String(state.inputValue || "").trim().toLowerCase();
                     if (!q) return opts;
@@ -223,27 +223,9 @@ function BatchForm({
                       setValue("stockMode", "add");
                     }
                   }}
-                  renderOption={(props, option) => (
-                    <Box
-                      component="li"
-                      {...props}
-                      key={option.id}
-                      sx={{
-                        display: "flex !important",
-                        flexDirection: "column",
-                        alignItems: "flex-start !important",
-                        gap: 0.25,
-                        py: 1,
-                      }}
-                    >
-                      <Typography variant="body2" fontWeight={600}>
-                        {option.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Stock: {stockFmt(option.stock)}
-                      </Typography>
-                    </Box>
-                  )}
+                  renderOption={(props, option) =>
+                    renderProductSelectOption(props, option, { showCost: showProductCost })
+                  }
                   renderInput={(params) => (
                     <TextField
                       {...params}

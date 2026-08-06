@@ -28,9 +28,15 @@ import {
   VisibilityOff,
 } from "@mui/icons-material";
 import SearchableSelect from "../../../components/SearchableSelect.jsx";
+import {
+  moneyFmt,
+  stockColor,
+  stockFmt,
+} from "../../../utils/productSelectDisplay.jsx";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 import { pathImg } from "../../../api/axios";
 import { useAuth } from "../../../context/AuthContext";
+import { useAppSettings } from "../../../context/AppSettingsContext.jsx";
 import {
   getStoreProductsRequest,
   addProductsToStoreRequest,
@@ -90,6 +96,8 @@ export default function StoreProductsLinker({
   compact = false,
 }) {
   const { toast: toastAuth } = useAuth();
+  const { activeApp } = useAppSettings();
+  const showProductCost = Boolean(activeApp?.showProductCostInSelect);
   const [loading, setLoading] = useState(false);
   const [links, setLinks] = useState([]);
   const [catalog, setCatalog] = useState([]);
@@ -519,38 +527,73 @@ export default function StoreProductsLinker({
         }}
         loading={catalogLoading || busy}
         clearInputOnSelect
-        getOptionLabel={(p) => p?.name || ""}
+        productMeta
         getSearchText={(p) =>
           `${p?.name || ""} ${p?.barcode || ""} ${p?.sku || ""} ${formatMoneyShort(productPrice(p))} stock ${productStock(p) ?? ""}`
         }
         renderOption={(props, p) => {
           const { key, ...rest } = props;
           const img = p.primaryImageUrl ? `${pathImg}${p.primaryImageUrl}` : null;
-          const stock = productStock(p);
+          const stock = Number(productStock(p) ?? 0);
           const price = productPrice(p);
+          const cost = Number(p.supplierPrice ?? 0);
           return (
-            <li key={key} {...rest}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ width: "100%", py: 0.25 }}>
-                {img ? (
-                  <img
-                    src={img}
-                    alt=""
-                    style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover" }}
-                    onError={(e) => (e.currentTarget.style.visibility = "hidden")}
-                  />
-                ) : (
-                  <Box sx={{ width: 32, height: 32, bgcolor: "action.hover", borderRadius: 1, flexShrink: 0 }} />
+            <Box
+              component="li"
+              key={key}
+              {...rest}
+              sx={{
+                display: "flex !important",
+                alignItems: "center !important",
+                gap: 1,
+                py: "6px !important",
+              }}
+            >
+              {img ? (
+                <img
+                  src={img}
+                  alt=""
+                  style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover", flexShrink: 0 }}
+                  onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                />
+              ) : (
+                <Box sx={{ width: 32, height: 32, bgcolor: "action.hover", borderRadius: 1, flexShrink: 0 }} />
+              )}
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="body2" noWrap fontWeight={600}>
+                  {p.name}
+                </Typography>
+                {(p.sku || p.barcode) && (
+                  <Typography variant="caption" color="text.secondary" noWrap display="block">
+                    {[p.sku, p.barcode].filter(Boolean).join(" · ")}
+                  </Typography>
                 )}
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" noWrap fontWeight={600}>
-                    {p.name}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Stock {stock != null ? stock : "—"} · {formatMoneyShort(price)}
-                  </Typography>
-                </Box>
+              </Box>
+              <Stack direction="row" spacing={0.5} flexShrink={0} useFlexGap flexWrap="wrap" justifyContent="flex-end">
+                <Chip
+                  size="small"
+                  color={stockColor(stock, p.minStock)}
+                  label={`Stock ${stockFmt(stock)}`}
+                  sx={{ height: 22, "& .MuiChip-label": { px: 0.75, fontSize: "0.7rem", fontWeight: 700 } }}
+                />
+                <Chip
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  label={moneyFmt(price)}
+                  sx={{ height: 22, "& .MuiChip-label": { px: 0.75, fontSize: "0.7rem", fontWeight: 700 } }}
+                />
+                {showProductCost && cost > 0 && (
+                  <Chip
+                    size="small"
+                    color="secondary"
+                    variant="outlined"
+                    label={`Costo ${moneyFmt(cost)}`}
+                    sx={{ height: 22, "& .MuiChip-label": { px: 0.75, fontSize: "0.68rem", fontWeight: 600 } }}
+                  />
+                )}
               </Stack>
-            </li>
+            </Box>
           );
         }}
       />

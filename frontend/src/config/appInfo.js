@@ -35,6 +35,9 @@ export const RAPTOR_UNCONFIGURED_FALLBACK = {
   showPublicStoresPropia: false,
   showPublicStoresVitrina: false,
   multiStockEnabled: false,
+  showProductCostInSelect: false,
+  moneyDisplayDecimals: 2,
+  moneyRoundingMode: "up",
 };
 
 /** Fallback EdDeli solo cuando el modo de Vite es eddeli. */
@@ -62,6 +65,9 @@ export const EDDELI_FALLBACK = {
   showPublicStoresPropia: true,
   showPublicStoresVitrina: true,
   multiStockEnabled: true,
+  showProductCostInSelect: false,
+  moneyDisplayDecimals: 2,
+  moneyRoundingMode: "up",
 };
 
 export const APP_SETTINGS_FALLBACK =
