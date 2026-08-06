@@ -1,5 +1,6 @@
 import {
   Autocomplete,
+  Alert,
   Box,
   Button,
   Checkbox,
@@ -7,6 +8,8 @@ import {
   Grid,
   MenuItem,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
@@ -41,6 +44,7 @@ function BatchForm({
     defaultValues: {
       productId: null,
       storeId: null,
+      stockMode: "assign",
       quantity: "",
       expiresAt: "",
       manufacturedAt: "",
@@ -150,7 +154,8 @@ function BatchForm({
       expiresAt: formData.expiresAt,
       code: formData.code || undefined,
       notes: formData.notes || undefined,
-      createExpense: Boolean(formData.createExpense),
+      createExpense: Boolean(formData.createExpense) && formData.stockMode === "add",
+      stockMode: formData.stockMode === "assign" ? "assign" : "add",
     };
     if (multiStockEnabled && formData.storeId) {
       payload.storeId = Number(formData.storeId);
@@ -158,13 +163,20 @@ function BatchForm({
     if (formData.manufacturedAt) {
       payload.manufacturedAt = formData.manufacturedAt;
     }
-    if (formData.unitCost !== "" && formData.unitCost != null) {
+    if (
+      formData.stockMode === "add" &&
+      formData.unitCost !== "" &&
+      formData.unitCost != null
+    ) {
       payload.unitCost = Number(formData.unitCost);
     }
 
     toastAuth({
       promise: createBatchRequest(payload),
-      successMessage: "Lote registrado e inventario actualizado",
+      successMessage:
+        formData.stockMode === "assign"
+          ? "Lote asignado al stock existente (sin sumar)"
+          : "Lote registrado e inventario actualizado",
       onSuccess: () => {
         onClose?.();
         reload?.();
@@ -175,6 +187,8 @@ function BatchForm({
 
   const selectedProduct =
     products.find((p) => Number(p.id) === Number(watch("productId"))) || null;
+  const stockMode = watch("stockMode") || "assign";
+  const productStock = Number(selectedProduct?.stock || 0);
 
   return (
     <Box component="form" sx={{ mt: 1 }} onSubmit={handleSubmit(submitForm)}>
@@ -199,7 +213,16 @@ function BatchForm({
                   }}
                   isOptionEqualToValue={(a, b) => Number(a?.id) === Number(b?.id)}
                   value={selectedProduct}
-                  onChange={(_, v) => field.onChange(v?.id ?? null)}
+                  onChange={(_, v) => {
+                    field.onChange(v?.id ?? null);
+                    const stock = Number(v?.stock || 0);
+                    if (stock > 0) {
+                      setValue("stockMode", "assign");
+                      setValue("quantity", String(stock));
+                    } else {
+                      setValue("stockMode", "add");
+                    }
+                  }}
                   renderOption={(props, option) => (
                     <Box
                       component="li"
@@ -277,6 +300,39 @@ function BatchForm({
           </Grid>
         )}
 
+        {!isEditing && (
+          <Grid item xs={12}>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+              ¿Qué hacés con el stock?
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              fullWidth
+              value={stockMode}
+              onChange={(_, v) => v && setValue("stockMode", v)}
+              sx={{ flexWrap: "wrap" }}
+            >
+              <ToggleButton value="assign" sx={{ textTransform: "none", flex: 1 }}>
+                Asignar stock existente
+              </ToggleButton>
+              <ToggleButton value="add" sx={{ textTransform: "none", flex: 1 }}>
+                Entrada nueva (suma stock)
+              </ToggleButton>
+            </ToggleButtonGroup>
+            <Alert
+              severity={stockMode === "assign" ? "info" : "warning"}
+              sx={{ mt: 1, py: 0.25, "& .MuiAlert-message": { fontSize: "0.75rem" } }}
+            >
+              {stockMode === "assign"
+                ? `Solo pone fechas/vencimiento al stock que ya hay${
+                    selectedProduct ? ` (disp. ${stockFmt(productStock)})` : ""
+                  }. No suma ni crea movimiento de entrada.`
+                : "Suma la cantidad al stock del producto y registra entrada (como una compra)."}
+            </Alert>
+          </Grid>
+        )}
+
         {isEditing && (
           <Grid item xs={12} sm={6}>
             <TextField
@@ -295,12 +351,18 @@ function BatchForm({
         {!isEditing && (
           <Grid item xs={12} sm={6}>
             <TextField
-              label="Cantidad"
+              label={stockMode === "assign" ? "Cantidad a asignar al lote" : "Cantidad a ingresar"}
               type="number"
               fullWidth
               required
               variant="standard"
+              InputLabelProps={{ shrink: true }}
               inputProps={{ min: 0, step: "any" }}
+              helperText={
+                stockMode === "assign" && selectedProduct
+                  ? `Máximo sugerido: stock actual ${stockFmt(productStock)}`
+                  : undefined
+              }
               {...register("quantity", { required: true, min: 0.0001 })}
             />
           </Grid>
@@ -341,7 +403,7 @@ function BatchForm({
           />
         </Grid>
 
-        {!isEditing && (
+        {!isEditing && stockMode === "add" && (
           <Grid item xs={12} sm={6}>
             <TextField
               label="Costo unitario (opcional)"
@@ -366,7 +428,7 @@ function BatchForm({
           />
         </Grid>
 
-        {!isEditing && (
+        {!isEditing && stockMode === "add" && (
           <Grid item xs={12}>
             <Controller
               name="createExpense"
