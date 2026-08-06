@@ -482,6 +482,20 @@ export const writeOffBatchRequest = async (id) => {
   });
 };
 
+export const closeBatchRequest = async (id) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.post(`/inventory/batches/${id}/close`, {}, {
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const splitBatchRequest = async (id, data) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.post(`/inventory/batches/${id}/split`, data, {
+    headers: { Authorization: jwt() },
+  });
+};
+
 export const deleteBatchRequest = async (id) => {
   if (isGuestDataMode()) return guestDenied();
   return axios.delete(`/inventory/batches/${id}`, {

@@ -5,6 +5,7 @@ import {
   Checkbox,
   FormControlLabel,
   Grid,
+  MenuItem,
   TextField,
   Typography,
 } from "@mui/material";
@@ -15,7 +16,9 @@ import {
   createBatchRequest,
   updateBatchRequest,
   getAllProductsAll,
+  getStoresRequest,
 } from "../../../../api/inventoryControlRequest";
+import { storeHoldsInventory } from "../../../../utils/storeLocationKind.js";
 
 const stockFmt = (v) =>
   new Intl.NumberFormat("es-EC", { maximumFractionDigits: 2 }).format(Number(v || 0));
@@ -31,11 +34,13 @@ function BatchForm({
   onClose,
   reload,
   defaultProductId = null,
+  multiStockEnabled = false,
 }) {
   const { toast: toastAuth } = useAuth();
   const { handleSubmit, register, reset, setValue, control, watch } = useForm({
     defaultValues: {
       productId: null,
+      storeId: null,
       quantity: "",
       expiresAt: "",
       manufacturedAt: "",
@@ -46,6 +51,7 @@ function BatchForm({
     },
   });
   const [products, setProducts] = useState([]);
+  const [stores, setStores] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
   useEffect(() => {
@@ -53,7 +59,12 @@ function BatchForm({
     (async () => {
       setLoadingProducts(true);
       try {
-        const { data } = await getAllProductsAll();
+        const [{ data }, storesRes] = await Promise.all([
+          getAllProductsAll(),
+          multiStockEnabled
+            ? getStoresRequest({ isActive: true }).catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] }),
+        ]);
         const list = Array.isArray(data) ? data : data?.products || [];
         if (!cancelled) {
           setProducts(
@@ -61,9 +72,14 @@ function BatchForm({
               .filter((p) => p?.isActive !== false)
               .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "es")),
           );
+          const rawStores = Array.isArray(storesRes.data) ? storesRes.data : [];
+          setStores(rawStores.filter((s) => storeHoldsInventory(s.locationKind)));
         }
       } catch {
-        if (!cancelled) setProducts([]);
+        if (!cancelled) {
+          setProducts([]);
+          setStores([]);
+        }
       } finally {
         if (!cancelled) setLoadingProducts(false);
       }
@@ -71,11 +87,13 @@ function BatchForm({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [multiStockEnabled]);
 
   useEffect(() => {
     if (isEditing && datos) {
       setValue("productId", datos.productId);
+      setValue("storeId", datos.storeId ?? null);
+      setValue("quantity", datos.quantityRemaining ?? "");
       setValue("expiresAt", String(datos.expiresAt || "").slice(0, 10));
       setValue("manufacturedAt", datos.manufacturedAt ? String(datos.manufacturedAt).slice(0, 10) : "");
       setValue("code", datos.code || "");
@@ -87,13 +105,22 @@ function BatchForm({
 
   const submitForm = async (formData) => {
     if (isEditing) {
+      const quantityRemaining = Number(formData.quantity);
+      if (!Number.isFinite(quantityRemaining) || quantityRemaining < 0) {
+        return;
+      }
+      const payload = {
+        code: formData.code,
+        expiresAt: formData.expiresAt,
+        manufacturedAt: formData.manufacturedAt || null,
+        notes: formData.notes,
+        quantityRemaining,
+      };
+      if (multiStockEnabled) {
+        payload.storeId = formData.storeId || null;
+      }
       toastAuth({
-        promise: updateBatchRequest(datos.id, {
-          code: formData.code,
-          expiresAt: formData.expiresAt,
-          manufacturedAt: formData.manufacturedAt || null,
-          notes: formData.notes,
-        }),
+        promise: updateBatchRequest(datos.id, payload),
         onSuccess: () => {
           onClose?.();
           reload?.();
@@ -109,6 +136,13 @@ function BatchForm({
     if (!productId || !(quantity > 0) || !formData.expiresAt) {
       return;
     }
+    if (multiStockEnabled && !formData.storeId) {
+      void toastAuth?.({
+        message: "Con multistock indicá el local del lote.",
+        variant: "warning",
+      });
+      return;
+    }
 
     const payload = {
       productId,
@@ -118,6 +152,9 @@ function BatchForm({
       notes: formData.notes || undefined,
       createExpense: Boolean(formData.createExpense),
     };
+    if (multiStockEnabled && formData.storeId) {
+      payload.storeId = Number(formData.storeId);
+    }
     if (formData.manufacturedAt) {
       payload.manufacturedAt = formData.manufacturedAt;
     }
@@ -211,6 +248,46 @@ function BatchForm({
               variant="standard"
               value={datos?.productName || ""}
               InputProps={{ readOnly: true }}
+            />
+          </Grid>
+        )}
+
+        {multiStockEnabled && (
+          <Grid item xs={12} sm={6}>
+            <TextField
+              select
+              label="Local del lote"
+              fullWidth
+              required={!isEditing}
+              variant="standard"
+              value={watch("storeId") || ""}
+              onChange={(e) => setValue("storeId", e.target.value || null)}
+              helperText={
+                isEditing
+                  ? "Asigná local para poder dividir el lote"
+                  : "Bodega o sucursal donde queda el stock"
+              }
+            >
+              {stores.map((s) => (
+                <MenuItem key={s.id} value={String(s.id)}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+        )}
+
+        {isEditing && (
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Cantidad restante"
+              type="number"
+              fullWidth
+              required
+              variant="standard"
+              inputProps={{ min: 0, step: "any" }}
+              helperText="Solo del lote. No cambia el stock del producto ni lo elimina."
+              {...register("quantity", { required: true, min: 0 })}
             />
           </Grid>
         )}
