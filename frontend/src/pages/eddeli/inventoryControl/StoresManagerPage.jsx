@@ -58,6 +58,7 @@ import {
 import { pathImg, buildImageUrl } from "../../../api/axios";
 import { mediaStoragePath } from "../../../utils/mediaPaths.js";
 import { useAuth } from "../../../context/AuthContext";
+import { useAppSettings } from "../../../context/AppSettingsContext.jsx";
 import Cropper from "react-easy-crop";
 import {
   locationKindLabel,
@@ -518,7 +519,7 @@ function StoreFormTabPanel({ value, index, children }) {
   );
 }
 
-function StoreForm({ value, onChange, inventoryStores = [] }) {
+function StoreForm({ value, onChange, inventoryStores = [], multiStockEnabled = true }) {
   const set = (k, v) => onChange({ ...value, [k]: v });
   const isPropia = (value.locationKind || "vitrina") === "propia";
   const isBodega = (value.locationKind || "vitrina") === "bodega";
@@ -642,7 +643,7 @@ function StoreForm({ value, onChange, inventoryStores = [] }) {
               sx={{ ...storeFieldSx, maxWidth: { sm: 220 } }}
             >
               <MenuItem value="propia">Sucursal propia</MenuItem>
-              <MenuItem value="bodega">Bodega</MenuItem>
+              {multiStockEnabled && <MenuItem value="bodega">Bodega</MenuItem>}
               <MenuItem value="vitrina">Vitrina</MenuItem>
             </TextField>
           </Stack>
@@ -652,7 +653,9 @@ function StoreForm({ value, onChange, inventoryStores = [] }) {
             sx={{ py: 0.25, px: 1.25, "& .MuiAlert-message": { fontSize: "0.75rem" } }}
           >
             {isPropia
-              ? "Punto de venta tuyo: turno, cajas, códigos SRI y stock del local."
+              ? multiStockEnabled
+                ? "Punto de venta tuyo: turno, cajas, códigos SRI y stock del local."
+                : "Tu local de operación: turno, cajas y stock."
               : isBodega
                 ? "Almacén: tiene stock, no abre turno de caja. Desde aquí trasladas a sucursales."
                 : "Local ajeno: entregas producto para que vendan (sin caja POS ni stock inventariable)."}
@@ -985,6 +988,8 @@ function StoresPage() {
   const [loading, setLoading] = useState(false);
   const [sriSettings, setSriSettings] = useState(null);
   const { toast: toastAuth } = useAuth();
+  const { activeApp } = useAppSettings();
+  const multiStockEnabled = Boolean(activeApp?.multiStockEnabled);
   const { startTour } = usePageTour({
     tourId: LOCALES_TOUR_ID,
     getSteps: getLocalesTourSteps,
@@ -1009,7 +1014,7 @@ function StoresPage() {
     position: 0,
     isActive: true,
     isVisible: true,
-    locationKind: "vitrina",
+    locationKind: "propia",
     establishmentCode: "001",
     emissionPointCode: "001",
     imageUrl: "",
@@ -1076,6 +1081,10 @@ function StoresPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!multiStockEnabled && kindFilter === "bodega") setKindFilter("all");
+  }, [multiStockEnabled, kindFilter]);
+
   const handleOpenCreate = () => {
     setIsEditing(false);
     setFormValue({
@@ -1091,7 +1100,7 @@ function StoresPage() {
       position: 0,
       isActive: true,
       isVisible: true,
-      locationKind: "vitrina",
+      locationKind: "propia",
       establishmentCode: "001",
       emissionPointCode: "001",
       imageUrl: "",
@@ -1396,8 +1405,17 @@ function StoresPage() {
             <TourHelpButton onClick={startTour} title="Ver tutorial de locales y stock" />
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            <strong>Sucursal propia</strong>: vende + turno. <strong>Bodega</strong>: almacén de
-            stock. <strong>Vitrina</strong>: entrega ajena (sin inventario).
+            {multiStockEnabled ? (
+              <>
+                <strong>Sucursal propia</strong>: vende + turno. <strong>Bodega</strong>: almacén de
+                stock. <strong>Vitrina</strong>: entrega ajena (sin inventario).
+              </>
+            ) : (
+              <>
+                Administra tu local de operación (turno y stock). Las vitrinas son opcionales para
+                entregas ajenas.
+              </>
+            )}
           </Typography>
         </Box>
         <Button
@@ -1410,17 +1428,25 @@ function StoresPage() {
         </Button>
       </Stack>
 
-      <Alert data-tour="locales-alert-stock" severity="warning" sx={{ mb: 1.5, py: 0.75 }}>
-        El stock general es la <strong>suma por local</strong>. Tras reiniciar el backend, el stock
-        actual migra a <strong>Bodega</strong>. Usa el ícono de inventario en cada sucursal/bodega
-        para ver la tabla y hacer <strong>traspasos</strong>. Sin stock en el local del turno, Caja
-        no cobra.
-      </Alert>
+      {multiStockEnabled ? (
+        <>
+          <Alert data-tour="locales-alert-stock" severity="warning" sx={{ mb: 1.5, py: 0.75 }}>
+            El stock general es la <strong>suma por local</strong>. Tras reiniciar el backend, el stock
+            actual migra a <strong>Bodega</strong>. Usa el ícono de inventario en cada sucursal/bodega
+            para ver la tabla y hacer <strong>traspasos</strong>. Sin stock en el local del turno, Caja
+            no cobra.
+          </Alert>
 
-      <Alert severity="info" sx={{ mb: 2, py: 0.75 }}>
-        Al abrir turno solo aparecen las <strong>sucursales propias</strong>. Bodega no abre caja.
-        Las vitrinas siguen para surtido/mapa público.
-      </Alert>
+          <Alert severity="info" sx={{ mb: 2, py: 0.75 }}>
+            Al abrir turno solo aparecen las <strong>sucursales propias</strong>. Bodega no abre caja.
+            Las vitrinas siguen para surtido/mapa público.
+          </Alert>
+        </>
+      ) : (
+        <Alert severity="info" sx={{ mb: 2, py: 0.75 }}>
+          Modo un solo local: abre turno en tu local activo sin crear Bodega ni sucursales extra.
+        </Alert>
+      )}
 
       <Stack
         data-tour="locales-kind-filters"
@@ -1448,15 +1474,17 @@ function StoresPage() {
           onClick={() => setKindFilter("propia")}
           sx={{ fontWeight: 700 }}
         />
-        <Chip
-          clickable
-          size="small"
-          color={kindFilter === "bodega" ? "primary" : "default"}
-          variant={kindFilter === "bodega" ? "filled" : "outlined"}
-          label={`${locationKindLabel("bodega")} (${kindCounts.bodega || 0})`}
-          onClick={() => setKindFilter("bodega")}
-          sx={{ fontWeight: 700 }}
-        />
+        {multiStockEnabled && (
+          <Chip
+            clickable
+            size="small"
+            color={kindFilter === "bodega" ? "primary" : "default"}
+            variant={kindFilter === "bodega" ? "filled" : "outlined"}
+            label={`${locationKindLabel("bodega")} (${kindCounts.bodega || 0})`}
+            onClick={() => setKindFilter("bodega")}
+            sx={{ fontWeight: 700 }}
+          />
+        )}
         <Chip
           clickable
           size="small"
@@ -1512,6 +1540,7 @@ function StoresPage() {
           value={formValue}
           onChange={setFormValue}
           inventoryStores={inventoryStores}
+          multiStockEnabled={multiStockEnabled}
         />
         <DialogActions sx={{ px: 0, pt: 1.5, pb: 0.5 }}>
           <Button onClick={() => setOpenForm(false)}>Cancelar</Button>

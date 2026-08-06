@@ -37,6 +37,7 @@ import AddIcon from "@mui/icons-material/Add";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import EditIcon from "@mui/icons-material/Edit";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { useAppSettings } from "../../context/AppSettingsContext.jsx";
 import { formatDateTime } from "../../helpers/functions.js";
 import {
   closeShift,
@@ -222,6 +223,9 @@ const DEMO_CLOSE_COUNTS = [
 
 export default function TurnoPage() {
   const { user, toast } = useAuth();
+  const { activeApp } = useAppSettings();
+  /** Multistock: solo sucursales propias. Un solo local: cualquier local activo. */
+  const multiStockEnabled = Boolean(activeApp?.multiStockEnabled);
   const isProgrammer = user?.loginRol === "Programador";
   const isAdmin = user?.loginRol === "Administrador" || isProgrammer;
   /** Admin y Programador abren/cierran con arqueo por monedas/billetes. */
@@ -354,22 +358,26 @@ export default function TurnoPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const storesQuery = multiStockEnabled
+        ? { isActive: true, kind: "propia" }
+        : { isActive: true };
       const [activeRes, histRes, storesRes, sriRes] = await Promise.all([
         getActiveShift(),
         getShifts({ limit: 12 }),
-        getStoresRequest({ isActive: true, kind: "propia" }).catch(() => ({ data: [] })),
+        getStoresRequest(storesQuery).catch(() => ({ data: [] })),
         fetchSriBillingSettings().catch(() => null),
       ]);
       setActiveShift(activeRes.data || null);
       setHistory(Array.isArray(histRes.data) ? histRes.data : []);
       const rawStores = Array.isArray(storesRes.data) ? storesRes.data : [];
-      // Solo sucursales propias activas (nunca bodega ni vitrina).
-      const propias = rawStores.filter(
-        (s) =>
-          String(s?.locationKind || "").toLowerCase() === "propia" &&
-          (s?.isActive === true || s?.isActive === 1 || s?.isActive === "1"),
-      );
-      setStores(propias);
+      const usable = rawStores.filter((s) => {
+        const active =
+          s?.isActive === true || s?.isActive === 1 || s?.isActive === "1";
+        if (!active) return false;
+        if (!multiStockEnabled) return true;
+        return String(s?.locationKind || "").toLowerCase() === "propia";
+      });
+      setStores(usable);
       setSriSettings(sriRes);
     } catch (e) {
       void toast?.({
@@ -379,7 +387,7 @@ export default function TurnoPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, multiStockEnabled]);
 
   useEffect(() => {
     void load();
@@ -508,13 +516,14 @@ export default function TurnoPage() {
     }
     if (!stores.length) {
       void toast?.({
-        message:
-          "No hay sucursales propias activas. Ve a Locales, crea o edita un local como «Sucursal propia» y actívalo.",
+        message: multiStockEnabled
+          ? "No hay sucursales propias activas. Ve a Locales, crea o edita un local como «Sucursal propia» y actívalo."
+          : "No hay un local activo. Ve a Locales y crea o activa tu local.",
         variant: "warning",
       });
       return;
     }
-    // Una sola propia activa → abrir directo. Varias → elegir.
+    // Un solo local activo → abrir directo. Varios → elegir.
     if (stores.length === 1) {
       await doOpenShift(String(stores[0].id));
       return;
@@ -705,21 +714,40 @@ export default function TurnoPage() {
           )}
           {stores.length > 1 && (
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-              Al abrir te pediremos en qué sucursal propia activa.
+              {multiStockEnabled
+                ? "Al abrir te pediremos en qué sucursal propia activa."
+                : "Al abrir te pediremos en qué local abrir el turno."}
             </Typography>
           )}
           {stores.length === 0 && (
             <Typography variant="caption" color="warning.main" display="block" sx={{ mb: 1 }}>
-              No hay sucursales propias activas. Ve a{" "}
-              <Button
-                component={RouterLink}
-                to={APP_ROUTES.channel.stores}
-                size="small"
-                sx={{ p: 0, minWidth: 0, verticalAlign: "baseline", textTransform: "none" }}
-              >
-                Locales
-              </Button>
-              , tipo «Sucursal propia» y Activo.
+              {multiStockEnabled ? (
+                <>
+                  No hay sucursales propias activas. Ve a{" "}
+                  <Button
+                    component={RouterLink}
+                    to={APP_ROUTES.channel.stores}
+                    size="small"
+                    sx={{ p: 0, minWidth: 0, verticalAlign: "baseline", textTransform: "none" }}
+                  >
+                    Locales
+                  </Button>
+                  , tipo «Sucursal propia» y Activo.
+                </>
+              ) : (
+                <>
+                  No hay un local activo. Ve a{" "}
+                  <Button
+                    component={RouterLink}
+                    to={APP_ROUTES.channel.stores}
+                    size="small"
+                    sx={{ p: 0, minWidth: 0, verticalAlign: "baseline", textTransform: "none" }}
+                  >
+                    Locales
+                  </Button>{" "}
+                  y crea o activa tu local.
+                </>
+              )}
             </Typography>
           )}
 
