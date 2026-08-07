@@ -83,7 +83,7 @@ export function getPedidoClienteFormTourSteps(hooks = {}) {
       popover: {
         title: "Crear paca",
         description:
-          "Agrupá productos que salen juntos. Los que estaban sueltos entran a la paca nueva.",
+          "Agrupá productos que salen juntos. La paca nace vacía: meté ítems con la manito, ↑↓ o el menú ⋮.",
         side: "left",
         align: "start",
       },

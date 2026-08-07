@@ -85,7 +85,7 @@ export function getPedidoProveedorFormTourSteps(hooks = {}) {
       popover: {
         title: "Crear paca",
         description:
-          "Agrupá productos que llegan juntos (misma caja). Los sueltos entran solos a la paca nueva.",
+          "Agrupá productos que llegan juntos (misma caja). La paca nace vacía: arrastrá, usá ↑↓ o el menú ⋮ para meter/sacar.",
         side: "left",
         align: "start",
       },

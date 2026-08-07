@@ -48,6 +48,8 @@ import {
   hydratePacksAndLots,
   newPackKey,
   resolveItemLotFields,
+  reorderItemInZone,
+  moveItemToZone,
 } from "./orderPackUtils.js";
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -246,19 +248,25 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
 
   const toggleItemIva = () => {};
 
-  const handleDropItem = (lineId, zoneType, zoneKey) => {
-    setItems((prev) =>
-      prev.map((it) => {
-        if (it.lineId !== lineId) return it;
-        if (zoneType === ZONE.FREE) return { ...it, packKey: null, lotKey: null };
-        if (zoneType === ZONE.PACK) return { ...it, packKey: zoneKey, lotKey: null };
-        if (zoneType === ZONE.LOT) {
-          const lot = lotsRef.current.find((l) => l.key === zoneKey);
-          return { ...it, packKey: lot?.packKey || it.packKey, lotKey: zoneKey };
-        }
-        return it;
-      }),
-    );
+  const handleDropItem = (lineId, zoneType, zoneKey, beforeLineId = null) => {
+    setItems((prev) => {
+      let assign = null;
+      if (zoneType === ZONE.FREE) assign = null;
+      else if (zoneType === ZONE.PACK) assign = { packKey: zoneKey, lotKey: null };
+      else if (zoneType === ZONE.LOT) {
+        const lot = lotsRef.current.find((l) => l.key === zoneKey);
+        assign = { packKey: lot?.packKey || null, lotKey: zoneKey };
+      } else return prev;
+      return moveItemToZone(prev, lineId, assign, beforeLineId);
+    });
+  };
+
+  const moveItem = (lineId, direction) => {
+    setItems((prev) => reorderItemInZone(prev, lineId, direction));
+  };
+
+  const assignItem = (lineId, assign) => {
+    setItems((prev) => moveItemToZone(prev, lineId, assign, null));
   };
 
   const createPack = () => {
@@ -276,11 +284,6 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
         expanded: true,
       },
     ]);
-    setItems((prev) => {
-      const free = prev.filter((it) => !it.packKey);
-      if (!free.length) return prev;
-      return prev.map((it) => (!it.packKey ? { ...it, packKey: key, lotKey: null } : it));
-    });
   };
 
   const updatePack = (packKey, patch) => {
@@ -743,7 +746,8 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
               tourIdPrefix="pedido-cliente"
               helpText={
                 <>
-                  Creá una paca para agrupar productos que salen juntos. Podés poner vencimiento y el{" "}
+                  Creá una paca vacía y meté productos con la manito, ↑↓ o el menú ⋮ (meter / sacar /
+                  pasar a otra paca). Podés poner vencimiento y el{" "}
                   <strong>valor total de la paca</strong> para repartir precios unitarios.
                 </>
               }
@@ -751,6 +755,8 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
               onUpdateItemField={updateItemField}
               onToggleItemIva={toggleItemIva}
               onDropItem={handleDropItem}
+              onMoveItem={moveItem}
+              onAssignItem={assignItem}
               onCreatePack={createPack}
               onUpdatePack={updatePack}
               onRemovePack={removePack}

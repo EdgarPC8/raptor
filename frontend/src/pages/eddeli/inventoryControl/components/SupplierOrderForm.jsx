@@ -49,6 +49,10 @@ import {
   buildLastPurchaseByProductId,
   getLastPurchaseForProduct,
 } from "../../../../utils/supplierLastPurchase.js";
+import {
+  reorderItemInZone,
+  moveItemToZone,
+} from "./orderPackUtils.js";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
@@ -447,27 +451,25 @@ function SupplierOrderForm(
     );
   };
 
-  const handleDropItem = (lineId, zoneType, zoneKey) => {
-    setItems((prev) =>
-      prev.map((it) => {
-        if (it.lineId !== lineId) return it;
-        if (zoneType === ZONE.FREE) {
-          return { ...it, packKey: null, lotKey: null };
-        }
-        if (zoneType === ZONE.PACK) {
-          return { ...it, packKey: zoneKey, lotKey: null };
-        }
-        if (zoneType === ZONE.LOT) {
-          const lot = lotsRef.current.find((l) => l.key === zoneKey);
-          return {
-            ...it,
-            packKey: lot?.packKey || it.packKey,
-            lotKey: zoneKey,
-          };
-        }
-        return it;
-      }),
-    );
+  const handleDropItem = (lineId, zoneType, zoneKey, beforeLineId = null) => {
+    setItems((prev) => {
+      let assign = null;
+      if (zoneType === ZONE.FREE) assign = null;
+      else if (zoneType === ZONE.PACK) assign = { packKey: zoneKey, lotKey: null };
+      else if (zoneType === ZONE.LOT) {
+        const lot = lotsRef.current.find((l) => l.key === zoneKey);
+        assign = { packKey: lot?.packKey || null, lotKey: zoneKey };
+      } else return prev;
+      return moveItemToZone(prev, lineId, assign, beforeLineId);
+    });
+  };
+
+  const moveItem = (lineId, direction) => {
+    setItems((prev) => reorderItemInZone(prev, lineId, direction));
+  };
+
+  const assignItem = (lineId, assign) => {
+    setItems((prev) => moveItemToZone(prev, lineId, assign, null));
   };
 
   const createPack = () => {
@@ -485,16 +487,8 @@ function SupplierOrderForm(
         expanded: true,
       },
     ]);
-    // Si hay productos sueltos, entran a la paca nueva (así se guardan al editar).
-    setItems((prev) => {
-      const free = prev.filter((it) => !it.packKey);
-      if (free.length === 0) return prev;
-      return prev.map((it) =>
-        !it.packKey ? { ...it, packKey: key, lotKey: null } : it,
-      );
-    });
     toast({
-      message: "Paca creada. Los productos sueltos quedaron dentro; podés arrastrarlos si hace falta.",
+      message: "Paca vacía creada. Arrastrá productos, usá ↑↓ o el menú ⋮ para meterlos.",
       variant: "info",
     });
   };
@@ -1111,6 +1105,8 @@ function SupplierOrderForm(
               onUpdateItemField={updateItemField}
               onToggleItemIva={toggleItemIva}
               onDropItem={handleDropItem}
+              onMoveItem={moveItem}
+              onAssignItem={assignItem}
               onCreatePack={createPack}
               onUpdatePack={updatePack}
               onRemovePack={removePack}

@@ -154,3 +154,79 @@ export function resolveItemLotFields(item, packs, lots) {
     manufacturedAt: null,
   };
 }
+
+/** Misma zona visual (libre / paca / lote). */
+export function sameItemZone(a, b) {
+  if (!a || !b) return false;
+  return (a.packKey || null) === (b.packKey || null) && (a.lotKey || null) === (b.lotKey || null);
+}
+
+export function itemMatchesZone(it, zone) {
+  if (!zone) return false;
+  if (zone.type === "free") return !it.packKey;
+  if (zone.type === "pack") {
+    return it.packKey === zone.packKey && !it.lotKey;
+  }
+  if (zone.type === "lot") return it.lotKey === zone.lotKey;
+  if (zone.type === "packAll") return it.packKey === zone.packKey;
+  return false;
+}
+
+/** Sube/baja un ítem dentro de su zona (mismo packKey/lotKey). */
+export function reorderItemInZone(items, lineId, direction) {
+  const current = items.find((it) => it.lineId === lineId);
+  if (!current) return items;
+  const match = (it) => sameItemZone(it, current);
+  const zoneItems = items.filter(match);
+  const idx = zoneItems.findIndex((it) => it.lineId === lineId);
+  const j = idx + direction;
+  if (idx < 0 || j < 0 || j >= zoneItems.length) return items;
+  const reordered = [...zoneItems];
+  [reordered[idx], reordered[j]] = [reordered[j], reordered[idx]];
+  let k = 0;
+  return items.map((it) => (match(it) ? reordered[k++] : it));
+}
+
+/**
+ * Mueve un ítem a otra zona y lo inserta antes de `beforeLineId` (o al final de la zona).
+ * `assign`: { packKey, lotKey } | null para libre.
+ */
+export function moveItemToZone(items, lineId, assign, beforeLineId = null) {
+  const moved = items.find((it) => it.lineId === lineId);
+  if (!moved) return items;
+  const nextAssign = assign
+    ? {
+        packKey: assign.packKey ?? null,
+        lotKey: assign.lotKey ?? null,
+      }
+    : { packKey: null, lotKey: null };
+  const updated = { ...moved, ...nextAssign };
+  let without = items.filter((it) => it.lineId !== lineId);
+
+  if (beforeLineId && beforeLineId !== lineId) {
+    const insertAt = without.findIndex((it) => it.lineId === beforeLineId);
+    if (insertAt >= 0) {
+      without = [
+        ...without.slice(0, insertAt),
+        updated,
+        ...without.slice(insertAt),
+      ];
+      return without;
+    }
+  }
+
+  // Insertar al final del grupo de destino (después del último de esa zona).
+  let lastIdx = -1;
+  without.forEach((it, i) => {
+    if (sameItemZone(it, updated)) lastIdx = i;
+  });
+  if (lastIdx >= 0) {
+    without = [
+      ...without.slice(0, lastIdx + 1),
+      updated,
+      ...without.slice(lastIdx + 1),
+    ];
+    return without;
+  }
+  return [...without, updated];
+}
