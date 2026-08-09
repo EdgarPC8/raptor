@@ -108,6 +108,7 @@ export default function AppSettingsPage() {
         showProductCostInSelect: Boolean(settings.showProductCostInSelect),
         moneyDisplayDecimals: Number(settings.moneyDisplayDecimals ?? 2),
         moneyRoundingMode: settings.moneyRoundingMode || "up",
+        ordersAllowDeliverStockAdjust: Boolean(settings.ordersAllowDeliverStockAdjust),
       });
     }
   }, [settings]);
@@ -626,6 +627,16 @@ export default function AppSettingsPage() {
                     }
                     label="Mostrar costo (prov.) en selects de producto"
                   />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={Boolean(form.ordersAllowDeliverStockAdjust)}
+                        onChange={onToggle("ordersAllowDeliverStockAdjust")}
+                      />
+                    }
+                    label="Pedidos: permitir ajuste de stock al entregar (Admin)"
+                  />
                   {multiStockFeatureStatus !== "hidden" ? (
                     <FormControlLabel
                       control={
@@ -640,6 +651,10 @@ export default function AppSettingsPage() {
                     />
                   ) : null}
                 </FormGroup>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, mb: 0.5 }}>
+                  Si al entregar un pedido falta stock y el check está activo, Admin/Programador ve un modal
+                  (como en caja) para registrar un movimiento de <strong>ajuste</strong> desde pedidos y completar.
+                </Typography>
 
                 {multiStockFeatureStatus !== "hidden" ? (
                   <Box data-tour="config-multistock" sx={{ mt: 0.75 }}>

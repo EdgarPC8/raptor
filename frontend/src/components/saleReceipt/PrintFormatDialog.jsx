@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   Checkbox,
@@ -32,17 +33,35 @@ import {
   downloadReceiptAsPng,
 } from "../../utils/saleReceiptExport.js";
 import { getReceiptLayout } from "../../utils/receiptFormats.js";
+import { enrichReceiptWithFiscal } from "../../utils/invoiceFiscalUtils.js";
+import { fetchSriBillingSettings } from "../../api/sriBillingRequest.js";
+import { fetchSriInvoices } from "../../api/sriInvoicesRequest.js";
+import { useAppSettings } from "../../context/AppSettingsContext.jsx";
 
 /** Modal: formato de impresión, tipo de documento y vista previa. */
-export default function PrintFormatDialog({ open, onClose, receipt, initialFormat = "a4" }) {
+export default function PrintFormatDialog({
+  open,
+  onClose,
+  receipt,
+  initialFormat = "a4",
+  sriInvoice: sriInvoiceProp = null,
+}) {
+  const { activeApp } = useAppSettings();
   const [format, setFormat] = useState(initialFormat);
   const [documentType, setDocumentType] = useState("documento");
   const [showNotes, setShowNotes] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [sriSettings, setSriSettings] = useState(null);
+  const [sriInvoice, setSriInvoice] = useState(sriInvoiceProp);
   const previewRef = useRef(null);
   const layout = getReceiptLayout(format);
-  const previewWidth = layout.isTicket ? layout.previewWidth : layout.maxWidth;
+  const previewWidth =
+    documentType === "factura" && !layout.isTicket
+      ? 820
+      : layout.isTicket
+        ? layout.previewWidth
+        : layout.maxWidth;
 
   useEffect(() => {
     if (open) {
@@ -50,15 +69,58 @@ export default function PrintFormatDialog({ open, onClose, receipt, initialForma
       setDocumentType(receipt?.documentType || "documento");
       setShowNotes(true);
       setCopied(false);
+      setSriInvoice(sriInvoiceProp || null);
     }
-  }, [open, initialFormat, receipt?.documentType]);
+  }, [open, initialFormat, receipt?.documentType, sriInvoiceProp]);
 
-  const previewReceipt = useMemo(
-    () => applyReceiptDocumentType(receipt, documentType),
-    [receipt, documentType],
-  );
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const settings = await fetchSriBillingSettings();
+        if (!cancelled) setSriSettings(settings);
+      } catch {
+        if (!cancelled) setSriSettings(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
-  const baseFilename = `comprobante-${receipt?.id || "pedido"}`;
+  useEffect(() => {
+    if (!open || !receipt?.id || sriInvoiceProp) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await fetchSriInvoices(80, "01");
+        const match = (list || []).find(
+          (inv) => Number(inv.orderId) === Number(receipt.id),
+        );
+        if (!cancelled) setSriInvoice(match || null);
+      } catch {
+        if (!cancelled) setSriInvoice(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, receipt?.id, sriInvoiceProp]);
+
+  const previewReceipt = useMemo(() => {
+    const typed = applyReceiptDocumentType(receipt, documentType);
+    if (!typed) return null;
+    if (documentType !== "factura") return typed;
+    return enrichReceiptWithFiscal(typed, sriSettings, sriInvoice, {
+      logoUrl: typed.logoUrl || activeApp?.logoUrl || "",
+    });
+  }, [receipt, documentType, sriSettings, sriInvoice, activeApp?.logoUrl]);
+
+  const baseFilename =
+    documentType === "factura"
+      ? `factura-${previewReceipt?.fiscal?.invoiceNumber || receipt?.id || "doc"}`
+      : `comprobante-${receipt?.id || "pedido"}`;
 
   const handlePrint = () => {
     if (!previewReceipt) return;
@@ -66,6 +128,7 @@ export default function PrintFormatDialog({ open, onClose, receipt, initialForma
   };
 
   const hasNotes = Boolean(previewReceipt?.notes);
+  const isFactura = documentType === "factura";
 
   const handleDownloadPng = async () => {
     if (!previewRef.current) return;
@@ -100,8 +163,8 @@ export default function PrintFormatDialog({ open, onClose, receipt, initialForma
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>Comprobante / factura</DialogTitle>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth={isFactura ? "lg" : "md"}>
+      <DialogTitle>{isFactura ? "Factura (RIDE)" : "Comprobante / factura"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           <Box>
@@ -149,20 +212,28 @@ export default function PrintFormatDialog({ open, onClose, receipt, initialForma
             </ToggleButtonGroup>
           </Box>
 
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={showNotes}
-                onChange={(e) => setShowNotes(e.target.checked)}
-                disabled={!hasNotes}
-              />
-            }
-            label={
-              hasNotes
-                ? "Mostrar descripción / notas del pedido"
-                : "Mostrar descripción / notas (este pedido no tiene)"
-            }
-          />
+          {isFactura ? (
+            <Alert severity="info" sx={{ py: 0.5 }}>
+              Estructura tipo factura electrónica (RIDE): A4 como hoja formal, 80/55 mm como ticket.
+              El Nº usa el secuencial de facturas (config SRI)
+              {sriInvoice?.sequential ? " autorizado" : " previsto"}.
+            </Alert>
+          ) : (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={showNotes}
+                  onChange={(e) => setShowNotes(e.target.checked)}
+                  disabled={!hasNotes}
+                />
+              }
+              label={
+                hasNotes
+                  ? "Mostrar descripción / notas del pedido"
+                  : "Mostrar descripción / notas (este pedido no tiene)"
+              }
+            />
+          )}
 
           <Typography variant="subtitle2" fontWeight={700}>
             Vista previa
@@ -180,7 +251,6 @@ export default function PrintFormatDialog({ open, onClose, receipt, initialForma
               justifyContent: "center",
             }}
           >
-            {/* Ref solo en el comprobante: sin scroll/maxHeight para PNG/Copiar enteros */}
             <Box
               ref={previewRef}
               sx={{
@@ -190,7 +260,11 @@ export default function PrintFormatDialog({ open, onClose, receipt, initialForma
                 flexShrink: 0,
               }}
             >
-              <SaleReceiptContent receipt={previewReceipt} format={format} showNotes={showNotes} />
+              <SaleReceiptContent
+                receipt={previewReceipt}
+                format={format}
+                showNotes={!isFactura && showNotes}
+              />
             </Box>
           </Box>
         </Stack>

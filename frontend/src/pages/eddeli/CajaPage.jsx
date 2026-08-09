@@ -982,6 +982,18 @@ export default function CajaPage() {
           if (customer?.id) payload.customerId = Number(customer.id);
           const result = await emitSriInvoice(payload);
           const st = result?.invoice?.status;
+          if (result?.invoice) {
+            setLastSaleReceipt((prev) =>
+              prev && Number(prev.id) === Number(data.orderId)
+                ? { ...prev, _sriInvoice: result.invoice }
+                : prev,
+            );
+            setPrintReceipt((prev) =>
+              prev && Number(prev.id) === Number(data.orderId)
+                ? { ...prev, _sriInvoice: result.invoice }
+                : prev,
+            );
+          }
           void toast?.({
             message:
               st === "authorized"
@@ -2170,6 +2182,7 @@ export default function CajaPage() {
         open={printOpen}
         onClose={() => setPrintOpen(false)}
         receipt={printReceipt}
+        sriInvoice={printReceipt?._sriInvoice || lastSaleReceipt?._sriInvoice || null}
       />
     </Box>
   );

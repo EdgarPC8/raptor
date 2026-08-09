@@ -5,6 +5,7 @@ import {
   useTheme, CircularProgress, ToggleButton, ToggleButtonGroup,
   Chip, LinearProgress, Stack,
   Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Alert,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 
@@ -381,6 +382,9 @@ export default forwardRef(function OrderCalendarView({
   const canManageOrders = ['Administrador', 'Programador'].includes(user?.loginRol);
   /** Ajuste de stock con movimiento `ajuste`: solo Programador y Administrador */
   const canAdjustStock = canManageOrders;
+  /** Config local: modal tipo caja al entregar sin stock (solo Admin/Programador). */
+  const allowDeliverStockAdjust =
+    Boolean(activeApp?.ordersAllowDeliverStockAdjust) && canAdjustStock;
 
   const [products, setProducts] = useState([]);
   /** Borrador por pedido: agregar línea sin abrir otro formulario */
@@ -395,6 +399,9 @@ export default forwardRef(function OrderCalendarView({
   const [inventoryStores, setInventoryStores] = useState([]);
   const [storeStockAvail, setStoreStockAvail] = useState(null);
   const [deliverBusy, setDeliverBusy] = useState(false);
+  const [deliverAdjustOpen, setDeliverAdjustOpen] = useState(false);
+  const [deliverAdjustQty, setDeliverAdjustQty] = useState({});
+  const [deliverAdjustNote, setDeliverAdjustNote] = useState('');
 
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustItem, setAdjustItem] = useState(null);
@@ -476,6 +483,45 @@ export default forwardRef(function OrderCalendarView({
       return;
     }
     if (!multiStockEnabled) {
+      const lines = pending.map((it) => {
+        const pid = Number(it.productId ?? it.ERP_inventory_product?.id);
+        const need = Number(it.quantity || 0);
+        const prod = products.find((p) => Number(p.id) === pid);
+        const avail = Number(prod?.stock ?? it.ERP_inventory_product?.stock ?? 0);
+        const name = it.ERP_inventory_product?.name || prod?.name || `Producto #${pid}`;
+        return {
+          pid,
+          need,
+          avail,
+          name,
+          ok: Number.isFinite(avail) ? avail >= need : true,
+          deficit: Math.max(0, need - (Number.isFinite(avail) ? avail : 0)),
+        };
+      });
+      const shortages = lines.filter((l) => !l.ok);
+      if (shortages.length) {
+        if (!allowDeliverStockAdjust) {
+          toastAuth({
+            message: `Stock insuficiente: ${shortages
+              .map((s) => `${s.name} (hay ${s.avail}, pide ${s.need})`)
+              .join('; ')}`,
+            variant: 'warning',
+          });
+          return;
+        }
+        setDeliverOrder(order);
+        setDeliverPendingItems(pending);
+        setStoreStockAvail(lines);
+        setDeliverStoreId('');
+        const init = {};
+        shortages.forEach((s) => {
+          init[s.pid] = String(s.deficit);
+        });
+        setDeliverAdjustQty(init);
+        setDeliverAdjustNote('');
+        setDeliverAdjustOpen(true);
+        return;
+      }
       setDeliverBusy(true);
       try {
         await runMutation(
@@ -499,7 +545,7 @@ export default forwardRef(function OrderCalendarView({
 
   useEffect(() => {
     if (!deliverOpen || !deliverStoreId || !deliverPendingItems?.length) {
-      setStoreStockAvail(null);
+      if (!deliverAdjustOpen) setStoreStockAvail(null);
       return;
     }
     let cancelled = false;
@@ -512,7 +558,15 @@ export default forwardRef(function OrderCalendarView({
           const need = Number(it.quantity || 0);
           const avail = Number(map[pid] ?? map[String(pid)] ?? 0);
           const name = it.ERP_inventory_product?.name || `Producto #${pid}`;
-          return { pid, need, avail, name, ok: Number.isFinite(avail) ? avail >= need : true };
+          const deficit = Math.max(0, need - (Number.isFinite(avail) ? avail : 0));
+          return {
+            pid,
+            need,
+            avail,
+            name,
+            ok: Number.isFinite(avail) ? avail >= need : true,
+            deficit,
+          };
         });
         if (!cancelled) setStoreStockAvail(lines);
       } catch {
@@ -522,7 +576,47 @@ export default forwardRef(function OrderCalendarView({
     return () => {
       cancelled = true;
     };
-  }, [deliverOpen, deliverStoreId, deliverPendingItems]);
+  }, [deliverOpen, deliverStoreId, deliverPendingItems, deliverAdjustOpen]);
+
+  const openDeliverAdjustFromShortage = (lines) => {
+    const shortages = (lines || []).filter((l) => !l.ok);
+    if (!shortages.length) return false;
+    if (!allowDeliverStockAdjust) {
+      toastAuth({
+        message: `Stock insuficiente en este local: ${shortages
+          .map((s) => `${s.name} (hay ${s.avail}, pide ${s.need})`)
+          .join('; ')}`,
+        variant: 'warning',
+      });
+      return true;
+    }
+    const init = {};
+    shortages.forEach((s) => {
+      init[s.pid] = String(s.deficit);
+    });
+    setDeliverAdjustQty(init);
+    setDeliverAdjustNote('');
+    setDeliverAdjustOpen(true);
+    return true;
+  };
+
+  const runMarkDelivered = async () => {
+    const payload = multiStockEnabled && deliverStoreId
+      ? { storeId: Number(deliverStoreId) }
+      : {};
+    await runMutation(
+      Promise.all(deliverPendingItems.map((it) => markItemAsDeliveredRequest(it.id, payload))),
+      async () => {
+        setDeliverOpen(false);
+        setDeliverAdjustOpen(false);
+        setDeliverOrder(null);
+        setDeliverPendingItems([]);
+        setDeliverAdjustQty({});
+        setDeliverAdjustNote('');
+        await onReload?.();
+      },
+    );
+  };
 
   const confirmDeliverOrder = async () => {
     if (!deliverPendingItems?.length) return;
@@ -530,18 +624,68 @@ export default forwardRef(function OrderCalendarView({
       toastAuth({ message: 'Elige Bodega o sucursal de donde sale el stock.', variant: 'warning' });
       return;
     }
+    const lines = Array.isArray(storeStockAvail) ? storeStockAvail : [];
+    if (lines.some((l) => !l.ok)) {
+      openDeliverAdjustFromShortage(lines);
+      return;
+    }
     setDeliverBusy(true);
     try {
-      const payload = multiStockEnabled ? { storeId: Number(deliverStoreId) } : {};
-      await runMutation(
-        Promise.all(deliverPendingItems.map((it) => markItemAsDeliveredRequest(it.id, payload))),
-        async () => {
-          setDeliverOpen(false);
-          setDeliverOrder(null);
-          setDeliverPendingItems([]);
-          await onReload?.();
-        },
-      );
+      await runMarkDelivered();
+    } finally {
+      setDeliverBusy(false);
+    }
+  };
+
+  const confirmDeliverAdjustAndDeliver = async () => {
+    const lines = (storeStockAvail || []).filter((l) => !l.ok);
+    if (!lines.length) {
+      setDeliverAdjustOpen(false);
+      return;
+    }
+    if (multiStockEnabled && !deliverStoreId) {
+      toastAuth({ message: 'Elige el local de salida antes de ajustar.', variant: 'warning' });
+      return;
+    }
+    for (const line of lines) {
+      const raw = String(deliverAdjustQty[line.pid] ?? '').trim().replace(',', '.');
+      const entrada = Number(raw);
+      if (!Number.isFinite(entrada) || entrada < line.deficit) {
+        toastAuth({
+          message: `“${line.name}”: hay ${line.avail}, pide ${line.need}. La entrada debe ser al menos +${line.deficit}.`,
+          variant: 'warning',
+        });
+        return;
+      }
+    }
+    setDeliverBusy(true);
+    try {
+      const orderId = deliverOrder?.id;
+      for (const line of lines) {
+        const entrada = Number(
+          String(deliverAdjustQty[line.pid] ?? '').trim().replace(',', '.'),
+        );
+        const nuevoStock = Number(line.avail) + entrada;
+        await registerMovement({
+          productId: Number(line.pid),
+          type: 'ajuste',
+          reason: 'AJUSTE_INVENTARIO',
+          quantity: nuevoStock,
+          description:
+            deliverAdjustNote?.trim() ||
+            `Ajuste desde entrega de pedidos #${orderId || '—'} · ${line.name}`,
+          price: null,
+          referenceType: 'order',
+          referenceId: orderId || null,
+          ...(multiStockEnabled ? { storeId: Number(deliverStoreId) } : {}),
+        });
+      }
+      await runMarkDelivered();
+    } catch (e) {
+      toastAuth({
+        message: e?.response?.data?.message || e.message || 'No se pudo ajustar o entregar',
+        variant: 'error',
+      });
     } finally {
       setDeliverBusy(false);
     }
@@ -1619,8 +1763,19 @@ export default forwardRef(function OrderCalendarView({
                 color={line.ok ? 'text.secondary' : 'error.main'}
               >
                 · {line.name}: necesita {line.need}, hay {line.avail}
+                {!line.ok ? ` (faltan ${line.deficit})` : ''}
               </Typography>
             ))}
+            {storeStockAvail.some((l) => !l.ok) && allowDeliverStockAdjust ? (
+              <Alert severity="info" sx={{ py: 0.5, mt: 0.75 }}>
+                Falta stock. Al confirmar se abrirá el ajuste (movimiento en pedidos) y luego la entrega.
+              </Alert>
+            ) : null}
+            {storeStockAvail.some((l) => !l.ok) && !allowDeliverStockAdjust ? (
+              <Alert severity="warning" sx={{ py: 0.5, mt: 0.75 }}>
+                Sin stock suficiente. Activá en Configuración «Pedidos: permitir ajuste…» (solo Admin).
+              </Alert>
+            ) : null}
           </Stack>
         )}
         <TextField
@@ -1655,10 +1810,111 @@ export default forwardRef(function OrderCalendarView({
           variant="contained"
           color="info"
           startIcon={<LocalShippingIcon />}
-          disabled={deliverBusy || !deliverStoreId}
+          disabled={
+            deliverBusy ||
+            !deliverStoreId ||
+            (Array.isArray(storeStockAvail) &&
+              storeStockAvail.some((l) => !l.ok) &&
+              !allowDeliverStockAdjust)
+          }
           onClick={() => void confirmDeliverOrder()}
         >
-          Confirmar entrega
+          {Array.isArray(storeStockAvail) &&
+          storeStockAvail.some((l) => !l.ok) &&
+          allowDeliverStockAdjust
+            ? 'Continuar (ajustar)'
+            : 'Confirmar entrega'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    <Dialog
+      open={deliverAdjustOpen}
+      onClose={() => {
+        if (deliverBusy) return;
+        setDeliverAdjustOpen(false);
+      }}
+      fullWidth
+      maxWidth="sm"
+    >
+      <DialogTitle sx={{ fontWeight: 700, fontSize: '1rem' }}>
+        Stock insuficiente · ajuste desde pedidos
+      </DialogTitle>
+      <DialogContent dividers>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+          Se registrará un movimiento tipo <strong>ajuste</strong> (desde entrega de pedidos
+          #{deliverOrder?.id || '—'}) y luego se completará la entrega
+          {multiStockEnabled && deliverStoreId
+            ? ` desde el local #${deliverStoreId}`
+            : ''}
+          . Solo Admin/Programador con la opción activa en Configuración.
+        </Typography>
+        <TableContainer sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mb: 1.5 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Producto</TableCell>
+                <TableCell align="right">Hay</TableCell>
+                <TableCell align="right">Pide</TableCell>
+                <TableCell align="right">Mín.</TableCell>
+                <TableCell align="right">Entrada</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(storeStockAvail || [])
+                .filter((l) => !l.ok)
+                .map((row) => (
+                  <TableRow key={row.pid}>
+                    <TableCell>{row.name}</TableCell>
+                    <TableCell align="right">{row.avail}</TableCell>
+                    <TableCell align="right">{row.need}</TableCell>
+                    <TableCell align="right">{row.deficit}</TableCell>
+                    <TableCell align="right" sx={{ minWidth: 110 }}>
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={deliverAdjustQty[row.pid] ?? ''}
+                        onChange={(e) =>
+                          setDeliverAdjustQty((prev) => ({
+                            ...prev,
+                            [row.pid]: e.target.value,
+                          }))
+                        }
+                        inputProps={{ min: row.deficit, step: '0.01' }}
+                        disabled={deliverBusy}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TextField
+          fullWidth
+          size="small"
+          label="Nota del ajuste (opcional)"
+          placeholder="Conteo, mercadería no cargada…"
+          value={deliverAdjustNote}
+          onChange={(e) => setDeliverAdjustNote(e.target.value)}
+          disabled={deliverBusy}
+        />
+      </DialogContent>
+      <DialogActions sx={{ px: 2, py: 1.5 }}>
+        <Button
+          onClick={() => setDeliverAdjustOpen(false)}
+          disabled={deliverBusy}
+          color="inherit"
+        >
+          Volver
+        </Button>
+        <Button
+          variant="contained"
+          color="secondary"
+          startIcon={<TuneIcon />}
+          disabled={deliverBusy}
+          onClick={() => void confirmDeliverAdjustAndDeliver()}
+        >
+          {deliverBusy ? '…' : 'Ajustar y entregar'}
         </Button>
       </DialogActions>
     </Dialog>

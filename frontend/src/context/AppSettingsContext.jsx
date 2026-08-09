@@ -87,6 +87,9 @@ function toActiveApp(settings, { offline = false } = {}) {
     moneyRoundingMode: unconfigured
       ? "up"
       : normalizeMoneyRoundingMode(resolved.moneyRoundingMode, "up"),
+    ordersAllowDeliverStockAdjust: unconfigured
+      ? false
+      : Boolean(resolved.ordersAllowDeliverStockAdjust),
     year: new Date().getFullYear(),
     background: "#F0F9FB",
   };

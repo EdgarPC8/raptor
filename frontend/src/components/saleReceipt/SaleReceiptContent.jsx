@@ -6,6 +6,8 @@ import {
   formatUnitMoneyReceipt,
   RECEIPT_FIELD_LABELS,
 } from "../../utils/saleReceiptUtils.js";
+import { isFacturaDocument } from "../../utils/invoiceFiscalUtils.js";
+import InvoiceRideContent from "./InvoiceRideContent.jsx";
 
 const BLACK = "#000";
 const cellSx = { py: 0.5, color: BLACK, borderColor: "#ccc" };
@@ -47,6 +49,9 @@ function ReceiptSignatures({ isTicket, signatureSize }) {
 /** Vista previa del comprobante (A4 o ticket térmico). */
 export default function SaleReceiptContent({ receipt, format = "a4", showNotes = true }) {
   if (!receipt) return null;
+  if (isFacturaDocument(receipt)) {
+    return <InvoiceRideContent receipt={receipt} format={format} />;
+  }
   const layout = getReceiptLayout(format);
   const isTicket = layout.isTicket;
   const items = receipt.items || [];

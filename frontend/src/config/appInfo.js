@@ -38,6 +38,7 @@ export const RAPTOR_UNCONFIGURED_FALLBACK = {
   showProductCostInSelect: false,
   moneyDisplayDecimals: 2,
   moneyRoundingMode: "up",
+  ordersAllowDeliverStockAdjust: false,
 };
 
 /** Fallback EdDeli solo cuando el modo de Vite es eddeli. */
@@ -68,6 +69,7 @@ export const EDDELI_FALLBACK = {
   showProductCostInSelect: false,
   moneyDisplayDecimals: 2,
   moneyRoundingMode: "up",
+  ordersAllowDeliverStockAdjust: false,
 };
 
 export const APP_SETTINGS_FALLBACK =

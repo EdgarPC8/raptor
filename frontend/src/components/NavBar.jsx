@@ -215,7 +215,7 @@ const MENU_GROUPS = [
   },
   {
     id: "ventas",
-    label: "Ventas",
+    label: "Ventas y Compras",
     items: [
       {
         name: "Pedidos",
@@ -229,6 +229,24 @@ const MENU_GROUPS = [
         icon: <PeopleIcon />,
         roles: ["Programador", "Administrador"],
       },
+      {
+        name: "Proveedores",
+        link: APP_ROUTES.sales.suppliers,
+        icon: <LocalShippingIcon />,
+        roles: ["Programador", "Administrador"],
+      },
+      {
+        name: "Ventas",
+        link: APP_ROUTES.sales.salesHub,
+        icon: <PointOfSaleIcon />,
+        roles: ["Programador", "Administrador"],
+      },
+      {
+        name: "Compras",
+        link: APP_ROUTES.sales.purchasesHub,
+        icon: <RequestQuoteIcon />,
+        roles: ["Programador", "Administrador"],
+      },
     ],
   },
   {
@@ -239,12 +257,6 @@ const MENU_GROUPS = [
         name: "Finanzas",
         link: APP_ROUTES.finance.transactions,
         icon: <MonetizationOnIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Cobranzas",
-        link: APP_ROUTES.finance.collections,
-        icon: <RequestQuoteIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
@@ -329,12 +341,6 @@ const MENU_GROUPS = [
         name: "Producción",
         link: APP_ROUTES.production.manufacturing,
         icon: <FactoryIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Proveedores",
-        link: APP_ROUTES.production.suppliers,
-        icon: <LocalShippingIcon />,
         roles: ["Programador", "Administrador"],
       },
     ],

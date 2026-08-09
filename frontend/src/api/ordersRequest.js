@@ -165,6 +165,29 @@ export const deleteSupplierRequest = async (id) => {
   return await axios.delete(`/orders/suppliers/${id}`, { headers: { Authorization: jwt() } });
 };
 
+/** Códigos de producto propios del proveedor (XML / catálogo). */
+export const getSupplierProductCodesRequest = async (supplierId) => {
+  if (isGuestDataMode()) return { data: { codes: [] } };
+  return await axios.get("/orders/supplier-product-codes", {
+    headers: { Authorization: jwt() },
+    params: { supplierId },
+  });
+};
+
+export const upsertSupplierProductCodesRequest = async (payload) => {
+  if (isGuestDataMode()) return guestDenied();
+  return await axios.post("/orders/supplier-product-codes/upsert", payload, {
+    headers: { Authorization: jwt() },
+  });
+};
+
+export const deleteSupplierProductCodeRequest = async (id) => {
+  if (isGuestDataMode()) return guestDenied();
+  return await axios.delete(`/orders/supplier-product-codes/${id}`, {
+    headers: { Authorization: jwt() },
+  });
+};
+
 export const getAllSupplierOrdersRequest = async ({ from, to } = {}) => {
   if (isGuestDataMode()) return guestFrom("supplierOrders");
   const params = new URLSearchParams();

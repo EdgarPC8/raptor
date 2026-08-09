@@ -250,8 +250,9 @@ export const APP_MODULE_GROUPS = [
   },
   {
     id: "ventas",
-    label: "Ventas",
-    summary: "Pedidos institucionales, clientes mayoristas y (próx.) clientes con cuenta.",
+    label: "Ventas y Compras",
+    summary:
+      "Pedidos, clientes, proveedores, cobranzas (ventas) y cuentas por pagar (compras).",
     sections: [
       {
         name: "Pedidos",
@@ -283,6 +284,41 @@ export const APP_MODULE_GROUPS = [
         ],
       },
       {
+        name: "Proveedores",
+        path: APP_ROUTES.sales.suppliers,
+        roles: ["Programador", "Administrador"],
+        description: "Directorio de proveedores con datos de contacto y notas.",
+        functions: [
+          { name: "Agregar proveedor", description: "Alta con nombre, teléfono, correo, dirección y notas." },
+          { name: "Tabla con búsqueda", description: "Listado paginado del directorio." },
+          { name: "Editar proveedor", description: "Precarga datos en diálogo." },
+          { name: "Eliminar proveedor", description: "Confirmación antes de borrar." },
+        ],
+      },
+      {
+        name: "Ventas",
+        path: APP_ROUTES.sales.salesHub,
+        roles: ["Programador", "Administrador"],
+        description:
+          "Cobranzas a clientes: abonos a pedidos, grupos e historial.",
+        functions: [
+          { name: "Abonar pedido", description: "Desde el resumen por pedidos: agrupa ítems y registra abono." },
+          { name: "Selector por deuda", description: "Chips ordenados por saldo pendiente." },
+          { name: "Grupos y abonos", description: "Crear grupos, abonar, mover ítems e historial." },
+          { name: "Resumen de cuenta", description: "Reporte A4/ticket imprimible, PDF, PNG o TXT." },
+        ],
+      },
+      {
+        name: "Compras",
+        path: APP_ROUTES.sales.purchasesHub,
+        roles: ["Programador", "Administrador"],
+        description: "Cuentas por pagar a proveedores: abonos a pedidos de compra.",
+        functions: [
+          { name: "Cuentas por pagar", description: "Abonos a pedidos de compra; genera gasto en Finanzas." },
+          { name: "Pacas / grupos de pago", description: "Agrupar deudas de compra y abonar." },
+        ],
+      },
+      {
         name: "Clientes con cuenta",
         path: APP_ROUTES.sales.customerAccounts,
         roles: ["Programador", "Administrador"],
@@ -300,7 +336,7 @@ export const APP_MODULE_GROUPS = [
   {
     id: "finanzas",
     label: "Finanzas",
-    summary: "Ingresos, cobros, gastos y cuentas por pagar a proveedores.",
+    summary: "Ingresos, gastos, préstamos y gastos recurrentes.",
     sections: [
       {
         name: "Finanzas",
@@ -313,22 +349,7 @@ export const APP_MODULE_GROUPS = [
           { name: "Filtro por tipo", description: "Ver todos, solo ingresos o solo gastos." },
           { name: "Filtro por categoría", description: "Acotar movimientos por categoría." },
           { name: "Registrar ingreso/gasto", description: "Formulario con categoría, monto y comprobante (gastos)." },
-          { name: "Ir a Cobranzas", description: "El detalle de cobros se gestiona en el módulo Cobranzas." },
-        ],
-      },
-      {
-        name: "Cobranzas",
-        path: APP_ROUTES.finance.collections,
-        roles: ["Programador", "Administrador"],
-        description:
-          "Cobros a clientes y pagos a proveedores: abonos parciales vinculados a pedidos.",
-        functions: [
-          { name: "Modo Clientes / Proveedores", description: "Alternar cuentas por cobrar y por pagar." },
-          { name: "Abonar pedido de cliente", description: "Desde el resumen por pedidos: agrupa ítems y registra abono." },
-          { name: "Abonar pedido de proveedor", description: "Pago parcial o total; genera gasto en Finanzas." },
-          { name: "Selector por deuda", description: "Chips ordenados por saldo pendiente." },
-          { name: "Grupos y abonos (clientes)", description: "Crear grupos, abonar, mover ítems e historial." },
-          { name: "Resumen de cuenta", description: "Reporte A4/ticket imprimible, PDF, PNG o TXT." },
+          { name: "Ir a Ventas / Compras", description: "Cobranzas y cuentas por pagar están en Ventas y Compras." },
         ],
       },
       {
@@ -357,18 +378,6 @@ export const APP_MODULE_GROUPS = [
           { name: "Ajustar monto variable", description: "Monto real de factura antes de pagar." },
           { name: "Registrar pago", description: "Crea gasto en Finanzas." },
           { name: "Omitir período", description: "Marca cuota omitida sin pago." },
-        ],
-      },
-      {
-        name: "Cuentas por pagar a proveedores",
-        path: APP_ROUTES.finance.collections,
-        roles: ["Programador", "Administrador"],
-        description:
-          "Integrado en Cobranzas → Proveedores: deudas por pedido, abonos parciales y saldos.",
-        functions: [
-          { name: "Saldo por proveedor", description: "Chips ordenados por lo que debes." },
-          { name: "Abonos por pedido", description: "Pagar parcial o liquidar un pedido de compra." },
-          { name: "Historial de abonos", description: "Ver y eliminar abonos (revierte el gasto)." },
         ],
       },
     ],
@@ -528,22 +537,12 @@ export const APP_MODULE_GROUPS = [
         ],
       },
       {
-        name: "Proveedores",
-        path: APP_ROUTES.production.suppliers,
-        roles: ["Programador", "Administrador"],
-        description: "Proveedores y pedidos de compra.",
-        functions: [
-          { name: "CRUD proveedores", description: "Nombre, teléfono, correo, dirección y notas." },
-          { name: "Tabla paginada", description: "Listado con búsqueda e índice." },
-        ],
-      },
-      {
         name: "Proveedores con cuenta",
         path: APP_ROUTES.production.supplierAccounts,
         roles: ["Programador", "Administrador"],
         status: "planned",
         description:
-          "Próximamente: acceso de proveedores al sistema (cuenta vinculada al proveedor) para pedidos de compra, estados de entrega o catálogo de insumos según permisos.",
+          "Próximamente: acceso de proveedores al sistema (cuenta vinculada al proveedor). El directorio está en Ventas y Compras → Proveedores; las cuentas por pagar en Compras.",
         functions: [
           { name: "Vincular cuenta", description: "Asociar un usuario/login a un proveedor." },
           { name: "Permisos de proveedor", description: "Qué puede consultar o confirmar desde su cuenta." },
@@ -964,7 +963,7 @@ export const APP_MODULE_GROUPS = [
           "Negocio/app (logo, icono, zona horaria, operación) y preparación de facturación electrónica SRI (RUC, firma .p12). También accesible desde el menú del avatar.",
         functions: [
           { name: "Pestaña Negocio y app", description: "Logo, icono, nombre, zona horaria, reglas de caja y redes." },
-          { name: "Pestaña Facturación electrónica", description: "Datos fiscales, ambiente, secuencial y certificado .p12 (siempre editable)." },
+          { name: "Pestaña Facturación electrónica", description: "Datos fiscales, ambiente, secuencial de facturas (01) y certificado .p12 (siempre editable)." },
           { name: "Subir / cambiar logo", description: "Imagen de marca (con nombre) en {prefijo}/logos/." },
           { name: "Subir / cambiar icono", description: "Emblema/favicon en {prefijo}/icons/; independiente del logo." },
           { name: "Zona horaria", description: "IANA (ej. America/Guayaquil) para fechas del sistema." },
@@ -1027,7 +1026,7 @@ export const APP_MODULE_GROUPS = [
         description:
           "Atajo a la pestaña SRI dentro de Configuración. No emite facturas aún; el POS sigue con consumidor final / comprobantes.",
         functions: [
-          { name: "Datos fiscales", description: "RUC, razón social, direcciones, régimen, secuencial." },
+          { name: "Datos fiscales", description: "RUC, razón social, direcciones, régimen, secuencial de facturas." },
           { name: "Ambiente", description: "Pruebas o producción." },
           { name: "Subir firma", description: "Archivo .p12/.pfx en carpeta privada del servidor." },
           { name: "Contraseña cifrada", description: "Se guarda cifrada; no se vuelve a mostrar." },

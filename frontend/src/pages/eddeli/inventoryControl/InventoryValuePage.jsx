@@ -830,8 +830,9 @@ export default function InventoryValuePage() {
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            Compará costo de catálogo vs última compra, filtrá subidas de precio y elegí
-            con qué base valorar el inventario.
+            {multiStockEnabled
+              ? "Compará costo de catálogo vs última compra, filtrá subidas de precio y elegí con qué base valorar el inventario (por local o general)."
+              : "Stock general: compará costo de catálogo vs última compra, filtrá subidas de precio y elegí con qué base valorar el inventario."}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>

@@ -3,7 +3,7 @@ import axios, { jwt } from "./axios.js";
 
 const auth = () => ({ headers: { Authorization: jwt() } });
 
-export const scanImagesRequest = ({ folder = "", maxDepth = 10 } = {}) =>
+export const scanImagesRequest = ({ folder = "", maxDepth = 30 } = {}) =>
   axios.get(
     `/img/scan?folder=${encodeURIComponent(folder)}&maxDepth=${encodeURIComponent(maxDepth)}&includeNonImages=false`,
     auth()

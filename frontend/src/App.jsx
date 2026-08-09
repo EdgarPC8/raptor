@@ -67,8 +67,11 @@ const LoansDebtsPage = lazy(
 const RecurringExpensesPage = lazy(
   () => import("./pages/eddeli/inventoryControl/RecurringExpensesPage.jsx"),
 );
-const CollectionsPage = lazy(
-  () => import("./pages/eddeli/inventoryControl/CollectionsPage.jsx"),
+const SalesHubPage = lazy(
+  () => import("./pages/eddeli/inventoryControl/SalesHubPage.jsx"),
+);
+const PurchasesHubPage = lazy(
+  () => import("./pages/eddeli/inventoryControl/PurchasesHubPage.jsx"),
 );
 const ProductionManagerPage = lazy(
   () => import("./pages/eddeli/inventoryControl/ProductionManagerPage.jsx"),
@@ -241,8 +244,11 @@ export default function App() {
               <Route path={APP_ROUTES.operation.shiftSupervision} element={<LazyPage><TurnoSupervisionPage /></LazyPage>} />
               <Route path={APP_ROUTES.sales.orders} element={<LazyPage><OrderPage /></LazyPage>} />
               <Route path={APP_ROUTES.sales.customers} element={<LazyPage><CustomerPage /></LazyPage>} />
+              <Route path={APP_ROUTES.sales.suppliers} element={<LazyPage><SupplierPage /></LazyPage>} />
+              <Route path={APP_ROUTES.sales.salesHub} element={<LazyPage><SalesHubPage /></LazyPage>} />
+              <Route path={APP_ROUTES.sales.purchasesHub} element={<LazyPage><PurchasesHubPage /></LazyPage>} />
               <Route path={APP_ROUTES.finance.transactions} element={<LazyPage><FinancePage /></LazyPage>} />
-              <Route path={APP_ROUTES.finance.collections} element={<LazyPage><CollectionsPage /></LazyPage>} />
+              <Route path={APP_ROUTES.finance.collections} element={<LazyPage><SalesHubPage /></LazyPage>} />
               <Route path={APP_ROUTES.finance.loansDebts} element={<LazyPage><LoansDebtsPage /></LazyPage>} />
               <Route path={APP_ROUTES.inventory.products} element={<LazyPage><ProductsPage /></LazyPage>} />
               <Route path={APP_ROUTES.inventory.movement} element={<LazyPage><MovementPage /></LazyPage>} />
@@ -254,7 +260,7 @@ export default function App() {
               <Route path={APP_ROUTES.production.ingredients} element={<LazyPage><GenericIngredientsPage /></LazyPage>} />
               <Route path={APP_ROUTES.production.recipes} element={<LazyPage><RecipePage /></LazyPage>} />
               <Route path={APP_ROUTES.production.manufacturing} element={<LazyPage><ProductionManagerPage /></LazyPage>} />
-              <Route path={APP_ROUTES.production.suppliers} element={<LazyPage><SupplierPage /></LazyPage>} />
+              <Route path={APP_ROUTES.production.suppliers} element={<Navigate to={APP_ROUTES.sales.suppliers} replace />} />
               <Route path={APP_ROUTES.channel.catalog} element={<LazyPage><CatalogManagerPage /></LazyPage>} />
               <Route path={APP_ROUTES.channel.stores} element={<LazyPage><StoresManagerPage /></LazyPage>} />
               <Route path={APP_ROUTES.admin.users} element={<LazyPage><UsersPage /></LazyPage>} />
@@ -455,11 +461,14 @@ export default function App() {
             />
             <Route path={APP_ROUTES.sales.orders} element={<OrderPage />} />
             <Route path={APP_ROUTES.sales.customers} element={<CustomerPage />} />
-            <Route path={APP_ROUTES.production.suppliers} element={<SupplierPage />} />
+            <Route path={APP_ROUTES.sales.suppliers} element={<SupplierPage />} />
+            <Route path={APP_ROUTES.sales.salesHub} element={<SalesHubPage />} />
+            <Route path={APP_ROUTES.sales.purchasesHub} element={<PurchasesHubPage />} />
+            <Route path={APP_ROUTES.production.suppliers} element={<Navigate to={APP_ROUTES.sales.suppliers} replace />} />
             <Route path={APP_ROUTES.finance.transactions} element={<FinancePage />} />
             <Route
               path={APP_ROUTES.finance.collections}
-              element={<CollectionsPage />}
+              element={<SalesHubPage />}
             />
             <Route
               path={APP_ROUTES.finance.loansDebts}

@@ -439,13 +439,13 @@ const SriBillingSettingsPanel = forwardRef(function SriBillingSettingsPanel(_pro
             <StatusTextField
               fullWidth
               type="number"
-              label="Próximo secuencial"
+              label="Próximo secuencial (facturas)"
               value={form.nextInvoiceSequential}
               onChange={onChange("nextInvoiceSequential")}
               placeholder="1"
               inputProps={{ min: 1 }}
               ok={Number(form.nextInvoiceSequential) >= 1}
-              helperText="normalmente empieza en 1"
+              helperText="Solo facturas electrónicas (01). No aplica a pedidos ni notas de venta."
             />
           </Grid>
           <Grid item xs={12} sm={3}>

@@ -3,6 +3,8 @@ import { getOrderCustomerDisplay } from "./eddeliPosOrderUtils.js";
 import { formatDateTime } from "../helpers/functions.js";
 import { printHtmlDocument } from "./printHtmlDocument.js";
 import { getReceiptLayout } from "./receiptFormats.js";
+import { isFacturaDocument } from "./invoiceFiscalUtils.js";
+import { buildInvoiceRidePrintHtml } from "./invoiceRidePrintHtml.js";
 
 const to2 = (n) => Number(Number(n || 0).toFixed(2));
 // Precio unitario: se conserva con hasta 3 decimales (ej. 0.125) para que la
@@ -126,8 +128,11 @@ export function normalizeSaleReceipt(sale) {
   if (!sale) return null;
   const items = (sale.items || []).map((row) => ({
     name: row.name || row.productName || "Producto",
+    code: row.code || row.sku || row.barcode || "",
+    productId: row.productId || row.id || null,
     quantity: Number(row.quantity || 0),
     price: to3(row.price),
+    discount: to2(row.discount || 0),
     lineTotal: to2(row.lineTotal ?? Number(row.quantity) * Number(row.price)),
     taxRate: Number(row.taxRate || 0),
     subtotal: to2(row.subtotal ?? row.lineTotal),
@@ -153,10 +158,12 @@ export function normalizeSaleReceipt(sale) {
     id: sale.id,
     businessName: app.alias || "App",
     businessDescription: app.description || "",
+    logoUrl: app.logoUrl || "",
     documentTitle: documentTitleForType(docType),
     documentType: docType,
     documentTypeLabel: documentTypeLabel(docType),
     date: formatReceiptDate(sale.date || sale.paidAt),
+    dateIso: sale.date || sale.paidAt || null,
     customerName: customerDisplay,
     customerPhone: customer.phone || "",
     customerAddress: customer.address || "",
@@ -197,10 +204,14 @@ export function buildReceiptFromCustomerOrder(order) {
       subtotal = to2(lineTotal / (1 + taxRate / 100));
       iva = to2(lineTotal - subtotal);
     }
+    const prod = row.ERP_inventory_product || {};
     return {
-      name: row.ERP_inventory_product?.name || row.name || "Producto",
+      name: prod.name || row.name || "Producto",
+      code: prod.sku || prod.barcode || row.code || "",
+      productId: row.productId || prod.id || null,
       quantity: qty,
       price,
+      discount: 0,
       taxRate,
       subtotal,
       iva,
@@ -249,8 +260,11 @@ export function buildReceiptFromCheckout({
     }
     return {
       name: row.name,
+      code: row.sku || row.barcode || row.code || "",
+      productId: row.productId || row.id || null,
       quantity: qty,
       price,
+      discount: 0,
       taxRate,
       subtotal,
       iva,
@@ -291,7 +305,10 @@ export function applyReceiptCustomerOverrides(receipt, fields = {}) {
 }
 
 export function printSaleReceipt(receipt, format, options = {}) {
-  printHtmlDocument(buildPrintHtml(receipt, format, options), { format });
+  const html = isFacturaDocument(receipt)
+    ? buildInvoiceRidePrintHtml(receipt, format)
+    : buildPrintHtml(receipt, format, options);
+  printHtmlDocument(html, { format });
 }
 
 function buildPrintHtml(receipt, format, options = {}) {
