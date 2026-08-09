@@ -733,11 +733,22 @@ export default function NavBar() {
           alignItems: "center",
           px: 1,
           ...theme.mixins.toolbar,
+          height: "auto",
+          minHeight: (theme.mixins.toolbar?.minHeight ?? 64),
+          py: 1,
           justifyContent: "flex-end",
+          gap: 0.5,
         }}
       >
         <Box
-          sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1, px: 1 }}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            flex: 1,
+            px: 1,
+            minWidth: 0,
+          }}
         >
           <Box
             component="img"
@@ -748,15 +759,38 @@ export default function NavBar() {
               height: 44,
               borderRadius: "50%",
               objectFit: "cover",
+              flexShrink: 0,
             }}
           />
           {drawerOpen && (
-            <Typography variant="subtitle2" fontWeight={700} noWrap>
+            <Typography
+              variant="subtitle2"
+              fontWeight={700}
+              title={activeApp.alias}
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                lineHeight: 1.2,
+                fontSize:
+                  String(activeApp.alias || "").length > 28
+                    ? "0.7rem"
+                    : String(activeApp.alias || "").length > 18
+                      ? "0.78rem"
+                      : "0.875rem",
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+                wordBreak: "break-word",
+                hyphens: "auto",
+              }}
+            >
               {activeApp.alias}
             </Typography>
           )}
         </Box>
         <IconButton
+          sx={{ flexShrink: 0 }}
           onClick={() => {
             setDrawerOpen(false);
             setExpandedGroupId(null);
