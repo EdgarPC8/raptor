@@ -7,8 +7,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { ThemeProvider, CssBaseline } from "./muiRuntime.js";
 import { getTheme } from "./getTheme.js";
+import { APP_ID } from "../config/appInfo.js";
 
-const STORAGE_KEY = "eddeli-theme-mode";
+const STORAGE_KEY = `${APP_ID}-theme-mode`;
 
 const ThemeModeContext = createContext({
   mode: "light",

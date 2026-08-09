@@ -78,12 +78,12 @@ export default function ExpectedCollectionsPanel({
           </Box>
           <Button
             component={RouterLink}
-            to={APP_ROUTES.sales.salesHub}
+            to={APP_ROUTES.finance.collections}
             variant="contained"
             endIcon={<OpenInNewIcon />}
             sx={{ alignSelf: { xs: "stretch", md: "flex-start" }, whiteSpace: "nowrap" }}
           >
-            Ir a Ventas
+            Ir a Cobranzas
           </Button>
         </Stack>
 

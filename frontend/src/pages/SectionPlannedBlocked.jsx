@@ -47,7 +47,7 @@ export default function SectionPlannedBlocked({ section }) {
             </Typography>
             <Alert severity="info">
               Tu suscripción sigue activa. Esta función aún no tiene pantalla
-              operativa en EdDeli.
+              operativa en esta aplicación.
             </Alert>
             {section?.description ? (
               <Typography variant="body2" color="text.secondary">

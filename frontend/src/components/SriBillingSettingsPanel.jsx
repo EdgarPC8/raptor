@@ -385,7 +385,7 @@ const SriBillingSettingsPanel = forwardRef(function SriBillingSettingsPanel(_pro
               label="Nombre comercial"
               value={form.tradeName}
               onChange={onChange("tradeName")}
-              placeholder="EdDeli Panadería"
+              placeholder="Razón social / negocio"
               helperText="nombre de fantasía del negocio"
             />
           </Grid>

@@ -222,7 +222,7 @@ function addFooters(doc) {
     doc.setFont("helvetica", "normal");
     doc.setTextColor(120);
     doc.text(
-      `${activeApp.alias || "EdDeli"} — Módulos y secciones · Pág. ${i}/${total}`,
+      `${activeApp.alias || "App"} — Módulos y secciones · Pág. ${i}/${total}`,
       MARGIN,
       pageHeight(doc) - 6,
     );
@@ -294,6 +294,6 @@ export function downloadAppModulesPdf({ includeInternal = false } = {}) {
 
   addFooters(doc);
 
-  const safeName = (activeApp.alias || "EdDeli").replace(/\s+/g, "-");
+  const safeName = (activeApp.alias || "App").replace(/\s+/g, "-");
   doc.save(`${safeName}-modulos-secciones-funciones.pdf`);
 }

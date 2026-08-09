@@ -12,7 +12,7 @@ export default function CollectionsPage() {
   const [mode, setMode] = useState("customers");
 
   return (
-    <Box sx={{ width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
+    <Box sx={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", p: { xs: 1.5, md: 3 } }}>
       <Paper
         variant="outlined"
         sx={{

@@ -262,7 +262,7 @@ function FinancePage() {
           Finanzas
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Resumen de ingresos y gastos registrados. El detalle de cobros está en Ventas y Compras → Ventas.
+          Resumen de ingresos y gastos registrados. El detalle de cobros está en Finanzas → Cobranzas.
         </Typography>
       </Box>
 

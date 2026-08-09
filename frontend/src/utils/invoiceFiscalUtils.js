@@ -26,6 +26,19 @@ export function formatInvoiceUnitPrice(n) {
   return String(fixed4);
 }
 
+/**
+ * Clave acceso / nº autorización SRI: siempre dígitos largos.
+ * Si viene corrupto (notación científica por Number), usa el fallback.
+ */
+export function asSriAuthorizationKey(value, fallback = "") {
+  const raw = value == null ? "" : String(value).trim();
+  if (/^\d{40,}$/.test(raw)) return raw;
+  const fb = fallback == null ? "" : String(fallback).trim();
+  if (/^\d{40,}$/.test(fb)) return fb;
+  if (raw && !/e[+-]?\d+$/i.test(raw)) return raw;
+  return fb || "";
+}
+
 export function environmentLabel(env) {
   return String(env || "").toLowerCase() === "produccion" ? "PRODUCCIÓN" : "PRUEBAS";
 }
@@ -81,15 +94,14 @@ export function enrichReceiptWithFiscal(receipt, sriSettings, sriInvoice = null,
     sriSettings?.emissionPointCode ||
     "001";
   const sequential =
-    sriInvoice?.sequential != null
-      ? Number(sriInvoice.sequential)
-      : sriSettings?.nextInvoiceSequential != null
-        ? Number(sriSettings.nextInvoiceSequential)
-        : null;
-  const accessKey =
-    sriInvoice?.accessKey || sriInvoice?.authorizationNumber || "";
-  const authorizationNumber =
-    sriInvoice?.authorizationNumber || sriInvoice?.accessKey || accessKey;
+    sriInvoice?.sequential != null ? Number(sriInvoice.sequential) : null;
+  const accessKey = asSriAuthorizationKey(
+    sriInvoice?.accessKey || sriInvoice?.authorizationNumber || "",
+  );
+  const authorizationNumber = asSriAuthorizationKey(
+    sriInvoice?.authorizationNumber || sriInvoice?.accessKey || accessKey,
+    accessKey,
+  );
   const authorizedAt = sriInvoice?.authorizedAt || null;
 
   return {
@@ -122,7 +134,8 @@ export function enrichReceiptWithFiscal(receipt, sriSettings, sriInvoice = null,
         (receipt.dateIso && String(receipt.dateIso).slice(0, 10)) ||
         "",
       status: sriInvoice?.status || null,
-      fromSettingsPreview: !sriInvoice?.sequential && sequential != null,
+      /** Solo true si hay settings pero aún no hay factura emitida (sin Nº real). */
+      fromSettingsPreview: !sriInvoice?.sequential,
     },
   };
 }

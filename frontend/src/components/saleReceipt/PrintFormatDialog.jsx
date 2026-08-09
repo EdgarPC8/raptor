@@ -94,9 +94,10 @@ export default function PrintFormatDialog({
     let cancelled = false;
     (async () => {
       try {
-        const list = await fetchSriInvoices(80, "01");
+        const list = await fetchSriInvoices(200, "01");
         const match = (list || []).find(
-          (inv) => Number(inv.orderId) === Number(receipt.id),
+          (inv) =>
+            inv.orderId != null && Number(inv.orderId) === Number(receipt.id),
         );
         if (!cancelled) setSriInvoice(match || null);
       } catch {
@@ -215,8 +216,9 @@ export default function PrintFormatDialog({
           {isFactura ? (
             <Alert severity="info" sx={{ py: 0.5 }}>
               Estructura tipo factura electrónica (RIDE): A4 como hoja formal, 80/55 mm como ticket.
-              El Nº usa el secuencial de facturas (config SRI)
-              {sriInvoice?.sequential ? " autorizado" : " previsto"}.
+              {sriInvoice?.sequential
+                ? ` Nº ${String(sriInvoice.establishmentCode || "").padStart(3, "0")}-${String(sriInvoice.emissionPointCode || "").padStart(3, "0")}-${String(sriInvoice.sequential).padStart(9, "0")} (factura SRI de esta venta).`
+                : " Sin factura SRI vinculada a esta venta: el Nº queda vacío hasta emitir/autorizar."}
             </Alert>
           ) : (
             <FormControlLabel

@@ -67,7 +67,7 @@ function TotalsBlock({ receipt, isTicket, ivaRate }) {
       })}
       {fiscal.fromSettingsPreview ? (
         <Typography sx={{ mt: 0.75, fontSize: "0.72em", fontWeight: 700, color: "#444" }}>
-          Nº previsto (próximo secuencial de facturas). Tras autorización SRI se confirma.
+          Sin factura SRI vinculada: el Nº se asigna al emitir/autorizar.
         </Typography>
       ) : null}
     </Box>

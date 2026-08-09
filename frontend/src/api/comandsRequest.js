@@ -27,16 +27,33 @@ export const deleteLogsRequest = (payload) =>
 export const deleteLogByIdRequest = (id) =>
   axios.delete(`/comands/logs/${id}`, auth());
 
+/** Nombre genérico: backup-YYYY-MM-DD_HH-mm-ss.json (sin marca de app). */
+export function backupFilenameWithDate(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `backup-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}.json`;
+}
+
+function filenameFromContentDisposition(header) {
+  const raw = String(header || "");
+  const m =
+    /filename\*=UTF-8''([^;]+)|filename="([^"]+)"|filename=([^;]+)/i.exec(raw);
+  const name = decodeURIComponent((m?.[1] || m?.[2] || m?.[3] || "").trim());
+  return name && /\.json$/i.test(name) ? name : "";
+}
+
 export const downloadBackup = async () => {
   const response = await axios.get("/comands/downloadBackup", {
     ...auth(),
     responseType: "blob",
     timeout: 90000,
   });
+  const fromHeader = filenameFromContentDisposition(
+    response.headers?.["content-disposition"],
+  );
   const url = window.URL.createObjectURL(new Blob([response.data]));
   const a = document.createElement("a");
   a.href = url;
-  a.download = "backup-eddeli.json";
+  a.download = fromHeader || backupFilenameWithDate();
   document.body.appendChild(a);
   a.click();
   a.remove();

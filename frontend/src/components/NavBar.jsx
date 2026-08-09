@@ -260,6 +260,12 @@ const MENU_GROUPS = [
         roles: ["Programador", "Administrador"],
       },
       {
+        name: "Cobranzas",
+        link: APP_ROUTES.finance.collections,
+        icon: <RequestQuoteIcon />,
+        roles: ["Programador", "Administrador"],
+      },
+      {
         name: "Préstamos y deudas",
         link: APP_ROUTES.finance.loansDebts,
         icon: <AccountBalanceWalletIcon />,

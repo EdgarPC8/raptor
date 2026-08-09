@@ -120,7 +120,7 @@ export default function PublicidadTvPlayerPage() {
             letterSpacing: 1,
           }}
         >
-          Conectando con EdDeli…
+          Conectando…
         </Box>
       ) : showOffline ? (
         <SignageOfflineScreen />

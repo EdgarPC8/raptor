@@ -48,7 +48,7 @@ function totalsHtml(receipt, { isTicket, ivaRate }) {
     })
     .join("");
   const note = receipt.fiscal?.fromSettingsPreview
-    ? `<div style="margin-top:6px;font-size:10px;font-weight:700;color:#444">Nº previsto (próximo secuencial de facturas). Tras autorización SRI se confirma.</div>`
+    ? `<div style="margin-top:6px;font-size:10px;font-weight:700;color:#444">Sin factura SRI vinculada: el Nº se asigna al emitir/autorizar.</div>`
     : "";
   return `${body}${note}`;
 }

@@ -12,7 +12,7 @@ import { APP_ROUTES } from "../config/appRoutes.js";
 /** Contenido visual de mantenimiento (también usado como overlay). */
 export function MaintenanceMessage() {
   const { activeApp } = useAppSettings();
-  const brand = activeApp?.alias || activeApp?.name || "EdDeli";
+  const brand = activeApp?.alias || activeApp?.name || "la aplicación";
 
   return (
     <Box

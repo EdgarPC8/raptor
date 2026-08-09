@@ -1,5 +1,6 @@
 /**
- * Catálogo de módulos, secciones y funciones de EdDeli (referencia para /info).
+ * Catálogo de módulos, secciones y funciones (referencia para /info).
+ * Compartido por las apps del frontend Raptor (EdDeli, Store, …).
  * Mantener alineado con el menú lateral (NavBar) cuando se agreguen rutas nuevas.
  *
  * Cada sección puede incluir `functions`: acciones concretas de la UI
@@ -252,7 +253,7 @@ export const APP_MODULE_GROUPS = [
     id: "ventas",
     label: "Ventas y Compras",
     summary:
-      "Pedidos, clientes, proveedores, cobranzas (ventas) y cuentas por pagar (compras).",
+      "Pedidos, clientes, proveedores, reporte de ventas y reporte de compras.",
     sections: [
       {
         name: "Pedidos",
@@ -300,22 +301,27 @@ export const APP_MODULE_GROUPS = [
         path: APP_ROUTES.sales.salesHub,
         roles: ["Programador", "Administrador"],
         description:
-          "Cobranzas a clientes: abonos a pedidos, grupos e historial.",
+          "Reporte de ventas / facturación diaria: fechas, vendedor, totales y formas de pago.",
         functions: [
-          { name: "Abonar pedido", description: "Desde el resumen por pedidos: agrupa ítems y registra abono." },
-          { name: "Selector por deuda", description: "Chips ordenados por saldo pendiente." },
-          { name: "Grupos y abonos", description: "Crear grupos, abonar, mover ítems e historial." },
-          { name: "Resumen de cuenta", description: "Reporte A4/ticket imprimible, PDF, PNG o TXT." },
+          { name: "Filtros por fecha y vendedor", description: "Aplicar rango y vendedor." },
+          { name: "Tabla diaria", description: "Número, cliente, subtotal, IVA, total y desglose de pago." },
+          { name: "Exportar Excel", description: "Descarga reporte de facturas (.xlsx) con el filtro actual." },
+          { name: "Totales", description: "Sumas del filtro actual." },
         ],
       },
       {
         name: "Compras",
         path: APP_ROUTES.sales.purchasesHub,
         roles: ["Programador", "Administrador"],
-        description: "Cuentas por pagar a proveedores: abonos a pedidos de compra.",
+        description:
+          "Registrar factura del proveedor (XML/PDF), cargar productos y ver reporte diario.",
         functions: [
-          { name: "Cuentas por pagar", description: "Abonos a pedidos de compra; genera gasto en Finanzas." },
-          { name: "Pacas / grupos de pago", description: "Agrupar deudas de compra y abonar." },
+          { name: "Nueva compra", description: "Pedido a proveedor con productos, XML SRI y comprobante." },
+          { name: "Filtros por fecha y proveedor", description: "Aplicar rango y proveedor." },
+          { name: "Tabla diaria", description: "Número, proveedor, subtotal, IVA, total y desglose de pago." },
+          { name: "Exportar Excel", description: "Descarga reporte de compras (.xlsx) con el filtro actual." },
+          { name: "Editar desde fila", description: "Abrir el pedido para corregir productos o adjuntos." },
+          { name: "Totales", description: "Sumas del filtro actual." },
         ],
       },
       {
@@ -336,7 +342,7 @@ export const APP_MODULE_GROUPS = [
   {
     id: "finanzas",
     label: "Finanzas",
-    summary: "Ingresos, gastos, préstamos y gastos recurrentes.",
+    summary: "Ingresos, gastos, cobranzas, préstamos y gastos recurrentes.",
     sections: [
       {
         name: "Finanzas",
@@ -349,7 +355,16 @@ export const APP_MODULE_GROUPS = [
           { name: "Filtro por tipo", description: "Ver todos, solo ingresos o solo gastos." },
           { name: "Filtro por categoría", description: "Acotar movimientos por categoría." },
           { name: "Registrar ingreso/gasto", description: "Formulario con categoría, monto y comprobante (gastos)." },
-          { name: "Ir a Ventas / Compras", description: "Cobranzas y cuentas por pagar están en Ventas y Compras." },
+        ],
+      },
+      {
+        name: "Cobranzas",
+        path: APP_ROUTES.finance.collections,
+        roles: ["Programador", "Administrador"],
+        description: "Cobranzas a clientes y pagos a proveedores (tabs).",
+        functions: [
+          { name: "Modo Clientes / Proveedores", description: "Alternar por cobrar y por pagar." },
+          { name: "Abonos y grupos", description: "Registrar abonos parciales e historial." },
         ],
       },
       {
@@ -1096,7 +1111,8 @@ export const APP_MODULE_GROUPS = [
         roles: ["Programador"],
         description: "Comandos de mantenimiento y sincronización.",
         functions: [
-          { name: "Subir backup.json", description: "Valida JSON EdDeli y guarda en servidor." },
+          { name: "Subir backup.json", description: "Valida JSON del sistema y guarda en servidor." },
+          { name: "Descargar backup", description: "Genera y descarga backup-FECHA.json." },
           { name: "Descargar backup", description: "Exporta estado actual de la BD." },
           { name: "Recargar BD", description: "Restaura desde backup.json con confirmación." },
           { name: "Progreso visual", description: "Diálogo con pasos y barra por operación." },

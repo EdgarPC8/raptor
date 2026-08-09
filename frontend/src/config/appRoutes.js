@@ -30,15 +30,15 @@ export const APP_ROUTES = {
     customers: "/ventas/clientes",
     customerAccounts: "/ventas/clientes/cuentas",
     suppliers: "/ventas/proveedores",
-    /** Hub cobranzas a clientes (sección Ventas) */
+    /** Reporte de ventas (facturación diaria / POS) */
     salesHub: "/ventas/ventas",
-    /** Hub compras: cuentas por pagar a proveedores */
+    /** Reporte de compras (pedidos a proveedor) */
     purchasesHub: "/ventas/compras",
   },
   finance: {
     transactions: "/finanzas/movimientos",
-    /** @deprecated Usar APP_ROUTES.sales.salesHub — se mantiene por compat. */
-    collections: "/ventas/ventas",
+    /** Cobranzas: clientes y proveedores */
+    collections: "/finanzas/cobranzas",
     loansDebts: "/finanzas/prestamos-deudas",
     recurringExpenses: "/finanzas/gastos-recurrentes",
   },
@@ -106,7 +106,10 @@ export const APP_ROUTES = {
   info: "/info",
 };
 
-/** Redirecciones legacy → rutas canónicas en español. */
+/**
+ * Redirecciones legacy → rutas canónicas en español.
+ * Nunca incluir from === to: tapa la ruta real y deja el Outlet en blanco.
+ */
 export const LEGACY_ROUTE_REDIRECTS = [
   // Operación (flat)
   ["/caja", APP_ROUTES.operation.cash],
@@ -129,18 +132,17 @@ export const LEGACY_ROUTE_REDIRECTS = [
   ["/sales/customers/accounts", APP_ROUTES.sales.customerAccounts],
   ["/ventas-compras/ventas", APP_ROUTES.sales.salesHub],
   ["/ventas-compras/compras", APP_ROUTES.sales.purchasesHub],
-  ["/ventas/cobranzas", APP_ROUTES.sales.salesHub],
   ["/inventory/orders", APP_ROUTES.sales.orders],
   ["/inventory/customers", APP_ROUTES.sales.customers],
   ["/inventory/customers/cuentas", APP_ROUTES.sales.customerAccounts],
-  // Finanzas → cobranzas legacy va al hub Ventas
+  // Finanzas / cobranzas (alias viejos; la canónica /finanzas/cobranzas NO va aquí)
   ["/finance/transactions", APP_ROUTES.finance.transactions],
-  ["/finance/collections", APP_ROUTES.sales.salesHub],
+  ["/finance/collections", APP_ROUTES.finance.collections],
   ["/finance/loans-debts", APP_ROUTES.finance.loansDebts],
   ["/finance/recurring-expenses", APP_ROUTES.finance.recurringExpenses],
   ["/inventory/finance", APP_ROUTES.finance.transactions],
-  ["/inventory/collections", APP_ROUTES.sales.salesHub],
-  ["/finanzas/cobranzas", APP_ROUTES.sales.salesHub],
+  ["/inventory/collections", APP_ROUTES.finance.collections],
+  ["/ventas/cobranzas", APP_ROUTES.finance.collections],
   ["/inventory/prestamos-deudas", APP_ROUTES.finance.loansDebts],
   ["/inventory/gastos-recurrentes", APP_ROUTES.finance.recurringExpenses],
   // Inventario
@@ -163,7 +165,6 @@ export const LEGACY_ROUTE_REDIRECTS = [
   ["/production/suppliers", APP_ROUTES.sales.suppliers],
   ["/production/suppliers/accounts", APP_ROUTES.production.supplierAccounts],
   ["/produccion/proveedores", APP_ROUTES.sales.suppliers],
-  ["/produccion/proveedores/cuentas", APP_ROUTES.production.supplierAccounts],
   ["/inventory/insumos", APP_ROUTES.production.ingredients],
   ["/inventory/recipes", APP_ROUTES.production.recipes],
   ["/inventory/production", APP_ROUTES.production.manufacturing],

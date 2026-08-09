@@ -28,7 +28,7 @@ import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 
 export default function EditorTemplatesView({
   editorBasePath = APP_ROUTES.promoDesign.editor,
-  defaultApp = "EdDeli",
+  defaultApp = "App",
   defaultFormat = "16:9",
 } = {}) {
   const nav = useNavigate();
@@ -681,7 +681,7 @@ export default function EditorTemplatesView({
               onChange={(e) => setImportForm((p) => ({ ...p, app: e.target.value }))}
               fullWidth
               size="small"
-              placeholder="EdDeli / Raptor / ..."
+              placeholder="App / proyecto / …"
             />
 
             <TextField
@@ -767,7 +767,7 @@ export default function EditorTemplatesView({
               onChange={(e) => setCreateForm((p) => ({ ...p, app: e.target.value }))}
               fullWidth
               size="small"
-              placeholder="EdDeli / Raptor / ..."
+              placeholder="App / proyecto / …"
             />
 
             <TextField

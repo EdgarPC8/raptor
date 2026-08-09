@@ -33,16 +33,16 @@ const OPERATION_CONFIG = {
     ],
     successMessage: "Backup validado y guardado en el servidor. Ejecuta «Recargar BD» para aplicarlo.",
     errorMessage:
-      "No se pudo subir el archivo. Debe ser un backup EdDeli válido (objeto con Roles, Users, Account, etc.).",
+      "No se pudo subir el archivo. Debe ser un backup JSON válido (objeto con Roles, Users, Account, etc.).",
   },
   download: {
-    title: "Descargando backup EdDeli",
+    title: "Descargando backup",
     steps: [
       { until: 35, label: "Generando respaldo desde la base de datos…" },
       { until: 70, label: "Preparando archivo para descarga…" },
       { until: 92, label: "Finalizando descarga…" },
     ],
-    successMessage: "Descarga de backup-eddeli.json completada correctamente.",
+    successMessage: "Descarga del backup completada correctamente.",
     errorMessage: "No se pudo descargar el backup. Intente de nuevo.",
   },
   save: {
@@ -209,8 +209,8 @@ export default function ComandosPage() {
     },
     {
       key: "download",
-      name: "Descargar backup EdDeli",
-      info: "Descarga el estado actual de la base como backup-eddeli.json",
+      name: "Descargar backup",
+      info: "Descarga el estado actual de la base como backup-FECHA.json",
       icon: BackupIcon,
       run: executeDownloadBackup,
     },

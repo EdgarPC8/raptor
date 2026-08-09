@@ -1,11 +1,12 @@
 /**
- * Suscripción local (backend EdDeli). El gestor solo EMPUJA el entitlement;
- * en runtime EdDeli lee su propio backend — el gestor puede estar apagado.
+ * Suscripción local (backend de la app). El gestor solo EMPUJA el entitlement;
+ * en runtime la app lee su propio backend — el gestor puede estar apagado.
  */
 import { useCallback, useEffect, useState } from "react";
 import axios from "../api/axios.js";
 import { socket } from "../api/axios.js";
 import { SHELL_ONLY } from "../config/deployEnv.js";
+import { APP_ID } from "../config/appInfo.js";
 
 /**
  * Switch en frontend/.env → `VITE_SUBSCRIPTIONS_ENABLED`:
@@ -14,8 +15,8 @@ import { SHELL_ONLY } from "../config/deployEnv.js";
  *   - sin definir → desactivado en `npm run dev`, activado en build de producción.
  *
  * Comandos:
- *   npm run eddeli      → usa .env.eddeli (normalmente true)
- *   npm run dev:eddeli  → fuerza false (programar libre)
+ *   npm run eddeli / store → usa .env del modo (normalmente true)
+ *   npm run dev:eddeli / dev:store → fuerza false (programar libre)
  */
 const ENV_OVERRIDE = import.meta.env.VITE_SUBSCRIPTIONS_ENABLED;
 export const SUBSCRIPTIONS_ENABLED =
@@ -34,8 +35,8 @@ const BYPASS_SUBSCRIPTION = {
   maintenance: false,
 };
 
-const CACHE_KEY = "eddeli_entitlement_cache_v2";
-const ENTITLEMENT_EVENT = "eddeli:entitlement-refetch";
+const CACHE_KEY = `${APP_ID}_entitlement_cache_v2`;
+const ENTITLEMENT_EVENT = `${APP_ID}:entitlement-refetch`;
 
 function readCachedEntitlement() {
   try {
