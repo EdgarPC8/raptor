@@ -43,7 +43,7 @@ export function getReceiptLayout(format) {
     return {
       isTicket: false,
       previewWidth: null,
-      maxWidth: 720,
+      maxWidth: 794,
       pad: 3,
       baseFont: 15,
       businessName: 22,

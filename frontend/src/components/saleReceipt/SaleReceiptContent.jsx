@@ -61,7 +61,7 @@ export default function SaleReceiptContent({ receipt, format = "a4", showNotes =
     <Box
       sx={{
         width: isTicket ? layout.previewWidth : "100%",
-        maxWidth: isTicket ? layout.maxWidth : 720,
+        maxWidth: isTicket ? layout.maxWidth : layout.maxWidth || 794,
         mx: "auto",
         p: layout.pad,
         bgcolor: "#fff",

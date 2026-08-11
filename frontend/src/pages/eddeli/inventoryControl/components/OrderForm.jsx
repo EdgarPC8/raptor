@@ -44,6 +44,11 @@ import {
   normalizeProductBarcode,
 } from "../../../../utils/productLookup.js";
 import SupplierOrderItemsBoard, { ZONE } from "./SupplierOrderItemsBoard.jsx";
+import OrderPaymentScheduleFields from "./OrderPaymentScheduleFields.jsx";
+import {
+  normalizeScheduleForApi,
+  toDateOnly,
+} from "../../../../utils/orderPaymentSchedule.js";
 import {
   hydratePacksAndLots,
   newPackKey,
@@ -110,6 +115,10 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
   const [printOpen, setPrintOpen] = useState(false);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [productDialogMode, setProductDialogMode] = useState("create");
+  const [paymentDueDate, setPaymentDueDate] = useState("");
+  const [splitPayments, setSplitPayments] = useState(false);
+  const [installmentCount, setInstallmentCount] = useState(2);
+  const [installments, setInstallments] = useState([]);
   const tourGenRef = useRef(0);
   const lotsRef = useRef([]);
 
@@ -381,6 +390,10 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
     setSelectedProduct("");
     setValue("productId", "");
     setValue("date", localISODate());
+    setPaymentDueDate("");
+    setSplitPayments(false);
+    setInstallmentCount(2);
+    setInstallments([]);
   };
 
   const submitOrder = async (data) => {
@@ -391,6 +404,26 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
     if (!selectedCustomer) {
       toast({ message: "Seleccione un cliente", variant: "warning" });
       return;
+    }
+
+    if (installments.length > 0) {
+      const schedule = normalizeScheduleForApi(installments);
+      if (!schedule.length) {
+        toast({ message: "Revisá las cuotas: cada una necesita fecha y monto", variant: "warning" });
+        return;
+      }
+      const sum = schedule.reduce((a, r) => a + r.amount, 0);
+      const total = items.reduce(
+        (acc, it) => acc + formatOrderLineTotal(it.quantity, it.unitPrice),
+        0,
+      );
+      if (Math.abs(sum - Number(total.toFixed(2))) > 0.02) {
+        toast({
+          message: `La suma de cuotas (${sum.toFixed(2)}) debe igualar el total (${total.toFixed(2)})`,
+          variant: "warning",
+        });
+        return;
+      }
     }
 
     for (const pack of packs) {
@@ -434,6 +467,19 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
           ...lotFields,
         };
       }),
+      paymentInstallments: installments.length
+        ? normalizeScheduleForApi(installments)
+        : paymentDueDate
+          ? normalizeScheduleForApi([
+              {
+                dueDate: paymentDueDate,
+                amount: items.reduce(
+                  (acc, it) => acc + formatOrderLineTotal(it.quantity, it.unitPrice),
+                  0,
+                ),
+              },
+            ])
+          : [],
     };
 
     try {
@@ -474,6 +520,31 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
       );
       setPacks(hydrated.packs);
       setLots(hydrated.lots);
+      const sched = Array.isArray(datos.paymentInstallments) ? datos.paymentInstallments : [];
+      setInstallments(
+        sched.map((r) => ({
+          id: r.id ?? null,
+          sequence: r.sequence,
+          dueDate: toDateOnly(r.dueDate) || "",
+          amount: Number(r.amount) || 0,
+          locked: Boolean(r.locked || r.isPaid),
+          paidAmount: Number(r.paidAmount) || 0,
+          remainingAmount: Number(r.remainingAmount) || 0,
+          isPaid: Boolean(r.isPaid),
+        })),
+      );
+      setPaymentDueDate(
+        toDateOnly(datos.paymentDueDate) ||
+          toDateOnly(sched[sched.length - 1]?.dueDate) ||
+          "",
+      );
+      setSplitPayments(sched.length > 1);
+      setInstallmentCount(Math.max(2, sched.length || 2));
+    } else if (!isEditing) {
+      setPaymentDueDate("");
+      setSplitPayments(false);
+      setInstallmentCount(2);
+      setInstallments([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datos]);
@@ -678,6 +749,22 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
                 fullWidth
                 InputLabelProps={{ shrink: true }}
                 {...register("date")}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <OrderPaymentScheduleFields
+                partyKind="customer"
+                deliveryDate={watch("date")}
+                orderTotal={itemsTotal}
+                paymentDueDate={paymentDueDate}
+                onPaymentDueDateChange={setPaymentDueDate}
+                splitPayments={splitPayments}
+                onSplitPaymentsChange={setSplitPayments}
+                installmentCount={installmentCount}
+                onInstallmentCountChange={setInstallmentCount}
+                installments={installments}
+                onInstallmentsChange={setInstallments}
               />
             </Grid>
 

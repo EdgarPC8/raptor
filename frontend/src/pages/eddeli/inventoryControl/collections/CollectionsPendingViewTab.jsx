@@ -27,6 +27,11 @@ import {
   toNum,
 } from "./helpers.js";
 import { buildPendingByDate, buildPendingByProduct } from "./summaryBuilders.js";
+import {
+  CREDIT_ORANGE,
+  formatCreditDueLabel,
+  pickNextCredit,
+} from "./creditHelpers.js";
 
 const VIEW_TABS = [
   { id: "orders", label: "Por pedidos" },
@@ -44,6 +49,7 @@ function lineTotal(it) {
  */
 export default function CollectionsPendingViewTab({
   itemsUngrouped = [],
+  orders = [],
   selectedItemIds = [],
   onToggleItemIds,
   onClearSelection,
@@ -58,17 +64,28 @@ export default function CollectionsPendingViewTab({
   const [sub, setSub] = useState(0);
   const view = VIEW_TABS[sub]?.id || "orders";
 
+  const orderMetaById = useMemo(() => {
+    const map = new Map();
+    for (const o of orders || []) map.set(Number(o.id), o);
+    return map;
+  }, [orders]);
+
   const byOrders = useMemo(() => {
     const map = new Map();
     for (const it of itemsUngrouped) {
       const oid = it.orderId;
       if (oid == null) continue;
       if (!map.has(oid)) {
+        const meta = orderMetaById.get(Number(oid)) || {};
         map.set(oid, {
           orderId: oid,
-          date: it.orderDate || "",
+          date: it.orderDate || meta.date || "",
           items: [],
           total: 0,
+          nextCreditDue: meta.nextCreditDue || null,
+          nextCreditAmount: meta.nextCreditAmount ?? null,
+          pendingCreditCount: meta.pendingCreditCount || 0,
+          paymentInstallments: meta.paymentInstallments || [],
         });
       }
       const row = map.get(oid);
@@ -81,7 +98,7 @@ export default function CollectionsPendingViewTab({
       if (da !== db) return da.localeCompare(db);
       return Number(b.orderId) - Number(a.orderId);
     });
-  }, [itemsUngrouped]);
+  }, [itemsUngrouped, orderMetaById]);
 
   const byProduct = useMemo(
     () => buildPendingByProduct(itemsUngrouped),
@@ -184,12 +201,13 @@ export default function CollectionsPendingViewTab({
 
       {view === "orders" && itemsUngrouped.length > 0 ? (
         <Box sx={{ width: "100%", overflowX: "auto" }}>
-          <Table size="small" sx={{ minWidth: 420 }}>
+          <Table size="small" sx={{ minWidth: 520 }}>
             <TableHead>
               <TableRow>
                 <TableCell padding="checkbox" sx={{ width: 40 }} />
                 <TableCell sx={{ fontWeight: 800, py: 0.75 }}>Pedido</TableCell>
                 <TableCell sx={{ fontWeight: 800, py: 0.75 }}>Fecha</TableCell>
+                <TableCell sx={{ fontWeight: 800, py: 0.75 }}>Crédito</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 800, py: 0.75 }}>
                   Ítems
                 </TableCell>
@@ -204,6 +222,7 @@ export default function CollectionsPendingViewTab({
             <TableBody>
               {byOrders.map((ord) => {
                 const ids = ord.items.map((it) => it.id);
+                const credit = pickNextCredit(ord);
                 return (
                   <TableRow key={ord.orderId} hover sx={{ "& td": { py: 0.5 } }}>
                     <TableCell padding="checkbox">
@@ -220,6 +239,29 @@ export default function CollectionsPendingViewTab({
                     </TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>#{ord.orderId}</TableCell>
                     <TableCell>{ord.date || "—"}</TableCell>
+                    <TableCell>
+                      {credit ? (
+                        <Chip
+                          size="small"
+                          label={`${formatCreditDueLabel(credit.due)} · ${money(credit.amount)}`}
+                          sx={{
+                            height: 22,
+                            fontWeight: 700,
+                            bgcolor: CREDIT_ORANGE,
+                            color: "#fff",
+                          }}
+                          title={
+                            credit.count > 1
+                              ? `${credit.count} cuotas pendientes`
+                              : "Próxima cuota de crédito"
+                          }
+                        />
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          —
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell align="right">{ord.items.length}</TableCell>
                     <TableCell align="right">{money(ord.total)}</TableCell>
                     <TableCell align="right">

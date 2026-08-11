@@ -35,6 +35,11 @@ import SearchableSelect from "../../../../components/SearchableSelect";
 import AttachmentField from "./AttachmentField.jsx";
 import ProductForm from "./ProductForm.jsx";
 import SupplierForm from "./SupplierForm.jsx";
+import OrderPaymentScheduleFields from "./OrderPaymentScheduleFields.jsx";
+import {
+  normalizeScheduleForApi,
+  toDateOnly,
+} from "../../../../utils/orderPaymentSchedule.js";
 import ProductPriceReference, {
   getProductUnitLabel,
   formatOrderLineTotal,
@@ -257,6 +262,10 @@ function SupplierOrderForm(
   const [xmlParsed, setXmlParsed] = useState(null);
   const xmlFileInputRef = useRef(null);
   const [ivaRate, setIvaRate] = useState(15);
+  const [paymentDueDate, setPaymentDueDate] = useState("");
+  const [splitPayments, setSplitPayments] = useState(false);
+  const [installmentCount, setInstallmentCount] = useState(2);
+  const [installments, setInstallments] = useState([]);
   /** Solo productos que este proveedor ya me vendió (historial de pedidos). */
   const [onlySoldBySupplier, setOnlySoldBySupplier] = useState(false);
   const [soldProductIds, setSoldProductIds] = useState(() => new Set());
@@ -794,6 +803,33 @@ function SupplierOrderForm(
       }
     }
 
+    const rate = (Number(ivaRate) || 0) / 100;
+    const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+    let sub = 0;
+    let iva = 0;
+    items.forEach((it) => {
+      const line = formatOrderLineTotal(it.quantity, it.unitPrice);
+      sub += line;
+      if (it.hasIva) iva += line * rate;
+    });
+    const orderTotalNow = round2(round2(sub) + round2(iva));
+
+    if (installments.length > 0) {
+      const schedule = normalizeScheduleForApi(installments);
+      if (!schedule.length) {
+        toast({ message: "Revisá las cuotas: cada una necesita fecha y monto", variant: "warning" });
+        return;
+      }
+      const sum = schedule.reduce((a, r) => a + r.amount, 0);
+      if (Math.abs(sum - orderTotalNow) > 0.02) {
+        toast({
+          message: `La suma de cuotas (${sum.toFixed(2)}) debe igualar el total (${orderTotalNow.toFixed(2)})`,
+          variant: "warning",
+        });
+        return;
+      }
+    }
+
     const localDT = new Date(`${data.date}T12:00:00`);
     const payload = {
       supplierId: Number(selectedSupplier),
@@ -809,6 +845,11 @@ function SupplierOrderForm(
           ...lotFields,
         };
       }),
+      paymentInstallments: installments.length
+        ? normalizeScheduleForApi(installments)
+        : paymentDueDate
+          ? normalizeScheduleForApi([{ dueDate: paymentDueDate, amount: orderTotalNow }])
+          : [],
     };
 
     const voucherFile = pendingVoucherFile;
@@ -853,6 +894,10 @@ function SupplierOrderForm(
       setPacks([]);
       setLots([]);
       setPendingVoucherFile(null);
+      setPaymentDueDate("");
+      setSplitPayments(false);
+      setInstallmentCount(2);
+      setInstallments([]);
       if (reload) await reload();
       if (onClose) await onClose();
     } catch {
@@ -875,6 +920,26 @@ function SupplierOrderForm(
         (item) => Number(item.taxRate) > 0,
       );
       if (firstIva) setIvaRate(Number(firstIva.taxRate));
+      const sched = Array.isArray(datos.paymentInstallments) ? datos.paymentInstallments : [];
+      setInstallments(
+        sched.map((r) => ({
+          id: r.id ?? null,
+          sequence: r.sequence,
+          dueDate: toDateOnly(r.dueDate) || "",
+          amount: Number(r.amount) || 0,
+          locked: Boolean(r.locked || r.isPaid),
+          paidAmount: Number(r.paidAmount) || 0,
+          remainingAmount: Number(r.remainingAmount) || 0,
+          isPaid: Boolean(r.isPaid),
+        })),
+      );
+      setPaymentDueDate(
+        toDateOnly(datos.paymentDueDate) ||
+          toDateOnly(sched[sched.length - 1]?.dueDate) ||
+          "",
+      );
+      setSplitPayments(sched.length > 1);
+      setInstallmentCount(Math.max(2, sched.length || 2));
       return;
     }
 
@@ -882,6 +947,10 @@ function SupplierOrderForm(
     setPacks([]);
     setLots([]);
     setPendingVoucherFile(null);
+    setPaymentDueDate("");
+    setSplitPayments(false);
+    setInstallmentCount(2);
+    setInstallments([]);
     setValue("notes", "");
     setValue("date", prefillDate || localISODate());
     setSelectedSupplier(prefillSupplierId ? String(prefillSupplierId) : "");
@@ -1167,6 +1236,21 @@ function SupplierOrderForm(
 
             <Grid item xs={12}>
               <TextField fullWidth label="Fecha del pedido" type="date" {...register("date")} />
+            </Grid>
+            <Grid item xs={12}>
+              <OrderPaymentScheduleFields
+                partyKind="supplier"
+                deliveryDate={watch("date")}
+                orderTotal={itemsTotal}
+                paymentDueDate={paymentDueDate}
+                onPaymentDueDateChange={setPaymentDueDate}
+                splitPayments={splitPayments}
+                onSplitPaymentsChange={setSplitPayments}
+                installmentCount={installmentCount}
+                onInstallmentCountChange={setInstallmentCount}
+                installments={installments}
+                onInstallmentsChange={setInstallments}
+              />
             </Grid>
             <Grid item xs={12}>
               <TextField fullWidth label="Notas" multiline rows={2} {...register("notes")} />

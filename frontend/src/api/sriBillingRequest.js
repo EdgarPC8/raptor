@@ -32,3 +32,16 @@ export async function deleteSriCertificate() {
   const { data } = await axios.delete("/sri/certificate", authHeaders());
   return data;
 }
+
+export async function testSriInvoiceEmail(to) {
+  if (isGuestDataMode()) {
+    await guestDenied();
+    return null;
+  }
+  const { data } = await axios.post(
+    "/sri/test-email",
+    to ? { to } : {},
+    authHeaders(),
+  );
+  return data;
+}

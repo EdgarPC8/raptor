@@ -135,7 +135,7 @@ export default function PrintFormatDialog({
     if (!previewRef.current) return;
     setExporting(true);
     try {
-      await downloadReceiptAsPng(previewRef.current, `${baseFilename}.png`);
+      await downloadReceiptAsPng(previewRef.current, `${baseFilename}.png`, format);
     } finally {
       setExporting(false);
     }
@@ -145,7 +145,7 @@ export default function PrintFormatDialog({
     if (!previewRef.current) return;
     setExporting(true);
     try {
-      await copyReceiptAsPng(previewRef.current);
+      await copyReceiptAsPng(previewRef.current, format);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } finally {
@@ -258,6 +258,7 @@ export default function PrintFormatDialog({
               sx={{
                 width: previewWidth,
                 maxWidth: "100%",
+                minWidth: layout.isTicket ? undefined : 640,
                 bgcolor: "#fff",
                 flexShrink: 0,
               }}

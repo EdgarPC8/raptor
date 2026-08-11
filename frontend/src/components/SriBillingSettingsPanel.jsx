@@ -28,6 +28,7 @@ import {
   updateSriBillingSettings,
   uploadSriCertificate,
   deleteSriCertificate,
+  testSriInvoiceEmail,
 } from "../api/sriBillingRequest.js";
 
 const EMPTY = {
@@ -52,6 +53,20 @@ const EMPTY = {
   certificateFileName: null,
   certificateUploadedAt: null,
   readyForInvoicing: false,
+  enableSendInvoiceEmail: false,
+  smtpHost: "",
+  smtpPort: 587,
+  smtpSecure: false,
+  smtpUser: "",
+  smtpFrom: "",
+  hasSmtpPassword: false,
+  smtpReady: false,
+  invoiceEmailDailyLimit: 80,
+  invoiceEmailsSentToday: 0,
+  invoiceEmailsRemainingToday: 80,
+  invoiceEmailUsagePct: 0,
+  invoiceEmailWarning: null,
+  invoiceEmailLimitReached: false,
 };
 
 function SectionTitle({ children, hint }) {
@@ -139,8 +154,11 @@ const SriBillingSettingsPanel = forwardRef(function SriBillingSettingsPanel(_pro
   const { toast } = useAuth();
   const [form, setForm] = useState(null);
   const [password, setPassword] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [testEmailTo, setTestEmailTo] = useState("");
   const [saving, setSaving] = useState(false);
   const [certBusy, setCertBusy] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -184,11 +202,20 @@ const SriBillingSettingsPanel = forwardRef(function SriBillingSettingsPanel(_pro
             taxRegime: form.taxRegime,
             nextInvoiceSequential: Number(form.nextInvoiceSequential) || 1,
             notes: form.notes,
+            enableSendInvoiceEmail: Boolean(form.enableSendInvoiceEmail),
+            smtpHost: form.smtpHost,
+            smtpPort: Number(form.smtpPort) || 587,
+            smtpSecure: Boolean(form.smtpSecure),
+            smtpUser: form.smtpUser,
+            smtpFrom: form.smtpFrom,
+            invoiceEmailDailyLimit: Number(form.invoiceEmailDailyLimit) || 80,
           };
           if (password.trim()) payload.certificatePassword = password.trim();
+          if (smtpPassword.trim()) payload.smtpPassword = smtpPassword.trim();
           const res = await updateSriBillingSettings(payload);
           setForm({ ...EMPTY, ...res.settings });
           setPassword("");
+          setSmtpPassword("");
         })(),
         successMessage: "Configuración SRI guardada",
         errorMessage: "No se pudo guardar",
@@ -207,7 +234,7 @@ const SriBillingSettingsPanel = forwardRef(function SriBillingSettingsPanel(_pro
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [form, password, saving],
+    [form, password, smtpPassword, saving],
   );
 
   if (!form) return <PageSkeleton />;
@@ -489,6 +516,189 @@ const SriBillingSettingsPanel = forwardRef(function SriBillingSettingsPanel(_pro
               }
               label="Obligado a llevar contabilidad"
             />
+          </Grid>
+        </Grid>
+      </Box>
+
+      <Divider />
+
+      <Box data-tour="sri-invoice-email">
+        <SectionTitle hint="Al autorizar una factura (pruebas o producción), si está activo se envía el XML al correo del cliente. Gmail y similares tienen cupo diario: la app te avisa cuando te acercas o lo alcanzas.">
+          Envío de factura por correo
+        </SectionTitle>
+
+        <Box
+          sx={{
+            p: 2,
+            mb: 2,
+            borderRadius: 2,
+            border: "1px solid",
+            borderColor: "divider",
+            bgcolor: "action.hover",
+          }}
+        >
+          <FormControlLabel
+            sx={{ m: 0, width: "100%", justifyContent: "space-between" }}
+            labelPlacement="start"
+            control={
+              <Switch
+                checked={Boolean(form.enableSendInvoiceEmail)}
+                onChange={onChange("enableSendInvoiceEmail")}
+              />
+            }
+            label={
+              <Box>
+                <Typography fontWeight={700}>Enviar factura al correo del cliente</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Debe estar activado. El cliente necesita tener email en la factura.
+                </Typography>
+              </Box>
+            }
+          />
+        </Box>
+
+        {form.invoiceEmailWarning ? (
+          <Alert
+            severity={form.invoiceEmailLimitReached ? "error" : "warning"}
+            sx={{ mb: 2, py: 1 }}
+          >
+            {form.invoiceEmailWarning}
+          </Alert>
+        ) : (
+          <Alert severity="info" sx={{ mb: 2, py: 1 }}>
+            Cupo hoy:{" "}
+            <strong>
+              {form.invoiceEmailsSentToday ?? 0}/{form.invoiceEmailDailyLimit ?? 80}
+            </strong>{" "}
+            · Quedan {form.invoiceEmailsRemainingToday ?? 80}. Configura el correo desde el que
+            salen las facturas (SMTP).
+          </Alert>
+        )}
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6}>
+            <StatusTextField
+              fullWidth
+              label="Servidor SMTP (host)"
+              value={form.smtpHost || ""}
+              onChange={onChange("smtpHost")}
+              placeholder="smtp.gmail.com"
+              ok={Boolean(String(form.smtpHost || "").trim())}
+              helperText="ej. smtp.gmail.com / smtp.office365.com"
+            />
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <StatusTextField
+              fullWidth
+              type="number"
+              label="Puerto"
+              value={form.smtpPort ?? 587}
+              onChange={onChange("smtpPort")}
+              placeholder="587"
+              helperText="587 TLS · 465 SSL"
+            />
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <FormControlLabel
+              sx={{ mt: 1 }}
+              control={
+                <Switch
+                  checked={Boolean(form.smtpSecure)}
+                  onChange={onChange("smtpSecure")}
+                />
+              }
+              label="SSL (puerto 465)"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <StatusTextField
+              fullWidth
+              label="Usuario SMTP"
+              value={form.smtpUser || ""}
+              onChange={onChange("smtpUser")}
+              placeholder="tunegocio@gmail.com"
+              ok={Boolean(String(form.smtpUser || "").trim())}
+              helperText="cuenta con la que te autenticas"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <StatusTextField
+              fullWidth
+              label="Remitente (From)"
+              value={form.smtpFrom || ""}
+              onChange={onChange("smtpFrom")}
+              placeholder="facturacion@tunegocio.com"
+              ok={Boolean(String(form.smtpFrom || form.smtpUser || "").trim())}
+              helperText="correo que verá el cliente como remitente"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <StatusTextField
+              required={!form.hasSmtpPassword}
+              fullWidth
+              type="password"
+              label={
+                form.hasSmtpPassword
+                  ? "Nueva contraseña SMTP / app password"
+                  : "Contraseña SMTP / app password *"
+              }
+              value={smtpPassword}
+              onChange={(e) => setSmtpPassword(e.target.value)}
+              placeholder="••••••••"
+              ok={form.hasSmtpPassword || Boolean(smtpPassword.trim())}
+              helperText={
+                form.hasSmtpPassword
+                  ? "deja vacío para mantener la guardada · Gmail: usa contraseña de aplicación"
+                  : "Gmail: activa 2FA y crea una contraseña de aplicación"
+              }
+              autoComplete="new-password"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <StatusTextField
+              fullWidth
+              type="number"
+              label="Límite diario de envíos"
+              value={form.invoiceEmailDailyLimit ?? 80}
+              onChange={onChange("invoiceEmailDailyLimit")}
+              placeholder="80"
+              inputProps={{ min: 1, max: 10000 }}
+              helperText="protege tu cuenta (Gmail free ≈ 100–500/día)"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <StatusTextField
+              fullWidth
+              type="email"
+              label="Probar envío a"
+              value={testEmailTo}
+              onChange={(e) => setTestEmailTo(e.target.value)}
+              placeholder={form.smtpFrom || form.email || "tu@correo.com"}
+              helperText="opcional · por defecto usa el remitente"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} sx={{ display: "flex", alignItems: "center" }}>
+            <Button
+              variant="outlined"
+              disabled={emailBusy}
+              onClick={async () => {
+                setEmailBusy(true);
+                try {
+                  await toast({
+                    promise: (async () => {
+                      const res = await testSriInvoiceEmail(testEmailTo.trim() || undefined);
+                      if (res?.settings) setForm({ ...EMPTY, ...res.settings });
+                    })(),
+                    successMessage: "Correo de prueba enviado",
+                    errorMessage: "No se pudo enviar la prueba",
+                  });
+                } finally {
+                  setEmailBusy(false);
+                }
+              }}
+            >
+              Enviar correo de prueba
+            </Button>
           </Grid>
         </Grid>
       </Box>

@@ -106,10 +106,26 @@ function CustomerBlock({ receipt, emissionDate, isTicket }) {
 
 function ItemsTableA4({ items }) {
   return (
-    <Box component="table" sx={{ width: "100%", borderCollapse: "collapse", mb: 1.25, fontSize: "0.92em" }}>
+    <Box
+      component="table"
+      sx={{
+        width: "100%",
+        borderCollapse: "collapse",
+        mb: 1.25,
+        fontSize: "0.95em",
+        tableLayout: "fixed",
+      }}
+    >
       <Box component="thead">
         <Box component="tr">
-          {["Codigo", "Descripción", "Cant", "Precio Unitario", "Descto", "Subtotal"].map((h, i) => (
+          {[
+            { h: "Codigo", w: "12%" },
+            { h: "Descripción", w: "38%" },
+            { h: "Cant", w: "10%" },
+            { h: "Precio Unitario", w: "15%" },
+            { h: "Descto", w: "10%" },
+            { h: "Subtotal", w: "15%" },
+          ].map(({ h, w }, i) => (
             <Box
               component="th"
               key={h}
@@ -120,6 +136,7 @@ function ItemsTableA4({ items }) {
                 fontWeight: 800,
                 textAlign: i >= 2 ? "right" : "left",
                 bgcolor: "#f3f3f3",
+                width: w,
               }}
             >
               {h}
@@ -253,7 +270,7 @@ export default function InvoiceRideContent({ receipt, format = "a4" }) {
       barcodeKey
         ? code128SvgMarkup(barcodeKey, {
             height: isTicket ? 36 : 48,
-            maxWidth: isTicket ? 240 : 300,
+            maxWidth: isTicket ? 240 : 420,
           })
         : "",
     [barcodeKey, isTicket],
@@ -384,15 +401,16 @@ export default function InvoiceRideContent({ receipt, format = "a4" }) {
     <Box
       sx={{
         width: isTicket ? layout.previewWidth : "100%",
-        maxWidth: isTicket ? layout.maxWidth : 820,
+        maxWidth: isTicket ? layout.maxWidth : "100%",
         mx: "auto",
-        p: isTicket ? 1 : 1.5,
+        p: isTicket ? 1 : 2,
         bgcolor: "#fff",
         color: BLACK,
         fontFamily: "Arial, Helvetica, sans-serif",
-        fontSize: isTicket ? (layout.narrow ? 11 : 12.5) : 13,
+        fontSize: isTicket ? (layout.narrow ? 11 : 12.5) : 14,
         border: "1px solid #ccc",
         borderRadius: 1,
+        boxSizing: "border-box",
         "& .MuiTypography-root": { color: BLACK },
       }}
     >

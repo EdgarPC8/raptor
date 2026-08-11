@@ -6,6 +6,7 @@ import {
   Chip, LinearProgress, Stack,
   Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Alert,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  InputAdornment,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 
@@ -29,6 +30,8 @@ import PaymentsIcon from '@mui/icons-material/Payments';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import TodayIcon from '@mui/icons-material/Today';
 import TuneIcon from '@mui/icons-material/Tune';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 
 import {
   markItemAsDeliveredRequest,
@@ -63,6 +66,43 @@ function parseOrderDate(value) {
     return null;
   }
 }
+
+/** Texto buscable: cliente/proveedor + productos del pedido. */
+function orderMatchesSearch(order, rawQuery) {
+  const needle = String(rawQuery || "")
+    .trim()
+    .toLowerCase();
+  if (!needle) return true;
+
+  const isSupplier = order?.orderKind === "supplier";
+  const party = isSupplier
+    ? order?.ERP_supplier?.name || order?.supplier?.name || ""
+    : order?.ERP_customer?.name || order?.customer?.name || "";
+  if (String(party).toLowerCase().includes(needle)) return true;
+
+  if (String(order?.id ?? "").includes(needle)) return true;
+
+  const items = isSupplier
+    ? order?.ERP_supplier_order_items || order?.items || []
+    : order?.ERP_order_items || order?.items || [];
+
+  for (const it of items) {
+    const prod = it?.ERP_inventory_product || it?.product || {};
+    const hay = [
+      prod.name,
+      it?.name,
+      prod.sku,
+      prod.barcode,
+      prod.code,
+      it?.sku,
+      it?.barcode,
+    ]
+      .map((v) => String(v || "").toLowerCase())
+      .join(" ");
+    if (hay.includes(needle)) return true;
+  }
+  return false;
+}
 import SimpleDialog from '../../../../components/Dialogs/SimpleDialog';
 import SearchableSelect from '../../../../components/SearchableSelect';
 import ProductForm from './ProductForm.jsx';
@@ -77,8 +117,60 @@ import DocumentUploadButton from './DocumentUploadButton';
 import PrintFormatDialog from '../../../../components/saleReceipt/PrintFormatDialog.jsx';
 import { buildReceiptFromCustomerOrder } from '../../../../utils/saleReceiptUtils.js';
 import { formatOrderItemFromApi } from '../../../../utils/orderListUtils';
+import { toDateOnly } from '../../../../utils/orderPaymentSchedule.js';
 import SupplierOrderAccordion from './SupplierOrderAccordion';
 import CustomerOrderPayDialog from './CustomerOrderPayDialog';
+
+/** Naranja brillante: cuota / crédito a pagar. */
+const CREDIT_ORANGE = '#FF6D00';
+const CREDIT_ORANGE_BG = 'rgba(255, 109, 0, 0.16)';
+const CREDIT_ORANGE_HOVER = '#E65100';
+
+/** Amarillo dorado: entregado/recibido pero falta cobro o pago (sev 1). Distinto del naranja de crédito. */
+const DELIVERED_GOLD = '#F5C518';
+const DELIVERED_GOLD_DARK = '#8A7010';
+const DELIVERED_GOLD_BG = 'rgba(245, 197, 24, 0.2)';
+
+function parseDueDateLocal(dueDate) {
+  const iso = toDateOnly(dueDate);
+  if (!iso) return null;
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Eventos de cuota pendientes para el calendario. */
+function buildInstallmentEvents(orders) {
+  const events = [];
+  for (const order of orders || []) {
+    const installments = order.paymentInstallments || [];
+    for (const inst of installments) {
+      if (inst.isPaid || Number(inst.remainingAmount) <= 0.009) continue;
+      const due = parseDueDateLocal(inst.dueDate);
+      if (!due) continue;
+      const isSupplier = order.orderKind === 'supplier';
+      const partyName = isSupplier
+        ? order.ERP_supplier?.name || order.supplier?.name || 'Proveedor'
+        : order.ERP_customer?.name || order.customer?.name || 'Cliente';
+      events.push({
+        kind: 'installment',
+        key: `${isSupplier ? 's' : 'c'}-${order.id}-inst-${inst.id || inst.sequence}`,
+        orderId: order.id,
+        orderKind: isSupplier ? 'supplier' : 'customer',
+        installment: inst,
+        dueDate: due,
+        dueDateIso: toDateOnly(inst.dueDate),
+        deliveryDate: parseOrderDate(order.date),
+        partyName,
+        order,
+        amount: Number(inst.amount) || 0,
+        remaining: Number(inst.remainingAmount ?? inst.amount) || 0,
+        orderRemaining: Number(order.remainingAmount) || 0,
+        orderTotal: Number(order.totalAmount) || 0,
+      });
+    }
+  }
+  return events;
+}
 
 /* ---------------- Utils ---------------- */
 function chunkArray(array, size) {
@@ -155,7 +247,7 @@ function getCalendarDayBaseColor(dailyOrders, theme) {
   const worst = Math.min(...dailyOrders.map((o) => getOrderSeverity(o)));
   const { palette } = theme;
   if (worst === 0) return palette.error.main;
-  if (worst === 1) return palette.warning.main;
+  if (worst === 1) return DELIVERED_GOLD;
   if (worst === 2) return palette.info.main;
   if (worst === 3) return palette.success.main;
   return null;
@@ -210,7 +302,7 @@ function getStatusBaseColor(items, theme) {
 
   if (allPaid && allDelivered) return palette.success.main;
   if (!somePaid && !someDelivered) return palette.error.main;
-  if (someDelivered && !allPaid) return palette.warning.main;
+  if (someDelivered && !allPaid) return DELIVERED_GOLD;
   if (somePaid && !allDelivered) return palette.info.main;
   return null;
 }
@@ -218,7 +310,7 @@ function getStatusBaseColor(items, theme) {
 function severityToBaseColor(sev, theme) {
   const { palette } = theme;
   if (sev === 0) return palette.error.main;
-  if (sev === 1) return palette.warning.main;
+  if (sev === 1) return DELIVERED_GOLD;
   if (sev === 2) return palette.info.main;
   if (sev === 3) return palette.success.main;
   return null;
@@ -239,11 +331,31 @@ function getColorByOrder(order, theme, tone) {
 
 function getOrderStatusMeta(order) {
   const sev = getOrderSeverity(order);
-  if (sev === 3) return { label: 'Completo', color: 'success' };
-  if (sev === 0) return { label: 'Sin avance', color: 'error' };
-  if (sev === 1) return { label: 'Entregado · falta cobro', color: 'warning' };
-  if (sev === 2) return { label: 'Cobrado · falta entrega', color: 'info' };
-  return { label: 'Parcial', color: 'warning' };
+  if (sev === 3) return { label: 'Completo', color: 'success', chipSx: null };
+  if (sev === 0) return { label: 'Sin avance', color: 'error', chipSx: null };
+  if (sev === 1) {
+    return {
+      label: 'Entregado · falta cobro',
+      color: 'default',
+      chipSx: {
+        borderColor: DELIVERED_GOLD,
+        color: DELIVERED_GOLD_DARK || '#8A7010',
+        bgcolor: DELIVERED_GOLD_BG,
+        fontWeight: 700,
+      },
+    };
+  }
+  if (sev === 2) return { label: 'Cobrado · falta entrega', color: 'info', chipSx: null };
+  return {
+    label: 'Parcial',
+    color: 'default',
+    chipSx: {
+      borderColor: DELIVERED_GOLD,
+      color: '#8A7010',
+      bgcolor: DELIVERED_GOLD_BG,
+      fontWeight: 700,
+    },
+  };
 }
 
 /** Convierte una fecha (ISO o "dd/MM/yyyy HH:mm:ss") a "YYYY-MM-DD" para inputs date. */
@@ -294,10 +406,11 @@ function orderProgress(order) {
 }
 
 const STATUS_LEGEND = [
-  { label: 'Sin avance', key: 'error' },
-  { label: 'Entregado · falta cobro', key: 'warning' },
-  { label: 'Cobrado · falta entrega', key: 'info' },
-  { label: 'Completo', key: 'success' },
+  { label: 'Sin avance', key: 'error', color: null },
+  { label: 'Entregado · falta cobro', key: 'warning', color: DELIVERED_GOLD },
+  { label: 'Cobrado · falta entrega', key: 'info', color: null },
+  { label: 'Completo', key: 'success', color: null },
+  { label: 'Cuota / crédito a pagar', key: 'credit', color: CREDIT_ORANGE },
 ];
 
 const WEEKDAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -326,6 +439,7 @@ export default forwardRef(function OrderCalendarView({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [orderFilter, setOrderFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [expandedOrders, setExpandedOrders] = useState({});
   const [tourFocusDay, setTourFocusDay] = useState(null);
   const [tourExtraItems, setTourExtraItems] = useState({});
@@ -443,20 +557,31 @@ export default forwardRef(function OrderCalendarView({
   const weeks = chunkArray(daysToShow, 7);
 
   const filteredOrders = useMemo(() => {
+    let list = orders;
     if (orderFilter === 'customer') {
-      return orders.filter((o) => o.orderKind !== 'supplier');
+      list = list.filter((o) => o.orderKind !== 'supplier');
+    } else if (orderFilter === 'supplier') {
+      list = list.filter((o) => o.orderKind === 'supplier');
     }
-    if (orderFilter === 'supplier') {
-      return orders.filter((o) => o.orderKind === 'supplier');
+    if (String(searchQuery || '').trim()) {
+      list = list.filter((o) => orderMatchesSearch(o, searchQuery));
     }
-    return orders;
-  }, [orders, orderFilter]);
+    return list;
+  }, [orders, orderFilter, searchQuery]);
+
+  const installmentEvents = useMemo(
+    () => buildInstallmentEvents(filteredOrders),
+    [filteredOrders],
+  );
 
   const ordersOnDate = (date) =>
     filteredOrders.filter((order) => {
       const orderDate = parseOrderDate(order?.date);
       return orderDate ? isSameDay(orderDate, date) : false;
     });
+
+  const installmentsOnDate = (date) =>
+    installmentEvents.filter((ev) => ev.dueDate && isSameDay(ev.dueDate, date));
 
   const loadInventoryStores = useCallback(async () => {
     try {
@@ -897,6 +1022,13 @@ export default forwardRef(function OrderCalendarView({
   };
 
   const selectedOrders = selectedDate ? ordersOnDate(selectedDate) : [];
+  const selectedInstallments = selectedDate ? installmentsOnDate(selectedDate) : [];
+
+  const goToDeliveryDay = (deliveryDate) => {
+    if (!deliveryDate) return;
+    setCurrentDate(startOfMonth(deliveryDate));
+    setSelectedDate(deliveryDate);
+  };
 
   const handleDayClick = (date) => {
     if (selectedDate && isSameDay(date, selectedDate)) setSelectedDate(null);
@@ -1114,6 +1246,41 @@ export default forwardRef(function OrderCalendarView({
         </ToggleButtonGroup>
       </Stack>
 
+      <TextField
+        data-tour="pedidos-search"
+        fullWidth
+        size="small"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Buscar cliente, proveedor o producto…"
+        sx={{ mb: 1.25 }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon fontSize="small" color="action" />
+            </InputAdornment>
+          ),
+          endAdornment: searchQuery ? (
+            <InputAdornment position="end">
+              <IconButton
+                size="small"
+                aria-label="Limpiar búsqueda"
+                onClick={() => setSearchQuery('')}
+                edge="end"
+              >
+                <ClearIcon fontSize="small" />
+              </IconButton>
+            </InputAdornment>
+          ) : null,
+        }}
+      />
+      {String(searchQuery || '').trim() ? (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          {filteredOrders.length} pedido{filteredOrders.length === 1 ? '' : 's'} coincidente
+          {filteredOrders.length === 1 ? '' : 's'}
+        </Typography>
+      ) : null}
+
       <Stack
         direction="row"
         flexWrap="wrap"
@@ -1121,14 +1288,14 @@ export default forwardRef(function OrderCalendarView({
         spacing={1.5}
         sx={{ mb: 1, gap: { xs: 0.75, sm: 1.5 }, alignItems: 'center' }}
       >
-        {STATUS_LEGEND.map(({ label, key }) => (
+        {STATUS_LEGEND.map(({ label, key, color }) => (
           <Stack key={key} direction="row" alignItems="center" spacing={0.6}>
             <Box
               sx={{
                 width: 8,
                 height: 8,
                 borderRadius: '50%',
-                bgcolor: theme.palette[key].main,
+                bgcolor: color || theme.palette[key]?.main,
                 flexShrink: 0,
               }}
             />
@@ -1192,25 +1359,34 @@ export default forwardRef(function OrderCalendarView({
             >
               {week.map((date) => {
                 const dailyOrders = ordersOnDate(date);
+                const dailyInstallments = installmentsOnDate(date);
                 const customerCount = dailyOrders.filter((o) => o.orderKind !== 'supplier').length;
                 const supplierCount = dailyOrders.filter((o) => o.orderKind === 'supplier').length;
                 const isSelected = selectedDate && isSameDay(date, selectedDate);
                 const isToday = isSameDay(date, new Date());
                 const isOutOfMonth = !isSameMonth(date, currentDate);
-                const statusBase = getCalendarDayBaseColor(dailyOrders, theme);
-                const hasOrders = dailyOrders.length > 0;
+                const hasCreditDue = dailyInstallments.length > 0;
+                const statusBase = hasCreditDue
+                  ? CREDIT_ORANGE
+                  : getCalendarDayBaseColor(dailyOrders, theme);
+                const hasOrders = dailyOrders.length > 0 || hasCreditDue;
 
                 let countLabel = '';
-                if (hasOrders) {
-                  if (orderFilter === 'all' && customerCount > 0 && supplierCount > 0) {
-                    countLabel = `${customerCount} cli · ${supplierCount} prov`;
-                  } else if (orderFilter === 'all' && customerCount > 0) {
-                    countLabel = `${customerCount} ${customerCount === 1 ? 'pedido' : 'pedidos'}`;
-                  } else if (orderFilter === 'all' && supplierCount > 0) {
-                    countLabel = `${supplierCount} ${supplierCount === 1 ? 'pedido' : 'pedidos'}`;
-                  } else {
-                    countLabel = `${dailyOrders.length} ${dailyOrders.length === 1 ? 'pedido' : 'pedidos'}`;
+                if (hasCreditDue && !dailyOrders.length) {
+                  countLabel = `${dailyInstallments.length} cuota${dailyInstallments.length === 1 ? '' : 's'}`;
+                } else if (hasOrders) {
+                  const parts = [];
+                  if (dailyOrders.length) {
+                    if (orderFilter === 'all' && customerCount > 0 && supplierCount > 0) {
+                      parts.push(`${customerCount} cli · ${supplierCount} prov`);
+                    } else {
+                      parts.push(`${dailyOrders.length} ped.`);
+                    }
                   }
+                  if (hasCreditDue) {
+                    parts.push(`${dailyInstallments.length} cuota${dailyInstallments.length === 1 ? '' : 's'}`);
+                  }
+                  countLabel = parts.join(' · ');
                 }
 
                 return (
@@ -1349,23 +1525,106 @@ export default forwardRef(function OrderCalendarView({
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       {selectedOrders.length}{' '}
-                      {selectedOrders.length === 1 ? 'pedido registrado' : 'pedidos registrados'}
+                      {selectedOrders.length === 1 ? 'pedido' : 'pedidos'}
+                      {selectedInstallments.length
+                        ? ` · ${selectedInstallments.length} cuota${selectedInstallments.length === 1 ? '' : 's'} de crédito`
+                        : ''}
                     </Typography>
                   </Box>
-                  {selectedOrders.length > 0 && (
+                  {(selectedOrders.length > 0 || selectedInstallments.length > 0) && (
                     <Chip
                       size="small"
                       color="primary"
                       variant="outlined"
-                      label={`${selectedOrders.length} en total`}
+                      label={`${selectedOrders.length + selectedInstallments.length} en total`}
                       sx={{ fontWeight: 700 }}
                     />
                   )}
                 </Stack>
-                {selectedOrders.length === 0 && (
+                {selectedOrders.length === 0 && selectedInstallments.length === 0 && (
                   <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                    No hay pedidos este día.
+                    No hay pedidos ni cuotas este día.
                   </Typography>
+                )}
+
+                {selectedInstallments.length > 0 && (
+                  <Stack spacing={1} sx={{ mb: selectedOrders.length ? 1.5 : 0 }}>
+                    {selectedInstallments.map((ev) => (
+                      <Paper
+                        key={ev.key}
+                        variant="outlined"
+                        sx={{
+                          p: 1.25,
+                          borderColor: CREDIT_ORANGE,
+                          bgcolor: CREDIT_ORANGE_BG,
+                          borderRadius: 2,
+                        }}
+                      >
+                        <Stack
+                          direction={{ xs: 'column', sm: 'row' }}
+                          spacing={1}
+                          alignItems={{ sm: 'center' }}
+                          justifyContent="space-between"
+                        >
+                          <Box sx={{ minWidth: 0, flex: 1 }}>
+                            <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                              <Chip
+                                size="small"
+                                label="Cuota / crédito"
+                                sx={{
+                                  height: 22,
+                                  fontWeight: 800,
+                                  bgcolor: CREDIT_ORANGE,
+                                  color: '#fff',
+                                }}
+                              />
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label={ev.orderKind === 'supplier' ? 'Proveedor' : 'Cliente'}
+                                sx={{ height: 22, fontWeight: 700 }}
+                              />
+                            </Stack>
+                            <Typography variant="subtitle2" fontWeight={800} sx={{ mt: 0.5 }} noWrap>
+                              {ev.partyName}
+                            </Typography>
+                            <Typography variant="body2" fontWeight={700}>
+                              Cuota #{ev.installment.sequence}: ${Number(ev.remaining).toFixed(2)}
+                              {Number(ev.amount) !== Number(ev.remaining) ? (
+                                <Typography component="span" variant="caption" color="text.secondary">
+                                  {' '}
+                                  (de ${Number(ev.amount).toFixed(2)})
+                                </Typography>
+                              ) : null}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Pedido #{ev.orderId}
+                              {ev.orderRemaining > 0.009
+                                ? ` · Saldo pedido $${Number(ev.orderRemaining).toFixed(2)}`
+                                : ''}
+                              {ev.deliveryDate
+                                ? ` · Entrega ${format(ev.deliveryDate, 'dd/MM/yyyy')}`
+                                : ''}
+                            </Typography>
+                          </Box>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            startIcon={<LocalShippingIcon />}
+                            disabled={!ev.deliveryDate}
+                            onClick={() => goToDeliveryDay(ev.deliveryDate)}
+                            sx={{
+                              bgcolor: CREDIT_ORANGE,
+                              '&:hover': { bgcolor: CREDIT_ORANGE_HOVER },
+                              flexShrink: 0,
+                            }}
+                          >
+                            Ver entrega
+                          </Button>
+                        </Stack>
+                      </Paper>
+                    ))}
+                  </Stack>
                 )}
 
                 {selectedOrders.map((order) => {
@@ -1437,7 +1696,12 @@ export default forwardRef(function OrderCalendarView({
                                 label={statusMeta.label}
                                 color={statusMeta.color}
                                 variant="outlined"
-                                sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700 }}
+                                sx={{
+                                  height: 20,
+                                  fontSize: '0.65rem',
+                                  fontWeight: 700,
+                                  ...(statusMeta.chipSx || {}),
+                                }}
                               />
                             </Stack>
                             <Typography variant="caption" color="text.secondary" display="block">

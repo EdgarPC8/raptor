@@ -15,7 +15,6 @@ import {
 } from "@mui/material";
 import PrintIcon from "@mui/icons-material/Print";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
-import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import { Link as RouterLink } from "react-router-dom";
@@ -37,12 +36,26 @@ const EMPTY_FILTERS = {
   dateFrom: "",
   dateTo: "",
   status: "",
+  environment: "",
   seller: "",
   paymentState: "",
   sortBy: "id",
   sortDir: "desc",
   pageSize: 15,
 };
+
+function normalizeEnvironment(env, label) {
+  const raw = String(env || "").toLowerCase().trim();
+  if (raw === "produccion" || raw === "producción" || raw === "2") return "produccion";
+  if (raw === "pruebas" || raw === "1") return "pruebas";
+  const lbl = String(label || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (lbl.includes("produccion")) return "produccion";
+  if (lbl.includes("prueba")) return "pruebas";
+  return "";
+}
 
 const money = (n) => Number(n || 0).toFixed(2);
 
@@ -72,8 +85,7 @@ export default function FacturacionPage() {
   const [printReceipt, setPrintReceipt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sriSettings, setSriSettings] = useState(null);
-  const [draft, setDraft] = useState(EMPTY_FILTERS);
-  const [applied, setApplied] = useState(EMPTY_FILTERS);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
 
   const load = async () => {
     setLoading(true);
@@ -137,6 +149,7 @@ export default function FacturacionPage() {
           sellerLabel: s.sellerName || "—",
           estabPtoEmi: sri.estabPtoEmi || "—",
           sequentialLabel: sri.sequentialLabel || "—",
+          environment: normalizeEnvironment(sri.environment, sri.environmentLabel),
           environmentLabel: sri.environmentLabel || "—",
           sriStatusLabel: sri.statusLabel || "Sin SRI",
           paymentState,
@@ -154,15 +167,16 @@ export default function FacturacionPage() {
   );
 
   const filteredRows = useMemo(() => {
-    const q = String(applied.search || "")
+    const q = String(filters.search || "")
       .trim()
       .toLowerCase();
     let list = mappedSales.filter((row) => {
-      if (applied.dateFrom && row.dateIso && row.dateIso < applied.dateFrom) return false;
-      if (applied.dateTo && row.dateIso && row.dateIso > applied.dateTo) return false;
-      if (applied.status && row.sriStatusLabel !== applied.status) return false;
-      if (applied.seller && row.sellerLabel !== applied.seller) return false;
-      if (applied.paymentState && row.paymentState !== applied.paymentState) return false;
+      if (filters.dateFrom && row.dateIso && row.dateIso < filters.dateFrom) return false;
+      if (filters.dateTo && row.dateIso && row.dateIso > filters.dateTo) return false;
+      if (filters.status && row.sriStatusLabel !== filters.status) return false;
+      if (filters.environment && row.environment !== filters.environment) return false;
+      if (filters.seller && row.sellerLabel !== filters.seller) return false;
+      if (filters.paymentState && row.paymentState !== filters.paymentState) return false;
       if (q) {
         const hay = [
           row.id,
@@ -184,8 +198,8 @@ export default function FacturacionPage() {
       return true;
     });
 
-    const dir = applied.sortDir === "asc" ? 1 : -1;
-    const key = applied.sortBy || "id";
+    const dir = filters.sortDir === "asc" ? 1 : -1;
+    const key = filters.sortBy || "id";
     list = [...list].sort((a, b) => {
       let av;
       let bv;
@@ -220,10 +234,10 @@ export default function FacturacionPage() {
     });
 
     return list;
-  }, [mappedSales, applied]);
+  }, [mappedSales, filters]);
 
   const pageTotals = useMemo(() => {
-    const pageSize = Number(applied.pageSize) || 15;
+    const pageSize = Number(filters.pageSize) || 15;
     const pageRows = filteredRows.slice(0, pageSize);
     return {
       page: {
@@ -239,17 +253,13 @@ export default function FacturacionPage() {
         total: filteredRows.reduce((a, r) => a + Number(r.total || 0), 0),
       },
     };
-  }, [filteredRows, applied.pageSize]);
+  }, [filteredRows, filters.pageSize]);
 
-  const setDraftField = (field) => (e) => {
-    setDraft((prev) => ({ ...prev, [field]: e.target.value }));
+  const setFilterField = (field) => (e) => {
+    setFilters((prev) => ({ ...prev, [field]: e.target.value }));
   };
 
-  const applyFilters = () => setApplied({ ...draft });
-  const resetFilters = () => {
-    setDraft(EMPTY_FILTERS);
-    setApplied(EMPTY_FILTERS);
-  };
+  const resetFilters = () => setFilters(EMPTY_FILTERS);
 
   const openPrint = (sale) => {
     setPrintReceipt(normalizeSaleReceipt(sale));
@@ -319,11 +329,8 @@ export default function FacturacionPage() {
               size="small"
               label="Búsqueda"
               placeholder="Ingrese su búsqueda"
-              value={draft.search}
-              onChange={setDraftField("search")}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") applyFilters();
-              }}
+              value={filters.search}
+              onChange={setFilterField("search")}
             />
           </Grid>
           <Grid item xs={6} md={2}>
@@ -333,8 +340,8 @@ export default function FacturacionPage() {
               label="Fecha inicio"
               type="date"
               InputLabelProps={{ shrink: true }}
-              value={draft.dateFrom}
-              onChange={setDraftField("dateFrom")}
+              value={filters.dateFrom}
+              onChange={setFilterField("dateFrom")}
             />
           </Grid>
           <Grid item xs={6} md={2}>
@@ -344,8 +351,8 @@ export default function FacturacionPage() {
               label="Fecha fin"
               type="date"
               InputLabelProps={{ shrink: true }}
-              value={draft.dateTo}
-              onChange={setDraftField("dateTo")}
+              value={filters.dateTo}
+              onChange={setFilterField("dateTo")}
             />
           </Grid>
           <Grid item xs={6} md={2}>
@@ -354,8 +361,8 @@ export default function FacturacionPage() {
               fullWidth
               size="small"
               label="Estado"
-              value={draft.status}
-              onChange={setDraftField("status")}
+              value={filters.status}
+              onChange={setFilterField("status")}
             >
               <MenuItem value="">Todos</MenuItem>
               {sriStatusOptions.map((st) => (
@@ -370,9 +377,23 @@ export default function FacturacionPage() {
               select
               fullWidth
               size="small"
+              label="Ambiente"
+              value={filters.environment}
+              onChange={setFilterField("environment")}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="produccion">Producción</MenuItem>
+              <MenuItem value="pruebas">Pruebas</MenuItem>
+            </TextField>
+          </Grid>
+          <Grid item xs={6} md={2}>
+            <TextField
+              select
+              fullWidth
+              size="small"
               label="Vendedor"
-              value={draft.seller}
-              onChange={setDraftField("seller")}
+              value={filters.seller}
+              onChange={setFilterField("seller")}
             >
               <MenuItem value="">Todos</MenuItem>
               {sellerOptions.map((name) => (
@@ -389,8 +410,8 @@ export default function FacturacionPage() {
               fullWidth
               size="small"
               label="Estado pago"
-              value={draft.paymentState}
-              onChange={setDraftField("paymentState")}
+              value={filters.paymentState}
+              onChange={setFilterField("paymentState")}
             >
               <MenuItem value="">Todos</MenuItem>
               <MenuItem value="pagado">Pagado</MenuItem>
@@ -403,8 +424,8 @@ export default function FacturacionPage() {
               fullWidth
               size="small"
               label="Ordenar por"
-              value={draft.sortBy}
-              onChange={setDraftField("sortBy")}
+              value={filters.sortBy}
+              onChange={setFilterField("sortBy")}
             >
               <MenuItem value="id">Defecto (#)</MenuItem>
               <MenuItem value="date">Fecha</MenuItem>
@@ -420,8 +441,8 @@ export default function FacturacionPage() {
               fullWidth
               size="small"
               label="Orden"
-              value={draft.sortDir}
-              onChange={setDraftField("sortDir")}
+              value={filters.sortDir}
+              onChange={setFilterField("sortDir")}
             >
               <MenuItem value="desc">Descendente</MenuItem>
               <MenuItem value="asc">Ascendente</MenuItem>
@@ -433,8 +454,8 @@ export default function FacturacionPage() {
               fullWidth
               size="small"
               label="Ver"
-              value={draft.pageSize}
-              onChange={setDraftField("pageSize")}
+              value={filters.pageSize}
+              onChange={setFilterField("pageSize")}
             >
               <MenuItem value={15}>15</MenuItem>
               <MenuItem value={25}>25</MenuItem>
@@ -442,23 +463,15 @@ export default function FacturacionPage() {
               <MenuItem value={100}>100</MenuItem>
             </TextField>
           </Grid>
-          <Grid item xs={12} md={4}>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Button
-                variant="contained"
-                startIcon={<FilterAltIcon />}
-                onClick={applyFilters}
-              >
-                Aplicar filtros
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<RestartAltIcon />}
-                onClick={resetFilters}
-              >
-                Limpiar
-              </Button>
-            </Stack>
+          <Grid item xs={12} md={2}>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<RestartAltIcon />}
+              onClick={resetFilters}
+            >
+              Limpiar
+            </Button>
           </Grid>
         </Grid>
         <Typography
@@ -471,7 +484,7 @@ export default function FacturacionPage() {
       </Paper>
 
       <TablePro
-        key={`pos-sales-${applied.pageSize}-${applied.sortBy}-${applied.sortDir}`}
+        key={`pos-sales-${filters.pageSize}-${filters.sortBy}-${filters.sortDir}`}
         title="Ventas de caja"
         rows={filteredRows}
         columns={[
@@ -518,7 +531,7 @@ export default function FacturacionPage() {
         showSearch={false}
         showPagination
         showIndex={false}
-        defaultRowsPerPage={Number(applied.pageSize) || 15}
+        defaultRowsPerPage={Number(filters.pageSize) || 15}
         rowsPerPageOptions={[15, 25, 50, 100]}
         loading={loading}
       />

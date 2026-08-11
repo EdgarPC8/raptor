@@ -25,6 +25,11 @@ import {
   buildSupplierPendingByDate,
   buildSupplierPendingByProduct,
 } from "./summaryBuilders.js";
+import {
+  CREDIT_ORANGE,
+  formatCreditDueLabel,
+  pickNextCredit,
+} from "./creditHelpers.js";
 
 const VIEW_TABS = [
   { id: "orders", label: "Por pedidos" },
@@ -232,12 +237,15 @@ export default function SupplierPendingViewTab({
 
       {view === "orders" && byOrders.length > 0 ? (
         <Box sx={{ width: "100%", overflowX: "auto" }}>
-          <Table size="small" sx={{ minWidth: 480 }}>
+          <Table size="small" sx={{ minWidth: 560 }}>
             <TableHead>
               <TableRow>
                 {selectEnabled ? <TableCell padding="checkbox" sx={{ width: 40 }} /> : null}
                 <TableCell sx={{ fontWeight: 800, py: 0.75 }}>Pedido</TableCell>
                 <TableCell sx={{ fontWeight: 800, py: 0.75 }}>Fecha</TableCell>
+                {!isPaid ? (
+                  <TableCell sx={{ fontWeight: 800, py: 0.75 }}>Crédito</TableCell>
+                ) : null}
                 <TableCell align="right" sx={{ fontWeight: 800, py: 0.75 }}>
                   {isPaid ? "Pagado" : "Saldo"}
                 </TableCell>
@@ -258,6 +266,7 @@ export default function SupplierPendingViewTab({
                 const paidCol = isPaid
                   ? toNum(ord.paidAmount) || toNum(ord.totalAmount)
                   : toNum(ord.remainingAmount);
+                const credit = !isPaid ? pickNextCredit(ord) : null;
                 return (
                   <TableRow key={ord.id} hover sx={{ "& td": { py: 0.5 } }}>
                     {selectEnabled ? (
@@ -272,6 +281,31 @@ export default function SupplierPendingViewTab({
                     ) : null}
                     <TableCell sx={{ fontWeight: 700 }}>#{ord.id}</TableCell>
                     <TableCell>{ord.date || "—"}</TableCell>
+                    {!isPaid ? (
+                      <TableCell>
+                        {credit ? (
+                          <Chip
+                            size="small"
+                            label={`${formatCreditDueLabel(credit.due)} · ${money(credit.amount)}`}
+                            sx={{
+                              height: 22,
+                              fontWeight: 700,
+                              bgcolor: CREDIT_ORANGE,
+                              color: "#fff",
+                            }}
+                            title={
+                              credit.count > 1
+                                ? `${credit.count} cuotas pendientes`
+                                : "Próxima cuota a pagar"
+                            }
+                          />
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">
+                            —
+                          </Typography>
+                        )}
+                      </TableCell>
+                    ) : null}
                     <TableCell align="right">{money(paidCol)}</TableCell>
                     <TableCell align="right">{money(ord.totalAmount)}</TableCell>
                     <TableCell align="right">

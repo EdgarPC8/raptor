@@ -123,7 +123,8 @@ function nowLocalDateTime() {
 
 function severityColor(severity, palette) {
   if (severity === 0) return palette.error.main;
-  if (severity === 1) return palette.warning.main;
+  // Amarillo dorado (no warning MUI) para diferenciar del naranja de crédito
+  if (severity === 1) return "#F5C518";
   if (severity === 2) return palette.info.main;
   return palette.success.main;
 }

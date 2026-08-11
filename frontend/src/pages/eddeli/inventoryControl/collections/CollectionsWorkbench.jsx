@@ -1064,6 +1064,9 @@ export default function CollectionsWorkbench() {
                   const active = c.id === selectedCustomerId;
                   const amount = Number(totalCobrableByCustomer[c.id] ?? 0);
                   const displayName = c.name.length > 25 ? `${c.name.slice(0, 22)}...` : c.name;
+                  const creditHint = c.nextCreditDue
+                    ? ` · crédito ${String(c.nextCreditDue).slice(5).split("-").reverse().join("/")}`
+                    : "";
                   return (
                     <Chip
                       key={c.id}
@@ -1072,7 +1075,7 @@ export default function CollectionsWorkbench() {
                       color={active ? "primary" : amount > 0 ? "warning" : "default"}
                       variant={active ? "filled" : "outlined"}
                       label={
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, maxWidth: { xs: 200, sm: "none" } }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, maxWidth: { xs: 240, sm: "none" } }}>
                           <Typography
                             variant="caption"
                             sx={{
@@ -1082,12 +1085,23 @@ export default function CollectionsWorkbench() {
                               whiteSpace: "nowrap",
                               maxWidth: { xs: 120, sm: "none" },
                             }}
-                            title={c.name}
+                            title={
+                              c.nextCreditDue
+                                ? `${c.name} · próxima cuota ${c.nextCreditDue}${
+                                    c.nextCreditAmount != null ? ` $${Number(c.nextCreditAmount).toFixed(2)}` : ""
+                                  }`
+                                : c.name
+                            }
                           >
                             {displayName}
                           </Typography>
                           <Typography variant="caption" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>
                             · {money(amount)}
+                            {creditHint ? (
+                              <Box component="span" sx={{ color: active ? "inherit" : "#FF6D00", fontWeight: 800 }}>
+                                {creditHint}
+                              </Box>
+                            ) : null}
                           </Typography>
                         </Box>
                       }
@@ -1138,6 +1152,7 @@ export default function CollectionsWorkbench() {
           {tab === 0 && (
             <CollectionsPendingViewTab
               itemsUngrouped={itemsUngrouped}
+              orders={customerOrders}
               selectedItemIds={selectedItemIds}
               onToggleItemIds={toggleSelectItemIds}
               onClearSelection={clearItemSelection}

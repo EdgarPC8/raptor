@@ -66,14 +66,21 @@ export function printHtmlDocument(bodyHtml, { format = "a4" } = {}) {
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   `
     : `
-    @page { size: A4; margin: 8mm; }
+    @page { size: A4 portrait; margin: 8mm; }
+    *, *::before, *::after { box-sizing: border-box; }
     html, body {
       margin: 0;
       padding: 0;
+      width: 100%;
+      max-width: 100%;
       background: #fff;
       color: #000;
     }
-    body { font-family: Arial, sans-serif; }
+    body { font-family: Arial, Helvetica, sans-serif; }
+    body > div {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   `;
 

@@ -39,7 +39,7 @@ import { buildDetailedReportTxt } from "./reportBuilders.js";
 import {
   downloadReceiptAsPng,
   downloadReceiptAsPdf,
-  captureReceiptElement,
+  copyReceiptAsPng,
 } from "../../../../utils/saleReceiptExport.js";
 import { printHtmlDocument } from "../../../../utils/printHtmlDocument.js";
 import { amountToSpanishDollars } from "../../../../utils/amountToSpanishWords.js";
@@ -578,18 +578,12 @@ export default function DebtReportDialog({
 
   const handlePng = () =>
     withBusy(
-      () => downloadReceiptAsPng(captureRef.current, `${baseName}.png`),
+      () => downloadReceiptAsPng(captureRef.current, `${baseName}.png`, effectiveFormat),
       "No se pudo generar la imagen",
     );
   const handleCopy = () =>
     withBusy(async () => {
-      if (!navigator.clipboard || typeof window.ClipboardItem === "undefined") {
-        throw new Error("Tu navegador no permite copiar imágenes al portapapeles");
-      }
-      const canvas = await captureReceiptElement(captureRef.current);
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-      if (!blob) throw new Error("No se pudo generar la imagen");
-      await navigator.clipboard.write([new window.ClipboardItem({ "image/png": blob })]);
+      await copyReceiptAsPng(captureRef.current, effectiveFormat);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     }, "No se pudo copiar la imagen");

@@ -133,15 +133,16 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4") {
     "";
   const barcodeKey = fiscal.authorizationNumber || fiscal.accessKey || "";
   const barcodeSvg = barcodeKey
-    ? code128SvgMarkup(barcodeKey, {
-        height: isTicket ? 36 : 48,
-        maxWidth: isTicket ? 240 : 300,
-      })
-    : "";
+      ? code128SvgMarkup(barcodeKey, {
+          height: isTicket ? 36 : 52,
+          maxWidth: isTicket ? 240 : 420,
+        })
+      : "";
 
-  const w = isTicket ? "100%" : "210mm";
-  const fs = isTicket ? (layout.narrow ? "11px" : "12.5px") : "13px";
-  const pad = isTicket ? "0" : "8px";
+  // A4: 100% del área imprimible (no 210mm + márgenes @page → el navegador achica todo).
+  const w = "100%";
+  const fs = isTicket ? (layout.narrow ? "11px" : "12.5px") : "12pt";
+  const pad = isTicket ? "0" : "0";
 
   const docMeta = isTicket
     ? `<div style="text-align:center">
@@ -184,13 +185,21 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4") {
           )
           .join("")}
       </div>`
-    : `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:0.92em">
+    : `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:0.95em;table-layout:fixed">
+        <colgroup>
+          <col style="width:12%" />
+          <col style="width:38%" />
+          <col style="width:10%" />
+          <col style="width:15%" />
+          <col style="width:10%" />
+          <col style="width:15%" />
+        </colgroup>
         <thead>
           <tr>
             ${["Codigo", "Descripción", "Cant", "Precio Unitario", "Descto", "Subtotal"]
               .map(
                 (h, i) =>
-                  `<th style="border:1px solid #000;padding:4px 5px;font-weight:800;text-align:${i >= 2 ? "right" : "left"};background:#f3f3f3">${h}</th>`,
+                  `<th style="border:1px solid #000;padding:5px 6px;font-weight:800;text-align:${i >= 2 ? "right" : "left"};background:#f3f3f3">${h}</th>`,
               )
               .join("")}
           </tr>

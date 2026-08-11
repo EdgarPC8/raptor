@@ -734,6 +734,9 @@ export default function SupplierPayablesWorkbench() {
               suppliers.map((s) => {
                 const active = s.id === selectedSupplierId;
                 const amount = toNum(s.debtTotal);
+                const creditHint = s.nextCreditDue
+                  ? ` · crédito ${String(s.nextCreditDue).slice(5).split("-").reverse().join("/")}`
+                  : "";
                 return (
                   <Chip
                     key={s.id}
@@ -748,8 +751,17 @@ export default function SupplierPayablesWorkbench() {
                     }}
                     color={active ? "error" : amount > 0 ? "warning" : "default"}
                     variant={active ? "filled" : "outlined"}
-                    label={`${s.name} · ${money(amount)}`}
+                    label={`${s.name} · ${money(amount)}${creditHint}`}
                     size="small"
+                    title={
+                      s.nextCreditDue
+                        ? `Próxima cuota ${s.nextCreditDue}${
+                            s.nextCreditAmount != null
+                              ? ` · $${Number(s.nextCreditAmount).toFixed(2)}`
+                              : ""
+                          }`
+                        : s.name
+                    }
                   />
                 );
               })
