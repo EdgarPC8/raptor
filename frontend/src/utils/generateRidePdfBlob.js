@@ -12,6 +12,10 @@ const captureTheme = createTheme({
   typography: { fontFamily: "Arial, Helvetica, sans-serif" },
 });
 
+function waitMs(ms) {
+  return new Promise((r) => window.setTimeout(r, ms));
+}
+
 /**
  * @param {object} receipt - comprobante ya enriquecido con fiscal (enrichReceiptWithFiscal)
  * @param {string} [format]
@@ -47,14 +51,14 @@ export async function generateRidePdfBlob(receipt, format = "a4") {
                 if (el) resolve(el);
               },
             },
-            createElement(SaleReceiptContent, { receipt, format }),
+            createElement(SaleReceiptContent, { receipt, format, showNotes: false }),
           ),
         ),
       );
     });
 
-    // Imágenes / barcode SVG
-    await new Promise((r) => window.setTimeout(r, 350));
+    // Esperar paint de filas / barcode / logo
+    await waitMs(450);
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     const target = host.querySelector("[data-ride-root]") || host.firstElementChild;
