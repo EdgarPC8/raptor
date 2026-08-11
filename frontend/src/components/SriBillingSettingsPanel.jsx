@@ -583,8 +583,11 @@ const SriBillingSettingsPanel = forwardRef(function SriBillingSettingsPanel(_pro
               value={form.smtpHost || ""}
               onChange={onChange("smtpHost")}
               placeholder="smtp.gmail.com"
-              ok={Boolean(String(form.smtpHost || "").trim())}
-              helperText="ej. smtp.gmail.com / smtp.office365.com"
+              ok={
+                Boolean(String(form.smtpHost || "").trim()) &&
+                !String(form.smtpHost || "").includes("@")
+              }
+              helperText="NO es tu correo · Gmail: smtp.gmail.com"
             />
           </Grid>
           <Grid item xs={6} sm={3}>
