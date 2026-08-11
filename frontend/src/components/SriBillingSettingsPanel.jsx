@@ -523,7 +523,7 @@ const SriBillingSettingsPanel = forwardRef(function SriBillingSettingsPanel(_pro
       <Divider />
 
       <Box data-tour="sri-invoice-email">
-        <SectionTitle hint="Al autorizar una factura (pruebas o producción), si está activo se envía el XML al correo del cliente. Gmail y similares tienen cupo diario: la app te avisa cuando te acercas o lo alcanzas.">
+        <SectionTitle hint="Al autorizar una factura, si está activo se envía al cliente un correo con logo, resumen, PDF y XML. Gmail y similares tienen cupo diario: la app avisa cuando te acercas o lo alcanzas.">
           Envío de factura por correo
         </SectionTitle>
 
