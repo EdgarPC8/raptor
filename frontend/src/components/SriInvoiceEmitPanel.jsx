@@ -34,6 +34,8 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { useAuth } from "../context/AuthContext.jsx";
 import { fetchSriBillingSettings } from "../api/sriBillingRequest.js";
 import { emitSriInvoice, fetchSriInvoices, refreshSriInvoice } from "../api/sriInvoicesRequest.js";
+import { sendAuthorizedInvoiceEmailWithRidePdf } from "../utils/sendAuthorizedInvoiceEmail.js";
+import { useAppSettings } from "../context/AppSettingsContext.jsx";
 
 const IDENT_TYPES = [
   { value: "05", label: "Cédula (05)" },
@@ -79,6 +81,7 @@ export default function SriInvoiceEmitPanel({
   documentType = null,
 }) {
   const { toast } = useAuth();
+  const { activeApp } = useAppSettings();
   const docType = documentType ? String(documentType).padStart(2, "0") : null;
   const meta = DOC_META[docType] || DOC_META["01"];
 
@@ -233,6 +236,33 @@ export default function SriInvoiceEmitPanel({
               : "info",
         message: data?.message || "Comprobante procesado",
       });
+      if (data?.invoice?.status === "authorized" && String(type) === "01") {
+        const receiptItems = (payload.items || []).map((it) => ({
+          name: it.description,
+          quantity: Number(it.qty) || 0,
+          price: Number(it.unitPrice) || 0,
+          taxRate: Number(it.taxRate) || 0,
+          subtotal: (Number(it.qty) || 0) * (Number(it.unitPrice) || 0),
+        }));
+        void sendAuthorizedInvoiceEmailWithRidePdf({
+          invoice: data.invoice,
+          receipt: {
+            documentType: "factura",
+            customerName: payload.buyer?.name || data.invoice.customerName,
+            customerCedula: payload.buyer?.ident || data.invoice.customerIdent,
+            customerEmail: payload.buyer?.email || data.invoice.customerEmail,
+            customerAddress: payload.buyer?.address || "",
+            items: receiptItems,
+            subtotal: Number(data.invoice.subtotal) || 0,
+            iva: Number(data.invoice.taxTotal) || 0,
+            total: Number(data.invoice.total) || 0,
+            paymentMethod: "efectivo",
+            date: data.invoice.authorizedAt || data.invoice.createdAt,
+          },
+          sriSettings: settings,
+          logoUrl: activeApp?.logoUrl || "",
+        });
+      }
       await loadInvoices();
       await loadSettings();
     } catch (err) {
@@ -254,6 +284,13 @@ export default function SriInvoiceEmitPanel({
         variant: data?.invoice?.status === "authorized" ? "success" : "info",
         message: data?.message || "Consulta actualizada",
       });
+      if (data?.invoice?.status === "authorized") {
+        void sendAuthorizedInvoiceEmailWithRidePdf({
+          invoice: data.invoice,
+          sriSettings: settings,
+          logoUrl: activeApp?.logoUrl || "",
+        });
+      }
       await loadInvoices();
     } catch (err) {
       void toast?.({

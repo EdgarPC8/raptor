@@ -165,6 +165,14 @@ export async function copyReceiptAsPng(element, format = "a4") {
 }
 
 export async function downloadReceiptAsPdf(element, format = "a4", filename = "comprobante.pdf") {
+  const blob = await receiptElementToPdfBlob(element, format);
+  triggerDownload(blob, filename);
+}
+
+/**
+ * Mismo PDF que la descarga, pero como Blob (para adjuntar al correo).
+ */
+export async function receiptElementToPdfBlob(element, format = "a4") {
   const isTicket = isTicketFormat(format);
   const canvas = await captureReceiptElement(element, captureOptionsForFormat(format));
   const ticketSize = getTicketPdfPageSize(format);
@@ -185,5 +193,5 @@ export async function downloadReceiptAsPdf(element, format = "a4", filename = "c
     maxH,
     paginate: !isTicket,
   });
-  pdf.save(filename);
+  return pdf.output("blob");
 }

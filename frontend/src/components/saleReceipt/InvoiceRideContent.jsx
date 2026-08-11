@@ -399,6 +399,7 @@ export default function InvoiceRideContent({ receipt, format = "a4" }) {
 
   return (
     <Box
+      data-ride-root
       sx={{
         width: isTicket ? layout.previewWidth : "100%",
         maxWidth: isTicket ? layout.maxWidth : "100%",

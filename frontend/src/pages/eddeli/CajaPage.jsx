@@ -50,6 +50,7 @@ import { getAllCustomersRequest, posCheckoutRequest } from "../../api/ordersRequ
 import { getActiveShift, setActiveCashRegister } from "../../api/shiftRequest.js";
 import { fetchSriBillingSettings } from "../../api/sriBillingRequest.js";
 import { emitSriInvoice } from "../../api/sriInvoicesRequest.js";
+import { sendAuthorizedInvoiceEmailWithRidePdf } from "../../utils/sendAuthorizedInvoiceEmail.js";
 import CajaCustomerFormDialog from "./CajaCustomerFormDialog.jsx";
 import CajaQuickProductsDialog from "./CajaQuickProductsDialog.jsx";
 import SearchableSelect from "../../components/SearchableSelect.jsx";
@@ -993,6 +994,21 @@ export default function CajaPage() {
                 ? { ...prev, _sriInvoice: result.invoice }
                 : prev,
             );
+          }
+          if (st === "authorized" && result?.invoice) {
+            void sendAuthorizedInvoiceEmailWithRidePdf({
+              invoice: result.invoice,
+              receipt,
+              sriSettings,
+              logoUrl: activeApp?.logoUrl || "",
+            }).then((emailRes) => {
+              if (emailRes?.ok) {
+                void toast?.({
+                  message: `Factura enviada por correo a ${emailRes.to}`,
+                  variant: "success",
+                });
+              }
+            });
           }
           void toast?.({
             message:

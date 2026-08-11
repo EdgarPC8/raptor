@@ -1,5 +1,5 @@
 /** API comprobantes electrónicos SRI (emisión / bandeja). */
-import axios, { authHeaders } from "./axios.js";
+import axios, { authHeaders, jwt } from "./axios.js";
 
 export async function emitSriInvoice(payload) {
   const { data } = await axios.post("/sri/invoices/emit", payload, authHeaders());
@@ -21,5 +21,17 @@ export async function fetchSriInvoice(id) {
 
 export async function refreshSriInvoice(id) {
   const { data } = await axios.post(`/sri/invoices/${id}/refresh`, {}, authHeaders());
+  return data;
+}
+
+/** Envía correo al cliente con PDF RIDE (opcional) + XML. */
+export async function sendSriInvoiceCustomerEmail(invoiceId, pdfBlob) {
+  const fd = new FormData();
+  if (pdfBlob) {
+    fd.append("pdf", pdfBlob, `factura-${invoiceId}.pdf`);
+  }
+  const { data } = await axios.post(`/sri/invoices/${invoiceId}/send-email`, fd, {
+    headers: { Authorization: jwt(), "Content-Type": "multipart/form-data" },
+  });
   return data;
 }
