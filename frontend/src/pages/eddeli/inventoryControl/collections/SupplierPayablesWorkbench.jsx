@@ -45,7 +45,10 @@ import {
   toNum,
 } from "./helpers.js";
 import SupplierPendingViewTab from "./SupplierPendingViewTab.jsx";
-import SupplierOrderForm from "../components/SupplierOrderForm.jsx";
+import SupplierOrderForm, {
+  SUPPLIER_ORDER_DIALOG_CONTENT_SX,
+  SUPPLIER_ORDER_DIALOG_PAPER_SX,
+} from "../components/SupplierOrderForm.jsx";
 import SimpleDialog from "../../../../components/Dialogs/SimpleDialog.jsx";
 import EditNoteIcon from "@mui/icons-material/EditNote";
 import CallSplitIcon from "@mui/icons-material/CallSplit";
@@ -984,6 +987,8 @@ export default function SupplierPayablesWorkbench() {
         }
         maxWidth="lg"
         fullWidth
+        paperSx={SUPPLIER_ORDER_DIALOG_PAPER_SX}
+        contentSx={SUPPLIER_ORDER_DIALOG_CONTENT_SX}
       >
         {orderToEdit ? (
           <SupplierOrderForm

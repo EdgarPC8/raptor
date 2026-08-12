@@ -10,6 +10,8 @@ import {
   Chip,
   Box,
   FormHelperText,
+  FormControlLabel,
+  Switch,
 } from "@mui/material";
 
 import { useRoles } from "../../hooks/useRoles";
@@ -25,6 +27,7 @@ const EMPTY_FORM = {
   firstLastName: "",
   password: "",
   roles: [],
+  isActive: true,
 };
 
 export default function UsersForm({ onSubmit, initialData }) {
@@ -60,6 +63,7 @@ export default function UsersForm({ onSubmit, initialData }) {
         firstLastName: initialData.firstLastName || "",
         password: initialData.password || "",
         roles: initialData.roles || [],
+        isActive: initialData.isActive !== false,
       });
     } else {
       setForm(EMPTY_FORM);
@@ -204,6 +208,23 @@ export default function UsersForm({ onSubmit, initialData }) {
               </FormHelperText>
             ) : null}
           </FormControl>
+        </Grid>
+        <Grid item xs={12}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={form.isActive !== false}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, isActive: e.target.checked }))
+                }
+              />
+            }
+            label={
+              form.isActive !== false
+                ? "Cuenta activa (puede iniciar sesión)"
+                : "Cuenta inactiva (no puede iniciar sesión)"
+            }
+          />
         </Grid>
         <Grid item xs={12}>
           {!!initialData ? (

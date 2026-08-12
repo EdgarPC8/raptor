@@ -1,4 +1,4 @@
-/** Configuración del sistema: app + facturación electrónica SRI. */
+/** Configuración del sistema: pestañas por categoría (extensible). */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import {
@@ -9,7 +9,6 @@ import {
   Button,
   Stack,
   Grid,
-  Divider,
   Avatar,
   MenuItem,
   Alert,
@@ -17,13 +16,18 @@ import {
   Tab,
   FormControlLabel,
   Switch,
-  FormGroup,
+  alpha,
 } from "@mui/material";
 import SaveIcon from "@mui/icons-material/Save";
 import UploadIcon from "@mui/icons-material/Upload";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import StorefrontIcon from "@mui/icons-material/Storefront";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
+import PreviewIcon from "@mui/icons-material/Preview";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
+import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
 import { useSubscriptions } from "../hooks/useSubscriptions.js";
@@ -37,27 +41,144 @@ import { uploadImageRequest, deleteImageRequest } from "../api/imgRequest.js";
 import { buildImageUrl } from "../api/axios.js";
 import AppTimeClockPanel from "../components/AppTimeClockPanel.jsx";
 import SriBillingSettingsPanel from "../components/SriBillingSettingsPanel.jsx";
+import ReceiptDetailPreviewDialog from "../components/settings/ReceiptDetailPreviewDialog.jsx";
+import ThemePaletteEditor from "../components/settings/ThemePaletteEditor.jsx";
 import { PageSkeleton } from "../components/ContentSkeleton.jsx";
 import TourHelpButton from "../components/TourHelpButton.jsx";
 import { usePageTour } from "../hooks/usePageTour.js";
 import { CONFIG_APP_TOUR_ID, getConfigAppTourSteps } from "../tours/configAppTour.js";
 import { CONFIG_SRI_TOUR_ID, getConfigSriTourSteps } from "../tours/configSriTour.js";
 import { APP_TIMEZONE_OPTIONS } from "../utils/appDateTime.js";
+import {
+  DEFAULT_RECEIPT_DETAIL_SETTINGS,
+  normalizeReceiptDetailSettings,
+  PRODUCT_NAME_CASE_OPTIONS,
+} from "../utils/receiptDetailFormat.js";
+import {
+  DEFAULT_THEME_PALETTE,
+  normalizeThemePalette,
+} from "../theme/themePalette.js";
 
 const ALLOWED = new Set(["Administrador", "Programador"]);
 
-const TABS = [
-  { id: "app", label: "Negocio y app", icon: <StorefrontIcon fontSize="small" /> },
-  { id: "sri", label: "Facturación electrónica", icon: <FactCheckIcon fontSize="small" /> },
+/**
+ * Pestañas de configuración (agregar más aquí a futuro).
+ * id → query ?tab=…  |  legado: ?tab=app → marca
+ */
+const SETTINGS_TABS = [
+  { id: "marca", label: "Marca", icon: <StorefrontIcon fontSize="small" />, saveKind: "app" },
+  { id: "sistema", label: "Sistema", icon: <AccessTimeIcon fontSize="small" />, saveKind: "app" },
+  {
+    id: "inventario",
+    label: "Inventario",
+    icon: <Inventory2OutlinedIcon fontSize="small" />,
+    saveKind: "app",
+  },
+  {
+    id: "comprobantes",
+    label: "Comprobantes",
+    icon: <ReceiptLongOutlinedIcon fontSize="small" />,
+    saveKind: "app",
+  },
+  {
+    id: "publico",
+    label: "Público",
+    icon: <PublicOutlinedIcon fontSize="small" />,
+    saveKind: "app",
+  },
+  { id: "sri", label: "Facturación SRI", icon: <FactCheckIcon fontSize="small" />, saveKind: "sri" },
 ];
+
+const TAB_IDS = new Set(SETTINGS_TABS.map((t) => t.id));
+
+function resolveTabId(raw) {
+  if (!raw || raw === "app") return "marca";
+  return TAB_IDS.has(raw) ? raw : "marca";
+}
+
+function SettingsSection({ title, hint, children, tourId }) {
+  return (
+    <Box data-tour={tourId} sx={{ mb: 2.5 }}>
+      <Typography
+        variant="overline"
+        sx={{
+          display: "block",
+          letterSpacing: 1.2,
+          fontWeight: 800,
+          color: "text.secondary",
+          mb: hint ? 0.25 : 1,
+        }}
+      >
+        {title}
+      </Typography>
+      {hint ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>
+          {hint}
+        </Typography>
+      ) : null}
+      <Stack spacing={0.75}>{children}</Stack>
+    </Box>
+  );
+}
+
+/** Fila estilo menú de juego: etiqueta a la izquierda, control a la derecha. */
+function SettingsRow({ label, description, control, align = "center" }) {
+  return (
+    <Box
+      sx={(theme) => ({
+        display: "flex",
+        flexDirection: { xs: "column", sm: "row" },
+        alignItems: { xs: "stretch", sm: align },
+        justifyContent: "space-between",
+        gap: { xs: 1, sm: 2 },
+        px: { xs: 1.25, sm: 1.75 },
+        py: 1.25,
+        borderRadius: 1,
+        bgcolor: alpha(theme.palette.text.primary, theme.palette.mode === "dark" ? 0.04 : 0.03),
+        border: 1,
+        borderColor: "divider",
+        transition: "background-color 120ms ease, border-color 120ms ease",
+        "&:hover": {
+          bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.12 : 0.06),
+          borderColor: alpha(theme.palette.primary.main, 0.35),
+        },
+      })}
+    >
+      <Box sx={{ minWidth: 0, flex: 1, pr: { sm: 1 } }}>
+        <Typography variant="body2" fontWeight={700}>
+          {label}
+        </Typography>
+        {description ? (
+          <Typography variant="caption" color="text.secondary" display="block">
+            {description}
+          </Typography>
+        ) : null}
+      </Box>
+      <Box
+        sx={{
+          flexShrink: 0,
+          minWidth: { sm: 200 },
+          maxWidth: { sm: 360 },
+          width: { xs: "100%", sm: "auto" },
+          display: "flex",
+          justifyContent: { xs: "stretch", sm: "flex-end" },
+          alignItems: "center",
+        }}
+      >
+        {control}
+      </Box>
+    </Box>
+  );
+}
 
 export default function AppSettingsPage() {
   const { user, toast } = useAuth();
   const { settings, activeApp, loading, reload, setSettings } = useAppSettings();
   const { subscription } = useSubscriptions();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get("tab");
-  const tab = TABS.some((t) => t.id === tabParam) ? tabParam : "app";
+  const tab = resolveTabId(searchParams.get("tab"));
+  const activeTabMeta = SETTINGS_TABS.find((t) => t.id === tab) || SETTINGS_TABS[0];
+  const isSriTab = activeTabMeta.saveKind === "sri";
   const sriPanelRef = useRef(null);
   const [sriSaving, setSriSaving] = useState(false);
 
@@ -65,6 +186,7 @@ export default function AppSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
   const [iconBusy, setIconBusy] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const fileRef = useRef(null);
   const iconFileRef = useRef(null);
 
@@ -73,12 +195,12 @@ export default function AppSettingsPage() {
   const { startTour: startAppTour } = usePageTour({
     tourId: CONFIG_APP_TOUR_ID,
     getSteps: getConfigAppTourSteps,
-    enabled: pageReady && tab === "app",
+    enabled: pageReady && !isSriTab,
   });
   const { startTour: startSriTour } = usePageTour({
     tourId: CONFIG_SRI_TOUR_ID,
     getSteps: getConfigSriTourSteps,
-    enabled: pageReady && tab === "sri",
+    enabled: pageReady && isSriTab,
   });
 
   useEffect(() => {
@@ -109,6 +231,12 @@ export default function AppSettingsPage() {
         moneyDisplayDecimals: Number(settings.moneyDisplayDecimals ?? 2),
         moneyRoundingMode: settings.moneyRoundingMode || "up",
         ordersAllowDeliverStockAdjust: Boolean(settings.ordersAllowDeliverStockAdjust),
+        receiptDetailSettings: normalizeReceiptDetailSettings(
+          settings.receiptDetailSettings || DEFAULT_RECEIPT_DETAIL_SETTINGS,
+        ),
+        themePalette: normalizeThemePalette(
+          settings.themePalette || DEFAULT_THEME_PALETTE,
+        ),
       });
     }
   }, [settings]);
@@ -130,19 +258,36 @@ export default function AppSettingsPage() {
   const multiStockSwitchDisabled =
     !multiStockUnlocked || (multiStockAlreadyOn && !multiStockCanToggleOff);
 
-  const tabIndex = useMemo(() => TABS.findIndex((t) => t.id === tab), [tab]);
+  const tabIndex = useMemo(
+    () => SETTINGS_TABS.findIndex((t) => t.id === tab),
+    [tab],
+  );
 
   if (!ALLOWED.has(user?.loginRol)) return <Navigate to="/" replace />;
 
   const setTab = (id) => {
     const next = new URLSearchParams(searchParams);
-    if (id === "app") next.delete("tab");
+    if (id === "marca") next.delete("tab");
     else next.set("tab", id);
     setSearchParams(next, { replace: true });
   };
 
   const onChange = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
   const onToggle = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.checked }));
+  const onReceiptDetailChange = (key) => (e) => {
+    const value =
+      e?.target?.type === "checkbox" ? e.target.checked : e.target.value;
+    setForm((f) => ({
+      ...f,
+      receiptDetailSettings: {
+        ...(f.receiptDetailSettings || DEFAULT_RECEIPT_DETAIL_SETTINGS),
+        [key]:
+          key === "maxNameLength"
+            ? Number(value) || 0
+            : value,
+      },
+    }));
+  };
 
   const persistSettings = async (patch, successMsg = "Configuración guardada") => {
     const payload = { ...form, ...patch };
@@ -265,7 +410,7 @@ export default function AppSettingsPage() {
   };
 
   const onFooterSave = async () => {
-    if (tab === "app") {
+    if (!isSriTab) {
       await onSave();
       return;
     }
@@ -277,19 +422,18 @@ export default function AppSettingsPage() {
     }
   };
 
-  const footerBusy = tab === "app" ? saving : sriSaving;
-  const footerLabel =
-    tab === "app"
-      ? footerBusy
-        ? "Guardando…"
-        : "Guardar configuración"
-      : footerBusy
-        ? "Guardando…"
-        : "Guardar facturación SRI";
+  const footerBusy = isSriTab ? sriSaving : saving;
+  const footerLabel = isSriTab
+    ? footerBusy
+      ? "Guardando…"
+      : "Guardar facturación SRI"
+    : footerBusy
+      ? "Guardando…"
+      : "Guardar configuración";
 
   if (loading || !form) {
     return (
-      <Box sx={{ maxWidth: 880, mx: "auto", py: 3, px: 2 }}>
+      <Box sx={{ maxWidth: 1040, mx: "auto", py: 3, px: 2 }}>
         <PageSkeleton />
       </Box>
     );
@@ -301,7 +445,7 @@ export default function AppSettingsPage() {
     : activeApp.iconUrl || null;
 
   return (
-    <Box sx={{ maxWidth: 880, mx: "auto", py: 3, px: 2, pb: 10 }}>
+    <Box sx={{ maxWidth: 1040, mx: "auto", py: 3, px: 2, pb: 10 }}>
       <Stack
         data-tour="config-header"
         direction="row"
@@ -314,169 +458,184 @@ export default function AppSettingsPage() {
           Configuración
         </Typography>
         <TourHelpButton
-          onClick={tab === "sri" ? startSriTour : startAppTour}
-          title={tab === "sri" ? "Ver tutorial de SRI" : "Ver tutorial de configuración"}
+          onClick={isSriTab ? startSriTour : startAppTour}
+          title={isSriTab ? "Ver tutorial de SRI" : "Ver tutorial de configuración"}
         />
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Datos del negocio, operación del sistema y preparación para facturación electrónica SRI.
+        Elegí una categoría arriba. Se irán sumando más opciones según el módulo.
       </Typography>
 
       <Paper
         variant="outlined"
         sx={{
           borderRadius: 2,
-          overflow: "visible",
+          overflow: "hidden",
           mb: 2,
         }}
       >
         <Tabs
           data-tour="config-tabs"
           value={tabIndex < 0 ? 0 : tabIndex}
-          onChange={(_, i) => setTab(TABS[i].id)}
-          variant="fullWidth"
-          sx={{
-            minHeight: 52,
-            bgcolor: "action.hover",
+          onChange={(_, i) => setTab(SETTINGS_TABS[i].id)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={(theme) => ({
+            minHeight: 56,
+            px: 0.5,
+            bgcolor:
+              theme.palette.mode === "dark"
+                ? alpha(theme.palette.common.black, 0.35)
+                : alpha(theme.palette.common.black, 0.04),
             borderBottom: 1,
             borderColor: "divider",
-            borderTopLeftRadius: 8,
-            borderTopRightRadius: 8,
+            "& .MuiTabs-indicator": {
+              height: 3,
+              borderRadius: "3px 3px 0 0",
+            },
             "& .MuiTab-root": {
-              minHeight: 52,
+              minHeight: 56,
               textTransform: "none",
               fontWeight: 700,
-              gap: 1,
+              letterSpacing: 0.2,
+              opacity: 0.72,
+              px: 2,
+              gap: 0.75,
+              transition: "opacity 120ms ease, color 120ms ease",
+              "&.Mui-selected": {
+                opacity: 1,
+                color: "primary.main",
+              },
             },
-          }}
+          })}
         >
-          {TABS.map((t) => (
+          {SETTINGS_TABS.map((t) => (
             <Tab key={t.id} icon={t.icon} iconPosition="start" label={t.label} />
           ))}
         </Tabs>
 
-        <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
-          {tab === "app" && (
-            <Stack spacing={2}>
-              <Box data-tour="config-logo">
-                <Typography variant="subtitle2" fontWeight={700}>
-                  Logo de marca
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  Imagen de marca (suele incluir el nombre). Se muestra en la app; no es el favicon.
-                </Typography>
-                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                  <Avatar
-                    src={logoPreview}
-                    alt={form.alias || "Logo"}
-                    variant="rounded"
-                    sx={{ width: 88, height: 88, border: 1, borderColor: "divider" }}
+        <Box sx={{ p: { xs: 2, sm: 2.75 }, minHeight: 360 }}>
+          {tab === "marca" && (
+            <>
+              <SettingsSection
+                title="Identidad visual"
+                hint="Logo de marca e icono (favicon). Preparado para más assets de marca."
+              >
+                <Box data-tour="config-logo">
+                  <SettingsRow
+                    align="flex-start"
+                    label="Logo de marca"
+                    description="Imagen de marca (suele incluir el nombre). No es el favicon."
+                    control={
+                      <Stack spacing={1} alignItems={{ xs: "stretch", sm: "flex-end" }}>
+                        <Avatar
+                          src={logoPreview}
+                          alt={form.alias || "Logo"}
+                          variant="rounded"
+                          sx={{ width: 72, height: 72, border: 1, borderColor: "divider" }}
+                        />
+                        <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="flex-end">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<UploadIcon />}
+                            onClick={() => fileRef.current?.click()}
+                            disabled={logoBusy}
+                          >
+                            {logoBusy ? "…" : form.logoPath ? "Cambiar" : "Subir"}
+                          </Button>
+                          {form.logoPath ? (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              startIcon={<DeleteOutlineIcon />}
+                              onClick={onDeleteLogo}
+                              disabled={logoBusy}
+                            >
+                              Eliminar
+                            </Button>
+                          ) : null}
+                        </Stack>
+                        <input
+                          ref={fileRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          hidden
+                          onChange={onLogoSelected}
+                        />
+                      </Stack>
+                    }
                   />
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
-                    <Button
-                      variant="outlined"
-                      startIcon={<UploadIcon />}
-                      onClick={() => fileRef.current?.click()}
-                      disabled={logoBusy}
-                    >
-                      {logoBusy ? "Procesando…" : form.logoPath ? "Cambiar logo" : "Subir logo"}
-                    </Button>
-                    {form.logoPath ? (
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<DeleteOutlineIcon />}
-                        onClick={onDeleteLogo}
-                        disabled={logoBusy}
-                      >
-                        Eliminar
-                      </Button>
-                    ) : null}
-                  </Stack>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    hidden
-                    onChange={onLogoSelected}
+                </Box>
+                <Box data-tour="config-icon">
+                  <SettingsRow
+                    align="flex-start"
+                    label="Icono de la app"
+                    description="Emblema cuadrado para la pestaña del navegador (favicon)."
+                    control={
+                      <Stack spacing={1} alignItems={{ xs: "stretch", sm: "flex-end" }}>
+                        <Avatar
+                          src={iconPreview || undefined}
+                          alt={form.alias || "Icono"}
+                          variant="rounded"
+                          sx={{
+                            width: 56,
+                            height: 56,
+                            border: 1,
+                            borderColor: "divider",
+                            bgcolor: "action.hover",
+                            fontSize: "0.7rem",
+                          }}
+                        >
+                          {!iconPreview ? "Icono" : null}
+                        </Avatar>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="flex-end">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<UploadIcon />}
+                            onClick={() => iconFileRef.current?.click()}
+                            disabled={iconBusy}
+                          >
+                            {iconBusy ? "…" : form.iconPath ? "Cambiar" : "Subir"}
+                          </Button>
+                          {form.iconPath ? (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              startIcon={<DeleteOutlineIcon />}
+                              onClick={onDeleteIcon}
+                              disabled={iconBusy}
+                            >
+                              Eliminar
+                            </Button>
+                          ) : null}
+                        </Stack>
+                        <input
+                          ref={iconFileRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                          hidden
+                          onChange={onIconSelected}
+                        />
+                      </Stack>
+                    }
                   />
-                </Stack>
-                {form.logoPath ? (
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                    Ruta: {form.logoPath}
-                  </Typography>
-                ) : null}
-              </Box>
+                </Box>
+              </SettingsSection>
 
-              <Box data-tour="config-icon">
-                <Typography variant="subtitle2" fontWeight={700}>
-                  Icono de la app
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  Emblema cuadrado (sin texto largo). Se usa en la pestaña del navegador (favicon).
-                </Typography>
-                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                  <Avatar
-                    src={iconPreview || undefined}
-                    alt={form.alias || "Icono"}
-                    variant="rounded"
-                    sx={{
-                      width: 64,
-                      height: 64,
-                      border: 1,
-                      borderColor: "divider",
-                      bgcolor: "action.hover",
-                      fontSize: "0.75rem",
-                    }}
-                  >
-                    {!iconPreview ? "Icono" : null}
-                  </Avatar>
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
-                    <Button
-                      variant="outlined"
-                      startIcon={<UploadIcon />}
-                      onClick={() => iconFileRef.current?.click()}
-                      disabled={iconBusy}
-                    >
-                      {iconBusy ? "Procesando…" : form.iconPath ? "Cambiar icono" : "Subir icono"}
-                    </Button>
-                    {form.iconPath ? (
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<DeleteOutlineIcon />}
-                        onClick={onDeleteIcon}
-                        disabled={iconBusy}
-                      >
-                        Eliminar
-                      </Button>
-                    ) : null}
-                  </Stack>
-                  <input
-                    ref={iconFileRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
-                    hidden
-                    onChange={onIconSelected}
-                  />
-                </Stack>
-                {form.iconPath ? (
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                    Ruta: {form.iconPath}
-                  </Typography>
-                ) : (
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                    Sin icono: se usará el logo como favicon.
-                  </Typography>
-                )}
-              </Box>
-
-              <Divider />
-
-              <Box data-tour="config-identity">
-                <Grid container spacing={2}>
+              <SettingsSection
+                title="Datos del negocio"
+                hint="Nombre y datos que se muestran en la app."
+                tourId="config-identity"
+              >
+                <Grid container spacing={1.5}>
                   <Grid item xs={12} sm={8}>
                     <TextField
+                      size="small"
                       label="Nombre completo"
                       fullWidth
                       value={form.name}
@@ -485,6 +644,7 @@ export default function AppSettingsPage() {
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <TextField
+                      size="small"
                       label="Alias corto"
                       fullWidth
                       value={form.alias}
@@ -493,6 +653,7 @@ export default function AppSettingsPage() {
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <TextField
+                      size="small"
                       label="Versión"
                       fullWidth
                       value={form.version}
@@ -501,6 +662,7 @@ export default function AppSettingsPage() {
                   </Grid>
                   <Grid item xs={12} sm={8}>
                     <TextField
+                      size="small"
                       label="Autor / desarrollador"
                       fullWidth
                       value={form.author}
@@ -509,6 +671,7 @@ export default function AppSettingsPage() {
                   </Grid>
                   <Grid item xs={12}>
                     <TextField
+                      size="small"
                       label="Descripción"
                       fullWidth
                       multiline
@@ -519,6 +682,7 @@ export default function AppSettingsPage() {
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <TextField
+                      size="small"
                       label="Teléfono"
                       fullWidth
                       value={form.phone}
@@ -526,25 +690,64 @@ export default function AppSettingsPage() {
                     />
                   </Grid>
                 </Grid>
-              </Box>
+              </SettingsSection>
 
-              <Divider />
-              <Box data-tour="config-timezone">
-                <Typography variant="subtitle2" fontWeight={700}>
-                  Hora y zona horaria
-                </Typography>
-                <Alert severity="info" sx={{ py: 0.75 }}>
-                  Todas las fechas del sistema se guardan con fecha y hora usando esta zona.
-                </Alert>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
+              <SettingsSection title="Redes" hint="Enlaces públicos del negocio.">
+                <Grid container spacing={1.5}>
+                  {[
+                    ["socialWhatsapp", "WhatsApp URL"],
+                    ["socialFacebook", "Facebook URL"],
+                    ["socialInstagram", "Instagram URL"],
+                    ["socialTiktok", "TikTok URL"],
+                    ["socialEmail", "Email"],
+                  ].map(([key, label]) => (
+                    <Grid item xs={12} sm={6} key={key}>
+                      <TextField
+                        size="small"
+                        label={label}
+                        fullWidth
+                        value={form[key]}
+                        onChange={onChange(key)}
+                      />
+                    </Grid>
+                  ))}
+                </Grid>
+              </SettingsSection>
+
+              <SettingsSection
+                title="Paleta de colores"
+                hint="Define la marca visual en claro, oscuro y neón. Se guarda en el servidor y se cachea en el navegador."
+              >
+                <ThemePaletteEditor
+                  value={form.themePalette || DEFAULT_THEME_PALETTE}
+                  onChange={(next) =>
+                    setForm((f) => ({
+                      ...f,
+                      themePalette: normalizeThemePalette(next),
+                    }))
+                  }
+                />
+              </SettingsSection>
+            </>
+          )}
+
+          {tab === "sistema" && (
+            <>
+              <SettingsSection
+                title="Hora y zona"
+                hint="Todas las fechas del sistema usan esta zona."
+                tourId="config-timezone"
+              >
+                <SettingsRow
+                  label="Zona horaria (IANA)"
+                  description="Ej. America/Guayaquil para Ecuador"
+                  control={
                     <TextField
                       select
-                      label="Zona horaria (IANA)"
+                      size="small"
                       fullWidth
                       value={form.timezone}
                       onChange={onChange("timezone")}
-                      helperText="Ej. America/Guayaquil para Ecuador"
                     >
                       {APP_TIMEZONE_OPTIONS.map((opt) => (
                         <MenuItem key={opt.value} value={opt.value}>
@@ -552,72 +755,112 @@ export default function AppSettingsPage() {
                         </MenuItem>
                       ))}
                     </TextField>
-                  </Grid>
-                </Grid>
-                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: "action.hover", mt: 1 }}>
+                  }
+                />
+                <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.5, bgcolor: "action.hover" }}>
                   <AppTimeClockPanel timezone={form.timezone} />
                 </Paper>
-              </Box>
+              </SettingsSection>
 
-              <Divider />
-              <Box data-tour="config-inventario">
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
-                  Inventario y montos
-                </Typography>
-
-                <Grid container spacing={1.5} alignItems="flex-start">
-                  <Grid item xs={12} sm={4}>
+              <SettingsSection title="Operación" hint="Carpetas, caja y cliente mostrador.">
+                <SettingsRow
+                  label="Carpeta de medios"
+                  description="Prefijo en src/img (logos, icons, qr)."
+                  control={
                     <TextField
-                      select
                       size="small"
                       fullWidth
-                      label="Decimales a mostrar"
-                      value={Number(form.moneyDisplayDecimals ?? 2)}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          moneyDisplayDecimals: Number(e.target.value),
-                        }))
-                      }
-                      helperText="Solo pantalla (0–6)"
-                    >
-                      {[0, 1, 2, 3, 4, 5, 6].map((n) => (
-                        <MenuItem key={n} value={n}>
-                          {n} decimal{n === 1 ? "" : "es"}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
+                      value={form.mediaFolderPrefix}
+                      onChange={onChange("mediaFolderPrefix")}
+                    />
+                  }
+                />
+                <SettingsRow
+                  label="Filtro accesos rápidos caja"
+                  description="Subcadena de categoría. Vacío = todos."
+                  control={
                     <TextField
-                      select
                       size="small"
                       fullWidth
-                      label="Redondeo al mostrar"
-                      value={form.moneyRoundingMode || "up"}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          moneyRoundingMode: e.target.value,
-                        }))
-                      }
-                      helperText="Por defecto: hacia arriba"
-                    >
-                      <MenuItem value="up">Hacia arriba</MenuItem>
-                      <MenuItem value="down">Hacia abajo</MenuItem>
-                      <MenuItem value="nearest">Al más cercano</MenuItem>
-                    </TextField>
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Alert severity="info" sx={{ py: 0.5, px: 1.25 }}>
-                      En BD se guardan hasta <strong>6</strong> decimales. Al
-                      cargar/editar podés ingresar hasta 5.
-                    </Alert>
-                  </Grid>
-                </Grid>
+                      value={form.cajaQuickCategoryMatch}
+                      onChange={onChange("cajaQuickCategoryMatch")}
+                    />
+                  }
+                />
+                <SettingsRow
+                  label="Cliente mostrador"
+                  description="Etiqueta del consumidor final en caja."
+                  control={
+                    <TextField
+                      size="small"
+                      fullWidth
+                      value={form.walkInCustomerLabel}
+                      onChange={onChange("walkInCustomerLabel")}
+                    />
+                  }
+                />
+              </SettingsSection>
+            </>
+          )}
 
-                <FormGroup sx={{ mt: 1.25 }}>
+          {tab === "inventario" && (
+            <SettingsSection
+              title="Inventario y montos"
+              hint="Cómo se muestran precios y cómo se maneja el stock."
+              tourId="config-inventario"
+            >
+              <SettingsRow
+                label="Decimales a mostrar"
+                description="Solo en pantalla (0–6). En BD se guardan hasta 6."
+                control={
+                  <TextField
+                    select
+                    size="small"
+                    fullWidth
+                    value={Number(form.moneyDisplayDecimals ?? 2)}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        moneyDisplayDecimals: Number(e.target.value),
+                      }))
+                    }
+                  >
+                    {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+                      <MenuItem key={n} value={n}>
+                        {n} decimal{n === 1 ? "" : "es"}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                }
+              />
+              <SettingsRow
+                label="Redondeo al mostrar"
+                description="Por defecto: hacia arriba"
+                control={
+                  <TextField
+                    select
+                    size="small"
+                    fullWidth
+                    value={form.moneyRoundingMode || "up"}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        moneyRoundingMode: e.target.value,
+                      }))
+                    }
+                  >
+                    <MenuItem value="up">Hacia arriba</MenuItem>
+                    <MenuItem value="down">Hacia abajo</MenuItem>
+                    <MenuItem value="nearest">Al más cercano</MenuItem>
+                  </TextField>
+                }
+              />
+              <SettingsRow
+                label="Mostrar costo (prov.) en selects"
+                description="Útil al armar pedidos o compras."
+                control={
                   <FormControlLabel
+                    sx={{ m: 0 }}
                     control={
                       <Switch
                         size="small"
@@ -625,9 +868,16 @@ export default function AppSettingsPage() {
                         onChange={onToggle("showProductCostInSelect")}
                       />
                     }
-                    label="Mostrar costo (prov.) en selects de producto"
+                    label={form.showProductCostInSelect ? "Activado" : "Desactivado"}
                   />
+                }
+              />
+              <SettingsRow
+                label="Ajuste de stock al entregar pedidos"
+                description="Si falta stock, Admin puede registrar un ajuste desde pedidos."
+                control={
                   <FormControlLabel
+                    sx={{ m: 0 }}
                     control={
                       <Switch
                         size="small"
@@ -635,146 +885,201 @@ export default function AppSettingsPage() {
                         onChange={onToggle("ordersAllowDeliverStockAdjust")}
                       />
                     }
-                    label="Pedidos: permitir ajuste de stock al entregar (Admin)"
+                    label={form.ordersAllowDeliverStockAdjust ? "Activado" : "Desactivado"}
                   />
-                  {multiStockFeatureStatus !== "hidden" ? (
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          size="small"
-                          checked={Boolean(form.multiStockEnabled)}
-                          disabled={multiStockSwitchDisabled}
-                          onChange={onToggle("multiStockEnabled")}
-                        />
-                      }
-                      label="Multistock (stock por local)"
-                    />
-                  ) : null}
-                </FormGroup>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, mb: 0.5 }}>
-                  Si al entregar un pedido falta stock y el check está activo, Admin/Programador ve un modal
-                  (como en caja) para registrar un movimiento de <strong>ajuste</strong> desde pedidos y completar.
-                </Typography>
+                }
+              />
+              {multiStockFeatureStatus !== "hidden" ? (
+                <Box data-tour="config-multistock">
+                  <SettingsRow
+                    label="Multistock (stock por local)"
+                    description={
+                      !multiStockUnlocked
+                        ? FEATURE_STATUS_HINT[multiStockFeatureStatus] ||
+                          "Aún no disponible para tu instalación."
+                        : multiStockAlreadyOn
+                          ? multiStockCanToggleOff
+                            ? "Activo. Programador puede desactivar."
+                            : "Activo. No se puede desactivar."
+                          : "Modo clásico: stock en Productos. Activá solo con varios locales."
+                    }
+                    control={
+                      <FormControlLabel
+                        sx={{ m: 0 }}
+                        control={
+                          <Switch
+                            size="small"
+                            checked={Boolean(form.multiStockEnabled)}
+                            disabled={multiStockSwitchDisabled}
+                            onChange={onToggle("multiStockEnabled")}
+                          />
+                        }
+                        label={form.multiStockEnabled ? "Activado" : "Desactivado"}
+                      />
+                    }
+                  />
+                </Box>
+              ) : null}
+            </SettingsSection>
+          )}
 
-                {multiStockFeatureStatus !== "hidden" ? (
-                  <Box data-tour="config-multistock" sx={{ mt: 0.75 }}>
-                    {!multiStockUnlocked ? (
-                      <Alert severity="info" sx={{ py: 0.5 }}>
-                        {FEATURE_STATUS_HINT[multiStockFeatureStatus] ||
-                          "Multistock aún no disponible para tu instalación."}
-                      </Alert>
-                    ) : multiStockAlreadyOn ? (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Stock = suma por local. Ajustes en Locales.
-                        {multiStockCanToggleOff
-                          ? " Programador puede desactivar."
-                          : " No se puede desactivar una vez activo."}
-                      </Typography>
-                    ) : (
-                      <Typography variant="caption" color="warning.main" display="block">
-                        Modo clásico: stock editable en Productos. Activá multistock solo si
-                        manejás varios locales.
-                      </Typography>
-                    )}
-                  </Box>
-                ) : null}
-              </Box>
+          {tab === "comprobantes" && (
+            <SettingsSection
+              title="Texto del detalle"
+              hint="Cómo se ven los productos en factura / nota de venta. No cambia la BD."
+              tourId="config-receipt-detail"
+            >
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                alignItems={{ xs: "stretch", sm: "center" }}
+                justifyContent="flex-end"
+                sx={{ mb: 0.5 }}
+              >
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<PreviewIcon />}
+                  onClick={() => setPreviewOpen(true)}
+                  sx={{ textTransform: "none", whiteSpace: "nowrap" }}
+                >
+                  Ver plantilla de prueba
+                </Button>
+              </Stack>
+              <SettingsRow
+                label="Mayúsculas / minúsculas"
+                description="Formato del nombre del producto en el comprobante."
+                control={
+                  <TextField
+                    select
+                    size="small"
+                    fullWidth
+                    value={form.receiptDetailSettings?.productNameCase || "as_stored"}
+                    onChange={onReceiptDetailChange("productNameCase")}
+                  >
+                    {PRODUCT_NAME_CASE_OPTIONS.map((opt) => (
+                      <MenuItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                }
+              />
+              <SettingsRow
+                label="Límite de caracteres"
+                description="0 = sin límite. Útil en tickets angostos."
+                control={
+                  <TextField
+                    size="small"
+                    fullWidth
+                    type="number"
+                    value={form.receiptDetailSettings?.maxNameLength ?? 0}
+                    onChange={onReceiptDetailChange("maxNameLength")}
+                    inputProps={{ min: 0, max: 200 }}
+                  />
+                }
+              />
+              {[
+                ["showLineNumber", "Número de línea", "Muestra 1., 2., …"],
+                ["showBarcode", "Código / barras", "Junto al nombre del producto"],
+                ["showUnit", "Unidad de medida", "Abreviatura de la unidad"],
+                ["trimSpaces", "Recortar espacios", "Inicio y final del nombre"],
+                ["collapseSpaces", "Colapsar espacios", "Varios espacios → uno"],
+                ["applyToFactura", "Aplicar a factura", "Factura electrónica SRI"],
+                ["applyToNotaVenta", "Aplicar a nota de venta", "Comprobante interno"],
+              ].map(([key, label, description]) => {
+                const checked =
+                  key === "showLineNumber" || key === "showBarcode" || key === "showUnit"
+                    ? Boolean(form.receiptDetailSettings?.[key])
+                    : form.receiptDetailSettings?.[key] !== false;
+                return (
+                  <SettingsRow
+                    key={key}
+                    label={label}
+                    description={description}
+                    control={
+                      <FormControlLabel
+                        sx={{ m: 0 }}
+                        control={
+                          <Switch
+                            size="small"
+                            checked={checked}
+                            onChange={onReceiptDetailChange(key)}
+                          />
+                        }
+                        label={checked ? "Activado" : "Desactivado"}
+                      />
+                    }
+                  />
+                );
+              })}
+            </SettingsSection>
+          )}
 
-              <Divider />
-              <Box data-tour="config-public">
-                <Typography variant="subtitle2" fontWeight={700}>
-                  Vista pública
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: -0.5 }}>
-                  Controla qué se muestra en el inicio y en el menú público (sin sesión).
-                </Typography>
-                <FormGroup>
+          {tab === "publico" && (
+            <SettingsSection
+              title="Vista pública"
+              hint="Qué ve un visitante sin sesión (inicio y menú público)."
+              tourId="config-public"
+            >
+              <SettingsRow
+                label="Mostrar catálogo"
+                control={
                   <FormControlLabel
+                    sx={{ m: 0 }}
                     control={
                       <Switch
                         checked={Boolean(form.showPublicCatalog)}
                         onChange={onToggle("showPublicCatalog")}
                       />
                     }
-                    label="Mostrar catálogo"
+                    label={form.showPublicCatalog ? "Activado" : "Desactivado"}
                   />
+                }
+              />
+              <SettingsRow
+                label="Mostrar sucursales propias"
+                control={
                   <FormControlLabel
+                    sx={{ m: 0 }}
                     control={
                       <Switch
                         checked={Boolean(form.showPublicStoresPropia)}
                         onChange={onToggle("showPublicStoresPropia")}
                       />
                     }
-                    label="Mostrar sucursales propias"
+                    label={form.showPublicStoresPropia ? "Activado" : "Desactivado"}
                   />
+                }
+              />
+              <SettingsRow
+                label="Mostrar vitrinas"
+                control={
                   <FormControlLabel
+                    sx={{ m: 0 }}
                     control={
                       <Switch
                         checked={Boolean(form.showPublicStoresVitrina)}
                         onChange={onToggle("showPublicStoresVitrina")}
                       />
                     }
-                    label="Mostrar vitrinas"
+                    label={form.showPublicStoresVitrina ? "Activado" : "Desactivado"}
                   />
-                </FormGroup>
-              </Box>
-
-              <Divider />
-              <Typography variant="subtitle2" fontWeight={700}>
-                Operación
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Carpeta de medios"
-                    fullWidth
-                    value={form.mediaFolderPrefix}
-                    onChange={onChange("mediaFolderPrefix")}
-                    helperText="Prefijo en src/img. Crea {prefijo}/logos, {prefijo}/icons y {prefijo}/qr"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Filtro accesos rápidos caja"
-                    fullWidth
-                    value={form.cajaQuickCategoryMatch}
-                    onChange={onChange("cajaQuickCategoryMatch")}
-                    helperText="Subcadena de categoría. Vacío = todos"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Cliente mostrador"
-                    fullWidth
-                    value={form.walkInCustomerLabel}
-                    onChange={onChange("walkInCustomerLabel")}
-                  />
-                </Grid>
-              </Grid>
-
-              <Divider />
-              <Typography variant="subtitle2" fontWeight={700}>
-                Redes
-              </Typography>
-              <Grid container spacing={2}>
-                {[
-                  ["socialWhatsapp", "WhatsApp URL"],
-                  ["socialFacebook", "Facebook URL"],
-                  ["socialInstagram", "Instagram URL"],
-                  ["socialTiktok", "TikTok URL"],
-                  ["socialEmail", "Email"],
-                ].map(([key, label]) => (
-                  <Grid item xs={12} key={key}>
-                    <TextField label={label} fullWidth value={form[key]} onChange={onChange(key)} />
-                  </Grid>
-                ))}
-              </Grid>
-            </Stack>
+                }
+              />
+            </SettingsSection>
           )}
 
           {tab === "sri" && <SriBillingSettingsPanel ref={sriPanelRef} />}
         </Box>
       </Paper>
+
+      <ReceiptDetailPreviewDialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        settings={form.receiptDetailSettings}
+        businessName={form.alias || form.name || activeApp?.alias}
+      />
 
       <Button
         data-tour="config-save"

@@ -7,6 +7,11 @@ import {
   RECEIPT_FIELD_LABELS,
 } from "../../utils/saleReceiptUtils.js";
 import { isFacturaDocument } from "../../utils/invoiceFiscalUtils.js";
+import {
+  formatReceiptItemDescription,
+  normalizeReceiptDetailSettings,
+} from "../../utils/receiptDetailFormat.js";
+import { useAppSettings } from "../../context/AppSettingsContext.jsx";
 import InvoiceRideContent from "./InvoiceRideContent.jsx";
 
 const BLACK = "#000";
@@ -47,15 +52,32 @@ function ReceiptSignatures({ isTicket, signatureSize }) {
 }
 
 /** Vista previa del comprobante (A4 o ticket térmico). */
-export default function SaleReceiptContent({ receipt, format = "a4", showNotes = true }) {
+export default function SaleReceiptContent({
+  receipt,
+  format = "a4",
+  showNotes = true,
+  detailSettings = null,
+}) {
+  const { activeApp } = useAppSettings();
+  const detailCfg = normalizeReceiptDetailSettings(
+    detailSettings ?? activeApp?.receiptDetailSettings,
+  );
+
   if (!receipt) return null;
   if (isFacturaDocument(receipt)) {
-    return <InvoiceRideContent receipt={receipt} format={format} />;
+    return (
+      <InvoiceRideContent
+        receipt={receipt}
+        format={format}
+        detailSettings={detailCfg}
+      />
+    );
   }
   const layout = getReceiptLayout(format);
   const isTicket = layout.isTicket;
   const items = receipt.items || [];
   const totalQuantity = items.reduce((acc, it) => acc + Number(it.quantity || 0), 0);
+  const docType = receipt.documentType || "nota_venta";
 
   return (
     <Box
@@ -171,7 +193,7 @@ export default function SaleReceiptContent({ receipt, format = "a4", showNotes =
                   fontWeight: 600,
                 }}
               >
-                {it.name}
+                {formatReceiptItemDescription(it, detailCfg, idx, docType)}
               </TableCell>
               <TableCell
                 align="center"

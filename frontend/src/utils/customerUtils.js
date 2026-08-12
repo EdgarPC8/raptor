@@ -23,6 +23,7 @@ export const EMPTY_CUSTOMER_FORM = {
   email: "",
   phone: "",
   address: "",
+  isActive: true,
 };
 
 export function buildCustomerDisplayName(customer) {
@@ -62,6 +63,7 @@ export function customerToForm(customer) {
     email: customer.email || "",
     phone: customer.phone || "",
     address: customer.address || "",
+    isActive: customer.isActive !== false,
   };
 }
 
@@ -82,6 +84,7 @@ export function formToCustomerPayload(form) {
     email: String(form.email || "").trim() || null,
     phone: String(form.phone || "").trim() || null,
     address: String(form.address || "").trim() || null,
+    isActive: form.isActive !== false,
   };
 }
 

@@ -39,6 +39,18 @@ export const RAPTOR_UNCONFIGURED_FALLBACK = {
   moneyDisplayDecimals: 2,
   moneyRoundingMode: "up",
   ordersAllowDeliverStockAdjust: false,
+  receiptDetailSettings: {
+    productNameCase: "as_stored",
+    showLineNumber: false,
+    showBarcode: false,
+    showUnit: false,
+    maxNameLength: 0,
+    trimSpaces: true,
+    collapseSpaces: true,
+    applyToFactura: true,
+    applyToNotaVenta: true,
+  },
+  themePalette: null,
 };
 
 /** Fallback EdDeli solo cuando el modo de Vite es eddeli. */
@@ -70,6 +82,18 @@ export const EDDELI_FALLBACK = {
   moneyDisplayDecimals: 2,
   moneyRoundingMode: "up",
   ordersAllowDeliverStockAdjust: false,
+  receiptDetailSettings: {
+    productNameCase: "as_stored",
+    showLineNumber: false,
+    showBarcode: false,
+    showUnit: false,
+    maxNameLength: 0,
+    trimSpaces: true,
+    collapseSpaces: true,
+    applyToFactura: true,
+    applyToNotaVenta: true,
+  },
+  themePalette: null,
 };
 
 export const APP_SETTINGS_FALLBACK =

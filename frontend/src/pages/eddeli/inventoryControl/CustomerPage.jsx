@@ -4,6 +4,7 @@ import {
   IconButton,
   Tooltip,
   Typography,
+  Chip,
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { Edit, Delete } from "@mui/icons-material";
@@ -70,6 +71,18 @@ function CustomerPage() {
     { label: "Teléfono", id: "phone", render: (row) => cellText(row.phone) },
     { label: "Email", id: "email", render: (row) => cellText(row.email) },
     { label: "Dirección", id: "address", render: (row) => cellText(row.address) },
+    {
+      label: "Estado",
+      id: "isActive",
+      render: (row) => (
+        <Chip
+          size="small"
+          label={row.isActive !== false ? "Activo" : "Inactivo"}
+          color={row.isActive !== false ? "success" : "default"}
+          variant={row.isActive !== false ? "filled" : "outlined"}
+        />
+      ),
+    },
     {
       label: "Acciones",
       id: "actions",

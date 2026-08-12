@@ -1,4 +1,4 @@
-import { Button, Paper } from "@mui/material";
+import { Button, Paper, Chip } from "@mui/material";
 import { Box } from "@mui/system";
 import { useState } from "react";
 import SimpleDialog from "../components/Dialogs/SimpleDialog";
@@ -107,6 +107,18 @@ export default function UsersPage() {
             label: "Roles",
             render: (r) => (r.account?.roles || []).map((role) => role.name).join(", ") || "—",
           },
+          {
+            id: "isActive",
+            label: "Estado",
+            render: (r) => (
+              <Chip
+                size="small"
+                label={r.account?.isActive !== false ? "Activo" : "Inactivo"}
+                color={r.account?.isActive !== false ? "success" : "default"}
+                variant={r.account?.isActive !== false ? "filled" : "outlined"}
+              />
+            ),
+          },
 
           {
             id: "acc",
@@ -126,6 +138,7 @@ export default function UsersPage() {
                     ci: r.ci,
                     password: "",
                     roles: r.account?.roles?.map((role) => role.id) || [],
+                    isActive: r.account?.isActive !== false,
                   });
                 }}
               >

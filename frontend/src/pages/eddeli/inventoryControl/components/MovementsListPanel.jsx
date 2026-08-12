@@ -82,7 +82,7 @@ function useMovementColumns(isProgrammer, onEdit, onDelete) {
       {
         label: "Descripción",
         id: "description",
-        getSearchValue: (r) => row.description || "",
+        getSearchValue: (r) => r.description || "",
         render: (row) => (
           <Typography variant="body2" noWrap title={row.description || ""} sx={{ maxWidth: 220 }}>
             {row.description || "—"}

@@ -15,6 +15,7 @@ export const uploadDocumentRequest = async ({
   batchKey,
   linkExpenseIds,
   label,
+  invoiceNumber,
 }) => {
   const fd = new FormData();
   fd.append("file", file);
@@ -22,6 +23,7 @@ export const uploadDocumentRequest = async ({
   if (entityId != null && entityId !== "") fd.append("entityId", String(entityId));
   if (batchKey) fd.append("batchKey", batchKey);
   if (label) fd.append("label", label);
+  if (invoiceNumber) fd.append("invoiceNumber", String(invoiceNumber).trim());
   if (linkExpenseIds?.length) {
     fd.append("linkExpenseIds", JSON.stringify(linkExpenseIds));
   }
@@ -77,12 +79,15 @@ export async function uploadExpenseVoucher(file, expenseId) {
   });
 }
 
-export async function uploadSupplierOrderVoucher(file, orderId) {
+export async function uploadSupplierOrderVoucher(file, orderId, invoiceNumber) {
   if (!file || !orderId) return null;
   return uploadDocumentRequest({
     file,
     entityType: "supplier_order",
     entityId: orderId,
-    label: "Factura / nota proveedor",
+    label: invoiceNumber
+      ? `Factura / nota proveedor ${invoiceNumber}`
+      : "Factura / nota proveedor",
+    invoiceNumber: invoiceNumber || null,
   });
 }

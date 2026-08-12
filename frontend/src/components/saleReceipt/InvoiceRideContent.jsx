@@ -8,6 +8,11 @@ import {
   sriPaymentFormLabel,
   dominantIvaRate,
 } from "../../utils/invoiceFiscalUtils.js";
+import {
+  formatReceiptItemDescription,
+  normalizeReceiptDetailSettings,
+} from "../../utils/receiptDetailFormat.js";
+import { useAppSettings } from "../../context/AppSettingsContext.jsx";
 
 const BLACK = "#000";
 const border = "1px solid #000";
@@ -104,7 +109,7 @@ function CustomerBlock({ receipt, emissionDate, isTicket }) {
   );
 }
 
-function ItemsTableA4({ items }) {
+function ItemsTableA4({ items, detailCfg, documentType }) {
   return (
     <Box
       component="table"
@@ -151,7 +156,7 @@ function ItemsTableA4({ items }) {
               {it.code || it.productId || idx + 1}
             </Box>
             <Box component="td" sx={{ border, px: 0.6, py: 0.35, fontWeight: 600 }}>
-              {it.name}
+              {formatReceiptItemDescription(it, detailCfg, idx, documentType)}
             </Box>
             <Box component="td" sx={{ border, px: 0.6, py: 0.35, textAlign: "right", fontWeight: 700 }}>
               {formatInvoiceMoney(it.quantity)}
@@ -172,7 +177,7 @@ function ItemsTableA4({ items }) {
   );
 }
 
-function ItemsTableTicket({ items }) {
+function ItemsTableTicket({ items, detailCfg, documentType }) {
   return (
     <Box sx={{ mb: 1, fontSize: "inherit" }}>
       <Box
@@ -208,7 +213,9 @@ function ItemsTableTicket({ items }) {
           }}
         >
           <span>{formatInvoiceMoney(it.quantity)}</span>
-          <span style={{ wordBreak: "break-word" }}>{it.name}</span>
+          <span style={{ wordBreak: "break-word" }}>
+            {formatReceiptItemDescription(it, detailCfg, idx, documentType)}
+          </span>
           <span style={{ textAlign: "right" }}>{formatInvoiceUnitPrice(it.price)}</span>
           <span style={{ textAlign: "right" }}>{formatInvoiceMoney(it.discount || 0)}</span>
           <span style={{ textAlign: "right" }}>{formatInvoiceMoney(it.subtotal ?? it.lineTotal)}</span>
@@ -260,11 +267,19 @@ function PaymentExtra({ receipt, isTicket }) {
 }
 
 /** RIDE factura: A4 (dos columnas) o ticket 80/55 mm (vertical). */
-export default function InvoiceRideContent({ receipt, format = "a4" }) {
+export default function InvoiceRideContent({
+  receipt,
+  format = "a4",
+  detailSettings = null,
+}) {
+  const { activeApp } = useAppSettings();
   const layout = getReceiptLayout(format);
   const isTicket = layout.isTicket;
   const fiscal = receipt?.fiscal || {};
   const barcodeKey = fiscal.authorizationNumber || fiscal.accessKey || "";
+  const detailCfg = normalizeReceiptDetailSettings(
+    detailSettings ?? activeApp?.receiptDetailSettings,
+  );
   const barcodeSvg = useMemo(
     () =>
       barcodeKey
@@ -279,6 +294,7 @@ export default function InvoiceRideContent({ receipt, format = "a4" }) {
   if (!receipt) return null;
 
   const items = receipt.items || [];
+  const docType = receipt.documentType || "factura";
   const ivaRate = dominantIvaRate(items);
   const emissionDate =
     fiscal.emissionDate ||
@@ -422,7 +438,7 @@ export default function InvoiceRideContent({ receipt, format = "a4" }) {
           {ticketAuthBlock}
           <Box sx={{ borderTop: border, borderBottom: border, py: 0.5, my: 1 }} />
           <CustomerBlock receipt={receipt} emissionDate={emissionDate} isTicket />
-          <ItemsTableTicket items={items} />
+          <ItemsTableTicket items={items} detailCfg={detailCfg} documentType={docType} />
           <TotalsBlock receipt={receipt} isTicket ivaRate={ivaRate} />
           <Box sx={{ mt: 1.25 }}>
             <PaymentExtra receipt={receipt} isTicket />
@@ -442,7 +458,7 @@ export default function InvoiceRideContent({ receipt, format = "a4" }) {
             <Box sx={{ border, p: 1.25 }}>{docMetaBlock}</Box>
           </Box>
           <CustomerBlock receipt={receipt} emissionDate={emissionDate} isTicket={false} />
-          <ItemsTableA4 items={items} />
+          <ItemsTableA4 items={items} detailCfg={detailCfg} documentType={docType} />
           <Box
             sx={{
               display: "grid",

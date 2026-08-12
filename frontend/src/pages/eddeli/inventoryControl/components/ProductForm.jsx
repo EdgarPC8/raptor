@@ -477,8 +477,18 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
   useEffect(() => {
     loadData();
     fetchOptions();
-    if (!isEditing && datos?.barcode) {
-      setValue("barcode", normalizeProductBarcode(datos.barcode));
+    if (!isEditing && datos && typeof datos === "object") {
+      if (datos.name) setValue("name", datos.name);
+      if (datos.desc) setValue("desc", datos.desc);
+      if (datos.type) setValue("type", datos.type);
+      if (datos.barcode) setValue("barcode", normalizeProductBarcode(datos.barcode));
+      if (datos.supplierPrice != null && datos.supplierPrice !== "") {
+        setValue("supplierPrice", datos.supplierPrice);
+      }
+      if (datos.price != null && datos.price !== "") setValue("price", datos.price);
+      if (datos.taxRate != null && datos.taxRate !== "") setValue("taxRate", datos.taxRate);
+      if (datos.unitId) setValue("unitId", datos.unitId);
+      if (datos.categoryId) setValue("categoryId", datos.categoryId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

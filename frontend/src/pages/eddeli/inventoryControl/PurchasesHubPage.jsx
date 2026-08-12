@@ -9,7 +9,6 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import AddIcon from "@mui/icons-material/Add";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
@@ -17,7 +16,10 @@ import TablePro from "../../../components/Tables/TablePro.jsx";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog.jsx";
 import { getAllSupplierOrdersRequest } from "../../../api/ordersRequest.js";
 import { useAuth } from "../../../context/AuthContext.jsx";
-import SupplierOrderForm from "./components/SupplierOrderForm.jsx";
+import SupplierOrderForm, {
+  SUPPLIER_ORDER_DIALOG_CONTENT_SX,
+  SUPPLIER_ORDER_DIALOG_PAPER_SX,
+} from "./components/SupplierOrderForm.jsx";
 import { exportPurchasesInvoicesExcel } from "../../../utils/exportInvoiceReportExcel.js";
 
 const money = (n) => Number(n || 0).toFixed(2);
@@ -78,12 +80,7 @@ export default function PurchasesHubPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [orderToEdit, setOrderToEdit] = useState(null);
-  const [draft, setDraft] = useState({
-    dateFrom: monthStartIso(),
-    dateTo: todayIso(),
-    supplier: "",
-  });
-  const [applied, setApplied] = useState({
+  const [filters, setFilters] = useState({
     dateFrom: monthStartIso(),
     dateTo: todayIso(),
     supplier: "",
@@ -108,7 +105,7 @@ export default function PurchasesHubPage() {
     }
   };
 
-  const refresh = () => void load(applied.dateFrom, applied.dateTo);
+  const refresh = () => void load(filters.dateFrom, filters.dateTo);
 
   const openNewPurchase = () => {
     setIsEditing(false);
@@ -128,10 +125,14 @@ export default function PurchasesHubPage() {
     setOrderToEdit(null);
   };
 
+  // Al cambiar fechas, recargar (debounce corto).
   useEffect(() => {
-    void load(applied.dateFrom, applied.dateTo);
+    const t = setTimeout(() => {
+      void load(filters.dateFrom, filters.dateTo);
+    }, 250);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [filters.dateFrom, filters.dateTo]);
 
   const supplierOptions = useMemo(() => {
     const set = new Set();
@@ -147,7 +148,7 @@ export default function PurchasesHubPage() {
       .map((o) => {
         const dateIso = orderDateIso(o);
         const total = Number(o.totalAmount ?? o.total ?? 0);
-          const supplierName = String(
+        const supplierName = String(
           o.ERP_supplier?.name || o.supplier?.name || o.supplierName || "—",
         ).toUpperCase();
         const items = o.ERP_supplier_order_items || o.items || [];
@@ -157,7 +158,6 @@ export default function PurchasesHubPage() {
           const line = Number(it.quantity || 0) * Number(it.unitPrice || it.price || 0);
           const rate = Number(it.taxRate || it.ivaRate || 0);
           if (rate > 0) {
-            // En pedidos proveedor el taxRate suele ser adicional al unitPrice
             subtotal += line;
             iva += line * (rate / 100);
           } else {
@@ -206,13 +206,13 @@ export default function PurchasesHubPage() {
         };
       })
       .filter((row) => {
-        if (applied.supplier && row.supplierLabel !== applied.supplier.toUpperCase()) {
+        if (filters.supplier && row.supplierLabel !== filters.supplier.toUpperCase()) {
           return false;
         }
         return true;
       })
       .sort((a, b) => String(b.dateIso).localeCompare(String(a.dateIso)));
-  }, [orders, applied.supplier]);
+  }, [orders, filters.supplier]);
 
   const totals = useMemo(() => {
     const sum = (key) => rows.reduce((a, r) => a + Number(r[key] || 0), 0);
@@ -229,11 +229,6 @@ export default function PurchasesHubPage() {
     };
   }, [rows]);
 
-  const applyFilters = () => {
-    setApplied({ ...draft });
-    void load(draft.dateFrom, draft.dateTo);
-  };
-
   const exportExcel = () => {
     if (!rows.length) {
       void toast?.({
@@ -244,8 +239,8 @@ export default function PurchasesHubPage() {
     }
     try {
       exportPurchasesInvoicesExcel(rows, {
-        dateTo: applied.dateTo || todayIso(),
-        fileName: `Reporte de Compras del ${applied.dateFrom || ""} al ${applied.dateTo || todayIso()}.xlsx`,
+        dateTo: filters.dateTo || todayIso(),
+        fileName: `Reporte de Compras del ${filters.dateFrom || ""} al ${filters.dateTo || todayIso()}.xlsx`,
       });
       void toast?.({ message: "Excel descargado.", variant: "success" });
     } catch (e) {
@@ -308,8 +303,8 @@ export default function PurchasesHubPage() {
               label="Fecha inicio"
               type="date"
               InputLabelProps={{ shrink: true }}
-              value={draft.dateFrom}
-              onChange={(e) => setDraft((p) => ({ ...p, dateFrom: e.target.value }))}
+              value={filters.dateFrom}
+              onChange={(e) => setFilters((p) => ({ ...p, dateFrom: e.target.value }))}
             />
           </Grid>
           <Grid item xs={6} md={2}>
@@ -319,8 +314,8 @@ export default function PurchasesHubPage() {
               label="Fecha fin"
               type="date"
               InputLabelProps={{ shrink: true }}
-              value={draft.dateTo}
-              onChange={(e) => setDraft((p) => ({ ...p, dateTo: e.target.value }))}
+              value={filters.dateTo}
+              onChange={(e) => setFilters((p) => ({ ...p, dateTo: e.target.value }))}
             />
           </Grid>
           <Grid item xs={12} md={3}>
@@ -329,8 +324,8 @@ export default function PurchasesHubPage() {
               fullWidth
               size="small"
               label="Proveedor"
-              value={draft.supplier}
-              onChange={(e) => setDraft((p) => ({ ...p, supplier: e.target.value }))}
+              value={filters.supplier}
+              onChange={(e) => setFilters((p) => ({ ...p, supplier: e.target.value }))}
             >
               <MenuItem value="">Todos</MenuItem>
               {supplierOptions.map((name) => (
@@ -341,31 +336,19 @@ export default function PurchasesHubPage() {
             </TextField>
           </Grid>
           <Grid item xs={12} md={5}>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Button
-                variant="contained"
-                startIcon={<FilterAltIcon />}
-                onClick={applyFilters}
-              >
-                Aplicar filtros
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<RestartAltIcon />}
-                onClick={() => {
-                  const next = {
-                    dateFrom: monthStartIso(),
-                    dateTo: todayIso(),
-                    supplier: "",
-                  };
-                  setDraft(next);
-                  setApplied(next);
-                  void load(next.dateFrom, next.dateTo);
-                }}
-              >
-                Limpiar
-              </Button>
-            </Stack>
+            <Button
+              variant="outlined"
+              startIcon={<RestartAltIcon />}
+              onClick={() =>
+                setFilters({
+                  dateFrom: monthStartIso(),
+                  dateTo: todayIso(),
+                  supplier: "",
+                })
+              }
+            >
+              Limpiar
+            </Button>
           </Grid>
         </Grid>
       </Paper>
@@ -417,6 +400,8 @@ export default function PurchasesHubPage() {
         tittle={isEditing ? "Editar compra / pedido a proveedor" : "Nueva compra a proveedor"}
         maxWidth="lg"
         fullWidth
+        paperSx={SUPPLIER_ORDER_DIALOG_PAPER_SX}
+        contentSx={SUPPLIER_ORDER_DIALOG_CONTENT_SX}
       >
         <SupplierOrderForm
           onClose={closeForm}

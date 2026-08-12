@@ -16,19 +16,19 @@ if (appTitle) document.title = appTitle;
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <ThemeModeProvider>
-      <SnackbarProvider
-        maxSnack={3}
-        autoHideDuration={3000}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-      >
-        <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "") || undefined}>
-          <AppSettingsProvider>
+    <AppSettingsProvider>
+      <ThemeModeProvider>
+        <SnackbarProvider
+          maxSnack={3}
+          autoHideDuration={3000}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        >
+          <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "") || undefined}>
             <App />
-          </AppSettingsProvider>
-          <Toaster position="bottom-right" />
-        </BrowserRouter>
-      </SnackbarProvider>
-    </ThemeModeProvider>
+            <Toaster position="bottom-right" />
+          </BrowserRouter>
+        </SnackbarProvider>
+      </ThemeModeProvider>
+    </AppSettingsProvider>
   </React.StrictMode>,
 );

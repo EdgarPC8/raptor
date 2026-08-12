@@ -35,3 +35,19 @@ export async function sendSriInvoiceCustomerEmail(invoiceId, pdfBlob) {
   });
   return data;
 }
+
+/**
+ * Consulta en el SRI una factura de compra por clave de acceso (49 dígitos / código de barras RIDE).
+ * @returns {{ xml: string, accessKey: string, estado: string, ... }}
+ */
+export async function lookupSriPurchaseInvoiceByAccessKey(accessKey, environment) {
+  const { data } = await axios.post(
+    "/sri/purchase-invoices/lookup",
+    {
+      accessKey,
+      ...(environment ? { environment } : {}),
+    },
+    authHeaders(),
+  );
+  return data;
+}

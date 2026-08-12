@@ -18,7 +18,10 @@ import { useCallback, useRef, useState } from "react";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 import TourHelpButton from "../../../components/TourHelpButton.jsx";
 import OrderForm from "./components/OrderForm";
-import SupplierOrderForm from "./components/SupplierOrderForm";
+import SupplierOrderForm, {
+  SUPPLIER_ORDER_DIALOG_CONTENT_SX,
+  SUPPLIER_ORDER_DIALOG_PAPER_SX,
+} from "./components/SupplierOrderForm";
 import {
   getOrdersForMonthRequest,
   getSupplierOrdersForMonthRequest,
@@ -509,6 +512,8 @@ function OrderPage() {
         }
         maxWidth="lg"
         fullWidth
+        paperSx={SUPPLIER_ORDER_DIALOG_PAPER_SX}
+        contentSx={SUPPLIER_ORDER_DIALOG_CONTENT_SX}
         titleExtra={
           !isEditingSupplier ? (
             <TourHelpButton

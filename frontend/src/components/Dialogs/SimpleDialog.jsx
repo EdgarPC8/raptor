@@ -27,6 +27,7 @@ function SimpleDialog({
   hideClose = false,
   disableClose = false,
   contentSx,
+  paperSx,
   titleExtra = null,
 }) {
   const titleId = useId();
@@ -51,9 +52,15 @@ function SimpleDialog({
       disableEscapeKeyDown={disableClose}
       aria-labelledby={titleId}
       aria-describedby={!children ? descId : undefined}
+      PaperProps={{
+        sx: {
+          maxHeight: "92vh",
+          ...paperSx,
+        },
+      }}
     >
-      <Box display="flex" justifyContent="space-between" alignItems="center">
-        <DialogTitle id={titleId} sx={{ flexGrow: 1, pr: 1 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ flexShrink: 0 }}>
+        <DialogTitle id={titleId} sx={{ flexGrow: 1, pr: 1, py: 1.25 }}>
           {dialogTitle}
         </DialogTitle>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, pr: 1, flexShrink: 0 }}>

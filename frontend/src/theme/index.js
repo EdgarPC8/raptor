@@ -14,3 +14,8 @@ export {
   CssBaseline,
 } from "./muiRuntime.js";
 export { getTheme } from "./getTheme.js";
+export {
+  DEFAULT_THEME_PALETTE,
+  normalizeThemePalette,
+  buildPaletteFromSeed,
+} from "./themePalette.js";

@@ -7,6 +7,11 @@ import {
   dominantIvaRate,
 } from "./invoiceFiscalUtils.js";
 import { getReceiptLayout } from "./receiptFormats.js";
+import { getActiveAppSettings } from "../context/AppSettingsContext.jsx";
+import {
+  formatReceiptItemDescription,
+  normalizeReceiptDetailSettings,
+} from "./receiptDetailFormat.js";
 
 function esc(str) {
   return String(str ?? "")
@@ -126,6 +131,10 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4") {
   const isTicket = layout.isTicket;
   const fiscal = receipt.fiscal || {};
   const items = receipt.items || [];
+  const detailCfg = normalizeReceiptDetailSettings(
+    getActiveAppSettings()?.receiptDetailSettings,
+  );
+  const docType = receipt.documentType || "factura";
   const ivaRate = dominantIvaRate(items);
   const emissionDate =
     fiscal.emissionDate ||
@@ -175,9 +184,9 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4") {
         </div>
         ${items
           .map(
-            (it) => `<div style="display:grid;grid-template-columns:0.7fr 2.2fr 0.9fr 0.7fr 0.9fr;gap:2px;padding:3px 0;border-bottom:1px dotted #999;font-weight:600;font-size:0.9em;align-items:start">
+            (it, idx) => `<div style="display:grid;grid-template-columns:0.7fr 2.2fr 0.9fr 0.7fr 0.9fr;gap:2px;padding:3px 0;border-bottom:1px dotted #999;font-weight:600;font-size:0.9em;align-items:start">
               <span>${esc(formatInvoiceMoney(it.quantity))}</span>
-              <span style="word-break:break-word">${esc(it.name)}</span>
+              <span style="word-break:break-word">${esc(formatReceiptItemDescription(it, detailCfg, idx, docType))}</span>
               <span style="text-align:right">${esc(formatInvoiceUnitPrice(it.price))}</span>
               <span style="text-align:right">${esc(formatInvoiceMoney(it.discount || 0))}</span>
               <span style="text-align:right">${esc(formatInvoiceMoney(it.subtotal ?? it.lineTotal))}</span>
@@ -209,7 +218,7 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4") {
             .map(
               (it, idx) => `<tr>
                 <td style="border:1px solid #000;padding:3px 5px;font-weight:600">${esc(it.code || it.productId || idx + 1)}</td>
-                <td style="border:1px solid #000;padding:3px 5px;font-weight:600">${esc(it.name)}</td>
+                <td style="border:1px solid #000;padding:3px 5px;font-weight:600">${esc(formatReceiptItemDescription(it, detailCfg, idx, docType))}</td>
                 <td style="border:1px solid #000;padding:3px 5px;text-align:right;font-weight:700">${esc(formatInvoiceMoney(it.quantity))}</td>
                 <td style="border:1px solid #000;padding:3px 5px;text-align:right;font-weight:700">${esc(formatInvoiceUnitPrice(it.price))}</td>
                 <td style="border:1px solid #000;padding:3px 5px;text-align:right;font-weight:700">${esc(formatInvoiceMoney(it.discount || 0))}</td>

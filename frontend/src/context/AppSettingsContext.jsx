@@ -12,6 +12,15 @@ import {
   normalizeMoneyDisplayDecimals,
   normalizeMoneyRoundingMode,
 } from "../utils/moneyFormat.js";
+import {
+  DEFAULT_RECEIPT_DETAIL_SETTINGS,
+  normalizeReceiptDetailSettings,
+} from "../utils/receiptDetailFormat.js";
+import {
+  DEFAULT_THEME_PALETTE,
+  normalizeThemePalette,
+  writeThemePaletteCache,
+} from "../theme/themePalette.js";
 
 const AppSettingsContext = createContext(null);
 
@@ -90,6 +99,12 @@ function toActiveApp(settings, { offline = false } = {}) {
     ordersAllowDeliverStockAdjust: unconfigured
       ? false
       : Boolean(resolved.ordersAllowDeliverStockAdjust),
+    receiptDetailSettings: unconfigured
+      ? { ...DEFAULT_RECEIPT_DETAIL_SETTINGS }
+      : normalizeReceiptDetailSettings(resolved.receiptDetailSettings),
+    themePalette: unconfigured
+      ? normalizeThemePalette(DEFAULT_THEME_PALETTE)
+      : normalizeThemePalette(resolved.themePalette),
     year: new Date().getFullYear(),
     background: "#F0F9FB",
   };
@@ -144,6 +159,9 @@ export function AppSettingsProvider({ children }) {
       setSettings(data);
       settingsStore = toActiveApp(data, { offline: unconfigured });
       applyBrandingToDocument(settingsStore);
+      if (data?.themePalette) {
+        writeThemePaletteCache(data.themePalette);
+      }
     } catch {
       setOffline(true);
       settingsStore = toActiveApp(APP_SETTINGS_FALLBACK, { offline: true });
@@ -188,6 +206,9 @@ export function AppSettingsProvider({ children }) {
         const unconfigured = looksUnconfigured(next);
         setOffline(unconfigured);
         settingsStore = toActiveApp(next, { offline: unconfigured });
+        if (next?.themePalette) {
+          writeThemePaletteCache(next.themePalette);
+        }
       },
     }),
     [settings, activeApp, loading, offline],

@@ -9,7 +9,6 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import TablePro from "../../../components/Tables/TablePro.jsx";
@@ -63,12 +62,7 @@ export default function SalesHubPage() {
   const { toast } = useAuth();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [draft, setDraft] = useState({
-    dateFrom: monthStartIso(),
-    dateTo: todayIso(),
-    seller: "",
-  });
-  const [applied, setApplied] = useState({
+  const [filters, setFilters] = useState({
     dateFrom: monthStartIso(),
     dateTo: todayIso(),
     seller: "",
@@ -150,13 +144,13 @@ export default function SalesHubPage() {
         };
       })
       .filter((row) => {
-        if (applied.dateFrom && row.dateIso && row.dateIso < applied.dateFrom) return false;
-        if (applied.dateTo && row.dateIso && row.dateIso > applied.dateTo) return false;
-        if (applied.seller && row.sellerLabel !== applied.seller) return false;
+        if (filters.dateFrom && row.dateIso && row.dateIso < filters.dateFrom) return false;
+        if (filters.dateTo && row.dateIso && row.dateIso > filters.dateTo) return false;
+        if (filters.seller && row.sellerLabel !== filters.seller) return false;
         return true;
       })
       .sort((a, b) => String(b.dateIso).localeCompare(String(a.dateIso)));
-  }, [sales, applied]);
+  }, [sales, filters]);
 
   const totals = useMemo(() => {
     const sum = (key) => rows.reduce((a, r) => a + Number(r[key] || 0), 0);
@@ -183,8 +177,8 @@ export default function SalesHubPage() {
     }
     try {
       exportSalesInvoicesExcel(rows, {
-        dateTo: applied.dateTo || todayIso(),
-        fileName: `Reporte de Facturas del ${applied.dateFrom || ""} al ${applied.dateTo || todayIso()}.xlsx`,
+        dateTo: filters.dateTo || todayIso(),
+        fileName: `Reporte de Facturas del ${filters.dateFrom || ""} al ${filters.dateTo || todayIso()}.xlsx`,
       });
       void toast?.({ message: "Excel descargado.", variant: "success" });
     } catch (e) {
@@ -236,8 +230,8 @@ export default function SalesHubPage() {
               label="Fecha inicio"
               type="date"
               InputLabelProps={{ shrink: true }}
-              value={draft.dateFrom}
-              onChange={(e) => setDraft((p) => ({ ...p, dateFrom: e.target.value }))}
+              value={filters.dateFrom}
+              onChange={(e) => setFilters((p) => ({ ...p, dateFrom: e.target.value }))}
             />
           </Grid>
           <Grid item xs={6} md={2}>
@@ -247,8 +241,8 @@ export default function SalesHubPage() {
               label="Fecha fin"
               type="date"
               InputLabelProps={{ shrink: true }}
-              value={draft.dateTo}
-              onChange={(e) => setDraft((p) => ({ ...p, dateTo: e.target.value }))}
+              value={filters.dateTo}
+              onChange={(e) => setFilters((p) => ({ ...p, dateTo: e.target.value }))}
             />
           </Grid>
           <Grid item xs={12} md={3}>
@@ -257,8 +251,8 @@ export default function SalesHubPage() {
               fullWidth
               size="small"
               label="Vendedor"
-              value={draft.seller}
-              onChange={(e) => setDraft((p) => ({ ...p, seller: e.target.value }))}
+              value={filters.seller}
+              onChange={(e) => setFilters((p) => ({ ...p, seller: e.target.value }))}
             >
               <MenuItem value="">Todos</MenuItem>
               {sellerOptions.map((name) => (
@@ -269,30 +263,19 @@ export default function SalesHubPage() {
             </TextField>
           </Grid>
           <Grid item xs={12} md={5}>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Button
-                variant="contained"
-                startIcon={<FilterAltIcon />}
-                onClick={() => setApplied({ ...draft })}
-              >
-                Aplicar filtros
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<RestartAltIcon />}
-                onClick={() => {
-                  const next = {
-                    dateFrom: monthStartIso(),
-                    dateTo: todayIso(),
-                    seller: "",
-                  };
-                  setDraft(next);
-                  setApplied(next);
-                }}
-              >
-                Limpiar
-              </Button>
-            </Stack>
+            <Button
+              variant="outlined"
+              startIcon={<RestartAltIcon />}
+              onClick={() =>
+                setFilters({
+                  dateFrom: monthStartIso(),
+                  dateTo: todayIso(),
+                  seller: "",
+                })
+              }
+            >
+              Limpiar
+            </Button>
           </Grid>
         </Grid>
       </Paper>
@@ -326,7 +309,7 @@ export default function SalesHubPage() {
 
       <Paper variant="outlined" sx={{ mt: 1.5, p: 1.5, borderRadius: 2 }}>
         <Typography variant="body2" sx={{ mb: 0.5 }}>
-          <strong>Totales página/filtro:</strong> Subtotal {money(totals.subtotal)} · Descuento{" "}
+          <strong>Totales:</strong> Subtotal {money(totals.subtotal)} · Descuento{" "}
           {money(totals.discount)} · IVA {money(totals.iva)} · Total {money(totals.total)}
         </Typography>
         <Typography variant="body2">

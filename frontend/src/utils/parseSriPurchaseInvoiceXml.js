@@ -45,8 +45,33 @@ function allByLocalName(root, localName) {
 
 /** Extrae el XML de factura desde texto (puede venir firmado o en autorizacion). */
 export function extractFacturaXmlString(rawText) {
-  const raw = String(rawText || "").trim();
+  let raw = String(rawText || "").trim();
   if (!raw) throw new Error("El archivo XML está vacío.");
+
+  // SRI a veces mete &#xD; / &#10; (inválidos fuera de contenido) y rompe DOMParser
+  const decodeNumeric = (s) =>
+    String(s || "")
+      .replace(/&#x([0-9a-fA-F]+);/gi, (_, hex) => {
+        const cp = parseInt(hex, 16);
+        return Number.isFinite(cp) ? String.fromCodePoint(cp) : _;
+      })
+      .replace(/&#([0-9]+);/g, (_, dec) => {
+        const cp = Number(dec);
+        return Number.isFinite(cp) ? String.fromCodePoint(cp) : _;
+      });
+
+  raw = decodeNumeric(raw);
+
+  // SRI a veces entrega el XML escapado (&lt;factura…&gt;)
+  if (raw.includes("&lt;") && /&lt;\s*(factura|notaCredito|liquidacionCompra)\b/i.test(raw)) {
+    raw = raw
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&#0?39;/g, "'")
+      .replace(/&amp;/g, "&");
+  }
 
   // CDATA dentro de autorizacion/comprobante
   const cdataMatch = raw.match(/<!\[CDATA\[([\s\S]*?)\]\]>/i);
@@ -179,6 +204,10 @@ export function parseSriPurchaseInvoiceXml(rawText) {
     supplierRuc: textOf(infoTrib, "ruc"),
     supplierName: textOf(infoTrib, "razonSocial"),
     tradeName: textOf(infoTrib, "nombreComercial"),
+    supplierAddress:
+      textOf(infoTrib, "dirMatriz") ||
+      textOf(infoFactura, "dirEstablecimiento") ||
+      "",
     invoiceNumber,
     accessKey: textOf(infoTrib, "claveAcceso"),
     emissionDate: parseDdMmYyyy(textOf(infoFactura, "fechaEmision")),
@@ -188,12 +217,25 @@ export function parseSriPurchaseInvoiceXml(rawText) {
   };
 }
 
-/** Empareja un ítem XML con un producto del catálogo.
+/**
+ * Empareja un ítem XML con un producto del catálogo.
+ * Prioridad:
+ *  1) códigos guardados de ese proveedor (supplierCodeMap)
+ *  2) productos que ese proveedor ya entregó (preferredProductIds)
+ *  3) resto del catálogo
+ *
  * @param {object[]} products
  * @param {object} line
- * @param {Map<string, number>|Record<string, number>|null} [supplierCodeMap] codeLower → productId
+ * @param {Map<string, number>|Record<string, number>|null} [supplierCodeMap]
+ * @param {{ preferredProductIds?: Set<number>|number[]|null }} [options]
+ * @returns {{ product: object|null, source: 'supplier_code'|'supplier_history'|'catalog'|'none' }}
  */
-export function matchProductForXmlLine(products, line, supplierCodeMap = null) {
+export function matchProductForXmlLine(
+  products,
+  line,
+  supplierCodeMap = null,
+  options = {},
+) {
   const list = Array.isArray(products) ? products : [];
   const map =
     supplierCodeMap instanceof Map
@@ -207,6 +249,24 @@ export function matchProductForXmlLine(products, line, supplierCodeMap = null) {
           )
         : null;
 
+  const preferredRaw = options?.preferredProductIds;
+  const preferredSet =
+    preferredRaw instanceof Set
+      ? preferredRaw
+      : new Set(
+          (Array.isArray(preferredRaw) ? preferredRaw : [])
+            .map((id) => Number(id))
+            .filter((id) => id > 0),
+        );
+
+  const preferredList = preferredSet.size
+    ? list.filter((p) => preferredSet.has(Number(p.id)))
+    : [];
+  const otherList = preferredSet.size
+    ? list.filter((p) => !preferredSet.has(Number(p.id)))
+    : list;
+
+  // 1) Código ya aprendido para este proveedor
   if (map && map.size) {
     for (const code of [line?.code, line?.auxCode]) {
       const key = String(code || "")
@@ -216,10 +276,30 @@ export function matchProductForXmlLine(products, line, supplierCodeMap = null) {
       const pid = map.get(key);
       if (pid) {
         const hit = list.find((p) => Number(p.id) === Number(pid));
-        if (hit) return hit;
+        if (hit) return { product: hit, source: "supplier_code" };
       }
     }
   }
+
+  // 2) Historial de entregas de este proveedor (códigos + nombre)
+  if (preferredList.length) {
+    const hit = matchProductInList(preferredList, line);
+    if (hit) return { product: hit, source: "supplier_history" };
+  }
+
+  // 3) Resto del catálogo
+  const pool = otherList.length ? otherList : preferredList.length ? [] : list;
+  if (pool.length) {
+    const hit = matchProductInList(pool, line);
+    if (hit) return { product: hit, source: "catalog" };
+  }
+
+  return { product: null, source: "none" };
+}
+
+/** Matching por código / nombre dentro de una lista acotada. */
+function matchProductInList(list, line) {
+  if (!list?.length) return null;
 
   const codes = [line?.code, line?.auxCode]
     .map((c) => String(c || "").trim())
@@ -237,7 +317,11 @@ export function matchProductForXmlLine(products, line, supplierCodeMap = null) {
   if (!desc) return null;
 
   const exact = list.find(
-    (p) => String(p.name || "").trim().toLowerCase().replace(/\s+/g, " ") === desc,
+    (p) =>
+      String(p.name || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ") === desc,
   );
   if (exact) return exact;
 

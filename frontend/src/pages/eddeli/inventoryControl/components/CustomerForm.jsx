@@ -4,6 +4,8 @@ import {
   Box,
   Button,
   MenuItem,
+  FormControlLabel,
+  Switch,
 } from "@mui/material";
 import { useForm } from "react-hook-form";
 import { useEffect } from "react";
@@ -23,6 +25,7 @@ function CustomerForm({ isEditing = false, datos = [], onClose, reload }) {
   const idData = datos?.id;
   const { toast: toastAuth } = useAuth();
   const identType = watch("identType");
+  const isActive = watch("isActive");
 
   const resetForm = () => {
     reset(customerToForm(null));
@@ -166,6 +169,17 @@ function CustomerForm({ isEditing = false, datos = [], onClose, reload }) {
             variant="standard"
             {...register("address")}
             InputLabelProps={idData ? { shrink: true } : {}}
+          />
+        </Grid>
+        <Grid item xs={12}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={isActive !== false}
+                onChange={(e) => setValue("isActive", e.target.checked)}
+              />
+            }
+            label={isActive !== false ? "Cliente activo" : "Cliente inactivo"}
           />
         </Grid>
         <Grid item xs={4}>

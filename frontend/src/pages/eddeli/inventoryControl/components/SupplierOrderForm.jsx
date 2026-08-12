@@ -13,6 +13,7 @@ import {
   FormControlLabel,
   Checkbox,
   Alert,
+  InputAdornment,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import AddBoxIcon from "@mui/icons-material/AddBox";
@@ -20,6 +21,12 @@ import AddBusinessIcon from "@mui/icons-material/AddBusiness";
 import EditIcon from "@mui/icons-material/Edit";
 import CloseIcon from "@mui/icons-material/Close";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import SearchIcon from "@mui/icons-material/Search";
+import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
+import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
+import ImageIcon from "@mui/icons-material/Image";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import CircularProgress from "@mui/material/CircularProgress";
 import { useForm } from "react-hook-form";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
@@ -30,6 +37,7 @@ import {
   upsertSupplierProductCodesRequest,
 } from "../../../../api/ordersRequest";
 import { getAllProductsAll } from "../../../../api/inventoryControlRequest";
+import { lookupSriPurchaseInvoiceByAccessKey } from "../../../../api/sriInvoicesRequest.js";
 import { useAuth } from "../../../../context/AuthContext";
 import SearchableSelect from "../../../../components/SearchableSelect";
 import AttachmentField from "./AttachmentField.jsx";
@@ -184,6 +192,7 @@ function hydratePacksAndLots(rawItems) {
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       hasIva: Number(item.taxRate) > 0,
+      taxRate: Number(item.taxRate) || 0,
       name: item.ERP_inventory_product?.name || item.name || "",
       unitLabel: getProductUnitLabel(item.ERP_inventory_product),
       packKey: packKey || null,
@@ -261,6 +270,10 @@ function SupplierOrderForm(
   const [xmlImportOpen, setXmlImportOpen] = useState(false);
   const [xmlParsed, setXmlParsed] = useState(null);
   const xmlFileInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const [accessKeyLookup, setAccessKeyLookup] = useState("");
+  const [lookingUpXml, setLookingUpXml] = useState(false);
   const [ivaRate, setIvaRate] = useState(15);
   const [paymentDueDate, setPaymentDueDate] = useState("");
   const [splitPayments, setSplitPayments] = useState(false);
@@ -385,8 +398,73 @@ function SupplierOrderForm(
     }
   };
 
+  const normalizeAccessKeyInput = useCallback((raw) => {
+    // Dígitos ASCII + fullwidth (por si pegan desde PDF)
+    return String(raw || "")
+      .replace(/[\uFF10-\uFF19]/g, (ch) => String(ch.charCodeAt(0) - 0xff10))
+      .replace(/\D/g, "")
+      .slice(0, 49);
+  }, []);
+
+  const openXmlImportFromText = useCallback((text) => {
+    const parsed = parseSriPurchaseInvoiceXml(text);
+    setXmlParsed(parsed);
+    setXmlImportOpen(true);
+  }, []);
+
+  const lookupInvoiceByAccessKey = useCallback(
+    async (rawKey) => {
+      const digits = normalizeAccessKeyInput(rawKey);
+      setAccessKeyLookup(digits);
+      if (digits.length !== 49) {
+        toast({
+          message: `La clave debe tener 49 dígitos (ahora: ${digits.length}). Pegá o escaneá la clave completa del RIDE.`,
+          variant: "warning",
+        });
+        return;
+      }
+      setLookingUpXml(true);
+      try {
+        const result = await lookupSriPurchaseInvoiceByAccessKey(digits);
+        if (!result?.xml) throw new Error("El SRI no devolvió el XML del comprobante.");
+        try {
+          openXmlImportFromText(result.xml);
+        } catch (parseErr) {
+          throw new Error(
+            parseErr?.message ||
+              "Se obtuvo el XML del SRI pero no se pudo leer la factura. Probá Subir XML.",
+          );
+        }
+        toast({
+          message: `Factura encontrada en el SRI (${result.estado || "AUTORIZADO"}).`,
+          variant: "success",
+        });
+      } catch (err) {
+        const apiMsg = err?.response?.data?.message;
+        const network =
+          !err?.response &&
+          (err?.code === "ERR_NETWORK" || /network|ECONNREFUSED/i.test(String(err?.message || "")));
+        toast({
+          message: network
+            ? "No hay conexión con el servidor (backend). Revisá que EdDeli esté corriendo."
+            : apiMsg || err?.message || "No se pudo consultar la factura en el SRI.",
+          variant: "error",
+        });
+      } finally {
+        setLookingUpXml(false);
+      }
+    },
+    [normalizeAccessKeyInput, openXmlImportFromText, toast],
+  );
+
   const handleBarcodeScan = useCallback(
     (rawCode) => {
+      const digitsOnly = normalizeAccessKeyInput(rawCode);
+      // Código de barras RIDE = clave de acceso SRI (49 dígitos)
+      if (digitsOnly.length === 49) {
+        void lookupInvoiceByAccessKey(digitsOnly);
+        return;
+      }
       const found = findEddeliProductByCode(products, rawCode);
       if (found) {
         if (onlySoldBySupplier && selectedSupplier && !soldProductIds.has(Number(found.id))) {
@@ -407,11 +485,26 @@ function SupplierOrderForm(
         variant: "warning",
       });
     },
-    [products, setValue, toast, onlySoldBySupplier, selectedSupplier, soldProductIds],
+    [
+      products,
+      setValue,
+      toast,
+      onlySoldBySupplier,
+      selectedSupplier,
+      soldProductIds,
+      lookupInvoiceByAccessKey,
+      normalizeAccessKeyInput,
+    ],
   );
 
   useBarcodeScanner({
-    enabled: active && products.length > 0 && !productDialogOpen && !supplierDialogOpen && !xmlImportOpen,
+    enabled:
+      active &&
+      products.length > 0 &&
+      !productDialogOpen &&
+      !supplierDialogOpen &&
+      !xmlImportOpen &&
+      !lookingUpXml,
     onScan: handleBarcodeScan,
     ignoreWhenTypingInInputs: true,
   });
@@ -435,6 +528,7 @@ function SupplierOrderForm(
         quantity,
         unitPrice,
         hasIva: productIva > 0,
+        taxRate: productIva,
         name: product?.name || "",
         unitLabel: getProductUnitLabel(product),
         packKey: null,
@@ -458,9 +552,7 @@ function SupplierOrderForm(
     }
     try {
       const text = await file.text();
-      const parsed = parseSriPurchaseInvoiceXml(text);
-      setXmlParsed(parsed);
-      setXmlImportOpen(true);
+      openXmlImportFromText(text);
     } catch (err) {
       toast({
         message: err?.message || "No se pudo leer el XML de la factura.",
@@ -469,7 +561,13 @@ function SupplierOrderForm(
     }
   };
 
-  const handleXmlImportConfirm = async ({ rows, supplierId, emissionDate, notesHint }) => {
+  const handleXmlImportConfirm = async ({
+    rows,
+    supplierId,
+    emissionDate,
+    notesHint,
+    invoiceNumber,
+  }) => {
     const nextLines = [];
     let maxIva = Number(ivaRate) || 0;
     for (const row of rows) {
@@ -484,6 +582,7 @@ function SupplierOrderForm(
         quantity: Number(row.quantity) || 0,
         unitPrice: Number(row.unitPrice) || 0,
         hasIva: taxRate > 0,
+        taxRate,
         name: product.name || row.description || "",
         unitLabel: getProductUnitLabel(product),
         packKey: null,
@@ -527,6 +626,9 @@ function SupplierOrderForm(
     if (emissionDate) {
       setValue("date", emissionDate);
     }
+    if (invoiceNumber) {
+      setValue("invoiceNumber", String(invoiceNumber).trim());
+    }
     const prevNotes = String(watch("notes") || "").trim();
     if (notesHint && !prevNotes.includes(notesHint.slice(0, 24))) {
       setValue("notes", prevNotes ? `${prevNotes}\n${notesHint}` : notesHint);
@@ -557,7 +659,20 @@ function SupplierOrderForm(
 
   const toggleItemIva = (lineId, checked) => {
     setItems((prev) =>
-      prev.map((it) => (it.lineId === lineId ? { ...it, hasIva: checked } : it)),
+      prev.map((it) => {
+        if (it.lineId !== lineId) return it;
+        const product = products.find((p) => Number(p.id) === Number(it.productId));
+        const rate =
+          Number(it.taxRate) ||
+          Number(product?.taxRate) ||
+          Number(ivaRate) ||
+          15;
+        return {
+          ...it,
+          hasIva: checked,
+          taxRate: checked ? rate : Number(it.taxRate) || rate,
+        };
+      }),
     );
   };
 
@@ -803,14 +918,16 @@ function SupplierOrderForm(
       }
     }
 
-    const rate = (Number(ivaRate) || 0) / 100;
     const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
     let sub = 0;
     let iva = 0;
     items.forEach((it) => {
       const line = formatOrderLineTotal(it.quantity, it.unitPrice);
       sub += line;
-      if (it.hasIva) iva += line * rate;
+      if (it.hasIva) {
+        const rate = (Number(it.taxRate) || Number(ivaRate) || 0) / 100;
+        iva += line * rate;
+      }
     });
     const orderTotalNow = round2(round2(sub) + round2(iva));
 
@@ -831,9 +948,11 @@ function SupplierOrderForm(
     }
 
     const localDT = new Date(`${data.date}T12:00:00`);
+    const invoiceNumberClean = String(data.invoiceNumber || "").trim().slice(0, 80) || null;
     const payload = {
       supplierId: Number(selectedSupplier),
       notes: data.notes || null,
+      invoiceNumber: invoiceNumberClean,
       date: toLocalISOWithOffset(localDT),
       items: items.map((it) => {
         const lotFields = resolveItemLotFields(it, packs, lots);
@@ -841,7 +960,7 @@ function SupplierOrderForm(
           productId: it.productId,
           quantity: Number(it.quantity),
           unitPrice: Number(it.unitPrice),
-          taxRate: it.hasIva ? Number(ivaRate) || 0 : 0,
+          taxRate: it.hasIva ? Number(it.taxRate) || Number(ivaRate) || 0 : 0,
           ...lotFields,
         };
       }),
@@ -861,7 +980,7 @@ function SupplierOrderForm(
           onSuccess: async () => {
             if (voucherFile) {
               try {
-                await uploadSupplierOrderVoucher(voucherFile, datos.id);
+                await uploadSupplierOrderVoucher(voucherFile, datos.id, invoiceNumberClean);
               } catch {
                 toast({
                   message: "Pedido actualizado, pero no se pudo subir el comprobante.",
@@ -878,7 +997,7 @@ function SupplierOrderForm(
             const orderId = result?.data?.id;
             if (voucherFile && orderId) {
               try {
-                await uploadSupplierOrderVoucher(voucherFile, orderId);
+                await uploadSupplierOrderVoucher(voucherFile, orderId, invoiceNumberClean);
               } catch {
                 toast({
                   message: "Pedido guardado, pero no se pudo subir el comprobante.",
@@ -911,6 +1030,7 @@ function SupplierOrderForm(
     if (isEditing && datos) {
       setSelectedSupplier(String(datos.supplierId || ""));
       setValue("notes", datos.notes || "");
+      setValue("invoiceNumber", datos.invoiceNumber || "");
       setValue("date", normalizeToYYYYMMDD(datos));
       const hydrated = hydratePacksAndLots(datos.ERP_supplier_order_items || []);
       setItems(hydrated.items);
@@ -952,20 +1072,23 @@ function SupplierOrderForm(
     setInstallmentCount(2);
     setInstallments([]);
     setValue("notes", "");
+    setValue("invoiceNumber", "");
     setValue("date", prefillDate || localISODate());
     setSelectedSupplier(prefillSupplierId ? String(prefillSupplierId) : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datos, isEditing, prefillSupplierId, prefillDate]);
 
   const { subtotal, ivaTotal, itemsTotal } = useMemo(() => {
-    const rate = (Number(ivaRate) || 0) / 100;
     const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
     let sub = 0;
     let iva = 0;
     items.forEach((it) => {
       const line = formatOrderLineTotal(it.quantity, it.unitPrice);
       sub += line;
-      if (it.hasIva) iva += line * rate;
+      if (it.hasIva) {
+        const rate = (Number(it.taxRate) || Number(ivaRate) || 0) / 100;
+        iva += line * rate;
+      }
     });
     const rSub = round2(sub);
     const rIva = round2(iva);
@@ -1008,6 +1131,7 @@ function SupplierOrderForm(
             quantity: qty,
             unitPrice,
             hasIva: Number(p?.taxRate) > 0,
+            taxRate: Number(p?.taxRate) || 0,
             name: p.name,
             unitLabel: getProductUnitLabel(p),
             packKey: null,
@@ -1040,19 +1164,26 @@ function SupplierOrderForm(
     <Box
       component="form"
       data-tour="pedido-prov-form"
-      sx={{ mt: 1 }}
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        height: { xs: "auto", md: "min(78vh, 820px)" },
+        mt: 0,
+      }}
       onSubmit={handleSubmit(submitOrder)}
     >
-      <Alert severity="info" sx={{ mb: 2, py: 0.75 }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", px: { xs: 0.5, sm: 1 }, pt: 0.5, pb: 1 }}>
+      <Alert severity="info" sx={{ mb: 1, py: 0.25 }}>
         <strong>Pedido a proveedor</strong>
-        {isEditing ? ` · #${datos?.id ?? ""}` : " · nuevo"}: compra/entrada de mercadería (no es
-        pedido de cliente).
+        {isEditing ? ` · #${datos?.id ?? ""}` : " · nuevo"}
       </Alert>
-      <Grid container spacing={3}>
+      <Grid container spacing={1.25}>
         <Grid item xs={12} md={5}>
-          <Grid container spacing={2}>
+          <Grid container spacing={1}>
             <Grid item xs={12} data-tour="pedido-prov-supplier">
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                 <Box sx={{ flex: 1 }}>
                   <SearchableSelect
                     label="Proveedor"
@@ -1066,10 +1197,11 @@ function SupplierOrderForm(
                   <Tooltip title="Agregar proveedor nuevo">
                     <IconButton
                       color="primary"
+                      size="small"
                       onClick={() => setSupplierDialogOpen(true)}
                       sx={{ border: 1, borderColor: "primary.main" }}
                     >
-                      <AddBusinessIcon />
+                      <AddBusinessIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 )}
@@ -1087,7 +1219,6 @@ function SupplierOrderForm(
                     onChange={(e) => {
                       const on = e.target.checked;
                       setOnlySoldBySupplier(on);
-                      // Si el producto actual no está en el filtro, limpiarlo
                       if (on && selectedProductId) {
                         const pid = Number(selectedProductId);
                         if (!soldProductIds.has(pid)) {
@@ -1099,16 +1230,16 @@ function SupplierOrderForm(
                   />
                 }
                 label={
-                  <Typography variant="body2">
-                    Solo productos que este proveedor me ha vendido
+                  <Typography variant="caption">
+                    Solo vendidos por este proveedor
                     {onlySoldBySupplier && selectedSupplier
                       ? ` (${soldProductIds.size})`
                       : ""}
                   </Typography>
                 }
-                sx={{ mb: 0.5, ml: 0, alignItems: "center" }}
+                sx={{ mb: 0.25, ml: 0, alignItems: "center" }}
               />
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                 <Box sx={{ flex: 1 }}>
                   <SearchableSelect
                     label="Producto"
@@ -1124,7 +1255,7 @@ function SupplierOrderForm(
                         ? "Seleccioná un proveedor primero…"
                         : onlySoldBySupplier && soldProductIds.size === 0
                           ? "Sin historial de ventas de este proveedor…"
-                          : "Buscar o escanear código de barras…"
+                          : "Buscar o escanear código…"
                     }
                     getSearchText={(p) =>
                       [p?.barcode, p?.sku].filter(Boolean).join(" ")
@@ -1141,6 +1272,7 @@ function SupplierOrderForm(
                 >
                   <IconButton
                     color="primary"
+                    size="small"
                     onClick={() => {
                       if (currentProduct) {
                         setProductDialogMode("edit");
@@ -1151,7 +1283,7 @@ function SupplierOrderForm(
                     }}
                     sx={{ border: 1, borderColor: "primary.main" }}
                   >
-                    {currentProduct ? <EditIcon /> : <AddBoxIcon />}
+                    {currentProduct ? <EditIcon fontSize="small" /> : <AddBoxIcon fontSize="small" />}
                   </IconButton>
                 </Tooltip>
               </Box>
@@ -1173,6 +1305,7 @@ function SupplierOrderForm(
             <Grid item xs={4} data-tour="pedido-prov-line">
               <TextField
                 fullWidth
+                size="small"
                 label="Cantidad"
                 type="number"
                 InputLabelProps={{ shrink: true }}
@@ -1183,6 +1316,7 @@ function SupplierOrderForm(
             <Grid item xs={4}>
               <TextField
                 fullWidth
+                size="small"
                 label="Precio unit."
                 type="number"
                 InputLabelProps={{ shrink: true }}
@@ -1190,33 +1324,19 @@ function SupplierOrderForm(
                 {...register("unitPrice")}
               />
             </Grid>
-            <Grid item xs={4}>
-              <TextField
+            <Grid item xs={4} sx={{ display: "flex", alignItems: "stretch" }}>
+              <Button
                 fullWidth
-                label="IVA (%)"
-                type="number"
-                value={ivaRate}
-                onChange={(e) =>
-                  setIvaRate(e.target.value === "" ? "" : Number(e.target.value))
-                }
-                InputLabelProps={{ shrink: true }}
-                inputProps={{ min: 0, step: "0.01" }}
-              />
+                size="small"
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={addItem}
+                sx={{ minHeight: 40 }}
+              >
+                Agregar
+              </Button>
             </Grid>
-            <Grid item xs={12} sx={{ display: "flex", justifyContent: "flex-start", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
-              <Tooltip title="Agregar a la lista (sin paca)">
-                <IconButton
-                  color="primary"
-                  onClick={addItem}
-                  sx={{ border: 1, borderColor: "primary.main" }}
-                >
-                  <AddIcon />
-                </IconButton>
-              </Tooltip>
-              <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>
-                Se agrega sin paca; después lo arrastrás si hace falta
-              </Typography>
-              <Box sx={{ flex: 1 }} />
+            <Grid item xs={12}>
               <input
                 ref={xmlFileInputRef}
                 type="file"
@@ -1224,18 +1344,119 @@ function SupplierOrderForm(
                 hidden
                 onChange={(e) => void handleXmlFilePicked(e)}
               />
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<UploadFileIcon />}
-                onClick={() => xmlFileInputRef.current?.click()}
-              >
-                Subir XML factura
-              </Button>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.75 }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Clave acceso SRI (49 dígitos)"
+                    value={accessKeyLookup}
+                    onChange={(e) =>
+                      setAccessKeyLookup(normalizeAccessKeyInput(e.target.value))
+                    }
+                    onPaste={(e) => {
+                      const text = e.clipboardData?.getData("text") || "";
+                      const digits = normalizeAccessKeyInput(text);
+                      if (!digits) return;
+                      e.preventDefault();
+                      setAccessKeyLookup(digits);
+                      if (digits.length === 49) {
+                        window.setTimeout(() => void lookupInvoiceByAccessKey(digits), 0);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const digits = normalizeAccessKeyInput(e.target.value);
+                      void lookupInvoiceByAccessKey(digits);
+                    }}
+                    placeholder="Pegá o escaneá la clave del RIDE"
+                    helperText={`${String(accessKeyLookup || "").length}/49 · IVA por producto en la lista`}
+                    inputProps={{ inputMode: "numeric", autoComplete: "off" }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <QrCodeScannerIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end" sx={{ gap: 0.25 }}>
+                          <Tooltip
+                            title={lookingUpXml ? "Consultando SRI…" : "Buscar en SRI"}
+                          >
+                            <span>
+                              <IconButton
+                                type="button"
+                                color="primary"
+                                size="small"
+                                edge="end"
+                                disabled={lookingUpXml}
+                                onClick={() =>
+                                  void lookupInvoiceByAccessKey(accessKeyLookup)
+                                }
+                                aria-label="Buscar en SRI"
+                              >
+                                {lookingUpXml ? (
+                                  <CircularProgress size={16} color="inherit" />
+                                ) : (
+                                  <SearchIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Subir XML factura">
+                            <span>
+                              <IconButton
+                                type="button"
+                                color="primary"
+                                size="small"
+                                edge="end"
+                                disabled={lookingUpXml}
+                                onClick={() => xmlFileInputRef.current?.click()}
+                                aria-label="Subir XML factura"
+                              >
+                                <UploadFileIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Box>
+                {/* Misma columna de ícono que Proveedor / Producto */}
+                <Box
+                  aria-hidden
+                  sx={{
+                    width: 34,
+                    height: 34,
+                    flexShrink: 0,
+                    visibility: "hidden",
+                    pointerEvents: "none",
+                  }}
+                />
+              </Box>
             </Grid>
 
-            <Grid item xs={12}>
-              <TextField fullWidth label="Fecha del pedido" type="date" {...register("date")} />
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Fecha del pedido"
+                type="date"
+                InputLabelProps={{ shrink: true }}
+                {...register("date")}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Nº factura proveedor"
+                placeholder="001-001-000000123"
+                {...register("invoiceNumber")}
+              />
             </Grid>
             <Grid item xs={12}>
               <OrderPaymentScheduleFields
@@ -1253,33 +1474,26 @@ function SupplierOrderForm(
               />
             </Grid>
             <Grid item xs={12}>
-              <TextField fullWidth label="Notas" multiline rows={2} {...register("notes")} />
+              <TextField
+                fullWidth
+                size="small"
+                label="Notas"
+                multiline
+                rows={2}
+                {...register("notes")}
+              />
             </Grid>
-            <Grid item xs={12}>
-              {isEditing ? (
+            {isEditing ? (
+              <Grid item xs={12}>
                 <AttachmentField
                   entityType="supplier_order"
                   entityId={datos.id}
-                  pendingFile={pendingVoucherFile}
-                  onPendingFileChange={setPendingVoucherFile}
-                  label="Factura / nota del proveedor (PDF o imagen)"
+                  label="Comprobantes ya guardados"
+                  helperText=""
+                  compact
                 />
-              ) : (
-                <AttachmentField
-                  label="Factura / nota del proveedor — PDF o imagen (opcional)"
-                  pendingFile={pendingVoucherFile}
-                  onPendingFileChange={setPendingVoucherFile}
-                />
-              )}
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                El XML se usa para importar productos; el PDF/imagen queda como comprobante adjunto.
-              </Typography>
-            </Grid>
-            <Grid item xs={12}>
-              <Button data-tour="pedido-prov-save" type="submit" variant="contained" fullWidth>
-                {isEditing ? "Guardar pedido a proveedor" : "Registrar pedido a proveedor"}
-              </Button>
-            </Grid>
+              </Grid>
+            ) : null}
           </Grid>
         </Grid>
 
@@ -1290,13 +1504,14 @@ function SupplierOrderForm(
               border: 1,
               borderColor: "divider",
               borderRadius: 2,
-              p: 1.5,
+              p: 1,
               height: "100%",
+              minHeight: { xs: 280, md: 420 },
               display: "flex",
               flexDirection: "column",
-              gap: 1,
+              gap: 0.75,
               bgcolor: "background.default",
-              maxHeight: { md: "70vh" },
+              maxHeight: { md: "100%" },
               overflow: "auto",
             }}
           >
@@ -1331,7 +1546,7 @@ function SupplierOrderForm(
                 </Box>
                 <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                   <Typography variant="body2" color="text.secondary">
-                    IVA ({Number(ivaRate) || 0}%)
+                    IVA
                   </Typography>
                   <Typography variant="body2">{formatProductPrice(ivaTotal)}</Typography>
                 </Box>
@@ -1348,6 +1563,105 @@ function SupplierOrderForm(
           </Box>
         </Grid>
       </Grid>
+      </Box>
+
+      <Box
+        sx={{
+          flexShrink: 0,
+          borderTop: 1,
+          borderColor: "divider",
+          bgcolor: "background.paper",
+          px: { xs: 1, sm: 1.5 },
+          py: 1,
+          position: "sticky",
+          bottom: 0,
+          zIndex: 2,
+        }}
+      >
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) setPendingVoucherFile(file);
+          }}
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) setPendingVoucherFile(file);
+          }}
+        />
+        {pendingVoucherFile ? (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 0.75,
+              mb: 0.75,
+            }}
+          >
+            <ImageIcon fontSize="small" color="primary" />
+            <Typography variant="caption" noWrap title={pendingVoucherFile.name} sx={{ maxWidth: 220 }}>
+              {pendingVoucherFile.name}
+            </Typography>
+            <IconButton
+              size="small"
+              aria-label="Quitar foto"
+              onClick={() => setPendingVoucherFile(null)}
+            >
+              <DeleteOutlineIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        ) : null}
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 1,
+          }}
+        >
+          <Button
+            type="button"
+            size="small"
+            variant="outlined"
+            startIcon={<ImageIcon />}
+            onClick={() => galleryInputRef.current?.click()}
+          >
+            Subir foto
+          </Button>
+          <Button
+            type="button"
+            size="small"
+            variant="outlined"
+            startIcon={<PhotoCameraIcon />}
+            onClick={() => cameraInputRef.current?.click()}
+          >
+            Tomar foto
+          </Button>
+          <Button
+            data-tour="pedido-prov-save"
+            type="submit"
+            variant="contained"
+            size="small"
+            sx={{ minWidth: 160, px: 2 }}
+          >
+            {isEditing ? "Guardar pedido" : "Registrar pedido"}
+          </Button>
+        </Box>
+      </Box>
 
       <Dialog
         open={productDialogOpen}
@@ -1426,11 +1740,56 @@ function SupplierOrderForm(
         products={products}
         suppliers={suppliers}
         preferredSupplierId={selectedSupplier || null}
+        supplierOrdersCache={supplierOrdersCache}
         onConfirm={(payload) => void handleXmlImportConfirm(payload)}
+        onProductCreated={(product) => {
+          if (!product?.id) return;
+          setProducts((prev) => {
+            const idx = prev.findIndex((p) => Number(p.id) === Number(product.id));
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = { ...next[idx], ...product };
+              return next;
+            }
+            return [...prev, product];
+          });
+        }}
+        onSupplierSaved={(supplier) => {
+          if (!supplier?.id) return;
+          setSuppliers((prev) => {
+            const idx = prev.findIndex((s) => Number(s.id) === Number(supplier.id));
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = { ...next[idx], ...supplier };
+              return next;
+            }
+            return [...prev, supplier];
+          });
+          setSelectedSupplier(String(supplier.id));
+        }}
       />
     </Box>
   );
 }
 
 const SupplierOrderFormForward = forwardRef(SupplierOrderForm);
+
+/** Estilos para que el modal deje el botón Guardar fijo abajo. */
+export const SUPPLIER_ORDER_DIALOG_PAPER_SX = {
+  display: "flex",
+  flexDirection: "column",
+  height: { xs: "100%", sm: "min(90vh, 900px)" },
+  maxHeight: "92vh",
+};
+
+export const SUPPLIER_ORDER_DIALOG_CONTENT_SX = {
+  p: { xs: 1, sm: 1.5 },
+  pt: { xs: 0.5, sm: 1 },
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  flex: 1,
+  minHeight: 0,
+};
+
 export default SupplierOrderFormForward;

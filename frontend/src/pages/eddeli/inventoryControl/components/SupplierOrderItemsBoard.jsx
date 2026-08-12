@@ -131,9 +131,10 @@ function DraggableLine({
   zoneKey,
 }) {
   const [menuAnchor, setMenuAnchor] = useState(null);
+  const lineTaxRate = Number(item.taxRate ?? ivaRate) || 0;
   const lineTotal =
     formatOrderLineTotal(item.quantity, item.unitPrice) *
-    (showIva && item.hasIva ? 1 + (Number(ivaRate) || 0) / 100 : 1);
+    (showIva && item.hasIva ? 1 + lineTaxRate / 100 : 1);
 
   const otherPacks = packs.filter((p) => p.key !== item.packKey);
   const inPack = Boolean(item.packKey);
@@ -293,7 +294,7 @@ function DraggableLine({
                 onChange={(e) => onToggleIva(item.lineId, e.target.checked)}
               />
             }
-            label={`IVA ${Number(ivaRate) || 0}%`}
+            label={`IVA ${lineTaxRate}%`}
           />
         )}
         <Typography variant="body2" fontWeight={700} sx={{ ml: "auto", minWidth: 72, textAlign: "right" }}>

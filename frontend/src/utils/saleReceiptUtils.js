@@ -5,6 +5,10 @@ import { printHtmlDocument } from "./printHtmlDocument.js";
 import { getReceiptLayout } from "./receiptFormats.js";
 import { isFacturaDocument } from "./invoiceFiscalUtils.js";
 import { buildInvoiceRidePrintHtml } from "./invoiceRidePrintHtml.js";
+import {
+  formatReceiptItemDescription,
+  normalizeReceiptDetailSettings,
+} from "./receiptDetailFormat.js";
 
 const to2 = (n) => Number(Number(n || 0).toFixed(2));
 // Precio unitario: se conserva con hasta 3 decimales (ej. 0.125) para que la
@@ -129,6 +133,8 @@ export function normalizeSaleReceipt(sale) {
   const items = (sale.items || []).map((row) => ({
     name: row.name || row.productName || "Producto",
     code: row.code || row.sku || row.barcode || "",
+    barcode: row.barcode || row.code || row.sku || "",
+    unitLabel: row.unitLabel || row.unit || "",
     productId: row.productId || row.id || null,
     quantity: Number(row.quantity || 0),
     price: to3(row.price),
@@ -208,6 +214,8 @@ export function buildReceiptFromCustomerOrder(order) {
     return {
       name: prod.name || row.name || "Producto",
       code: prod.sku || prod.barcode || row.code || "",
+      barcode: prod.barcode || prod.sku || row.code || "",
+      unitLabel: prod.unitLabel || prod.unit || row.unitLabel || "",
       productId: row.productId || prod.id || null,
       quantity: qty,
       price,
@@ -261,6 +269,8 @@ export function buildReceiptFromCheckout({
     return {
       name: row.name,
       code: row.sku || row.barcode || row.code || "",
+      barcode: row.barcode || row.sku || row.code || "",
+      unitLabel: row.unitLabel || row.unit || "",
       productId: row.productId || row.id || null,
       quantity: qty,
       price,
@@ -350,11 +360,15 @@ function buildPrintHtml(receipt, format, options = {}) {
           <div style="border-top:1.5px solid #000;margin-top:40px;padding-top:6px;font-weight:800;font-size:14px">Recibe</div>
         </div>
       </div>`;
+  const detailCfg = normalizeReceiptDetailSettings(
+    getActiveAppSettings()?.receiptDetailSettings,
+  );
+  const docType = receipt.documentType || "nota_venta";
   const rows = (receipt.items || [])
     .map(
-      (it) =>
+      (it, idx) =>
         `<tr>
-          <td style="${productCell}">${escapeHtml(it.name)}</td>
+          <td style="${productCell}">${escapeHtml(formatReceiptItemDescription(it, detailCfg, idx, docType))}</td>
           <td style="${numCell}">${it.quantity}</td>
           <td style="${moneyCell}">${formatUnitMoneyReceipt(it.price)}</td>
           <td style="${moneyCell}">${formatMoneyReceipt(it.lineTotal)}</td>

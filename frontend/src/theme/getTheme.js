@@ -2,16 +2,22 @@
 // createTheme solo vía muiRuntime (evita error createTheme_default en Vite)
 import { createTheme, alpha } from "./muiRuntime.js";
 import { getChartsPalette } from "./chartPalette";
+import {
+  contrastTextFor,
+  DEFAULT_THEME_PALETTE,
+  getModeSlice,
+  normalizeThemePalette,
+} from "./themePalette.js";
 
-/** Marca Raptor: azul acero → turquesa */
+/** Marca Raptor: azul acero → turquesa (también en DEFAULT_THEME_PALETTE) */
 const brand = {
   steel: "#1A6B8A",
   aqua: "#14B8A6",
   cyan: "#22D3EE",
   ice: "#E8F7FA",
-  mist: "#F0F9FB",
-  deep: "#0B1C24",
-  slate: "#102A36",
+  mist: DEFAULT_THEME_PALETTE.light.backgroundDefault,
+  deep: DEFAULT_THEME_PALETTE.dark.backgroundDefault,
+  slate: DEFAULT_THEME_PALETTE.dark.backgroundPaper,
 };
 
 const commonColors = {
@@ -249,7 +255,12 @@ function componentVariants() {
   };
 }
 
-export function getTheme(mode = "light") {
+export function getTheme(mode = "light", brandPalette = null) {
+  const palette = normalizeThemePalette(brandPalette || DEFAULT_THEME_PALETTE);
+  const slice = getModeSlice(palette, mode === "neon" ? "neon" : mode === "dark" ? "dark" : "light");
+  const primaryContrast = contrastTextFor(slice.primary, "#FFFFFF", "#0F2A36");
+  const secondaryContrast = contrastTextFor(slice.secondary, "#FFFFFF", "#042F2E");
+
   // ============= RAPTOR DARK — acero profundo =============
   if (mode === "dark") {
     return createTheme({
@@ -257,28 +268,29 @@ export function getTheme(mode = "light") {
         mode: "dark",
         customMode: "dark",
         background: {
-          default: brand.deep,
-          paper: brand.slate,
+          default: slice.backgroundDefault,
+          paper: slice.backgroundPaper,
         },
         primary: {
-          light: "#3D9BB8",
-          main: "#2A8FB0",
-          dark: "#156B88",
-          contrastText: "#F4FBFD",
+          light: slice.primaryLight,
+          main: slice.primary,
+          dark: slice.primaryDark,
+          contrastText: primaryContrast,
         },
         secondary: {
-          light: "#5EEAD4",
-          main: "#2DD4BF",
-          dark: "#14B8A6",
-          contrastText: "#042F2E",
+          light: slice.secondaryLight,
+          main: slice.secondary,
+          dark: slice.secondaryDark,
+          contrastText: secondaryContrast,
         },
         text: {
-          primary: "#E8F4F8",
-          secondary: alpha("#E8F4F8", 0.72),
+          primary: slice.textPrimary,
+          secondary: slice.textSecondary,
         },
-        divider: alpha("#7DD3E8", 0.14),
+        divider: alpha(slice.primaryLight || slice.primary, 0.14),
         colors: commonColors,
         charts: getChartsPalette("dark"),
+        brandPalette: palette,
       },
       shape: { borderRadius: 14 },
       typography: compactTypography({
@@ -290,9 +302,9 @@ export function getTheme(mode = "light") {
             html: { fontSize: "14px" },
             body: {
               background: `
-                radial-gradient(900px 480px at 12% -8%, rgba(42,143,176,.22), transparent 58%),
-                radial-gradient(780px 420px at 100% 0%, rgba(45,212,191,.14), transparent 55%),
-                linear-gradient(180deg, #0E2430 0%, ${brand.deep} 55%, #08141A 100%)`,
+                radial-gradient(900px 480px at 12% -8%, ${alpha(slice.primary, 0.22)}, transparent 58%),
+                radial-gradient(780px 420px at 100% 0%, ${alpha(slice.secondary, 0.14)}, transparent 55%),
+                linear-gradient(180deg, ${alpha(slice.backgroundPaper, 0.95)} 0%, ${slice.backgroundDefault} 55%, #08141A 100%)`,
               backgroundAttachment: "fixed",
             },
           },
@@ -310,40 +322,41 @@ export function getTheme(mode = "light") {
         mode: "dark",
         customMode: "neon",
         background: {
-          default: "#030B12",
-          paper: "#071820",
+          default: slice.backgroundDefault,
+          paper: slice.backgroundPaper,
         },
         primary: {
-          light: "#67E8F9",
-          main: "#22D3EE",
-          dark: "#0891B2",
-          contrastText: "#021016",
+          light: slice.primaryLight,
+          main: slice.primary,
+          dark: slice.primaryDark,
+          contrastText: primaryContrast,
         },
         secondary: {
-          light: "#5EEAD4",
-          main: "#2DD4BF",
-          dark: "#0D9488",
-          contrastText: "#022C26",
+          light: slice.secondaryLight,
+          main: slice.secondary,
+          dark: slice.secondaryDark,
+          contrastText: secondaryContrast,
         },
         text: {
-          primary: "#ECFEFF",
-          secondary: alpha("#ECFEFF", 0.78),
+          primary: slice.textPrimary,
+          secondary: slice.textSecondary,
         },
-        divider: alpha("#22D3EE", 0.28),
+        divider: alpha(slice.primary, 0.28),
         colors: {
           ...commonColors,
-          neonCyan: "#22D3EE",
-          neonTeal: "#2DD4BF",
-          neonAqua: "#67E8F9",
+          neonCyan: slice.primary,
+          neonTeal: slice.secondary,
+          neonAqua: slice.primaryLight,
         },
         charts: getChartsPalette("neon"),
+        brandPalette: palette,
       },
       shape: { borderRadius: 18 },
       shadows: [
         "none",
-        "0 0 14px rgba(34,211,238,.28)",
-        "0 0 18px rgba(45,212,191,.24)",
-        ...Array(22).fill("0 0 20px rgba(34,211,238,.16)"),
+        `0 0 14px ${alpha(slice.primary, 0.28)}`,
+        `0 0 18px ${alpha(slice.secondary, 0.24)}`,
+        ...Array(22).fill(`0 0 20px ${alpha(slice.primary, 0.16)}`),
       ],
       typography: compactTypography({
         fontFamily: `'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`,
@@ -354,10 +367,10 @@ export function getTheme(mode = "light") {
             html: { fontSize: "14px" },
             body: {
               background: `
-                radial-gradient(1100px 560px at 18% -12%, rgba(34,211,238,.18), transparent 58%),
-                radial-gradient(900px 480px at 108% 8%, rgba(45,212,191,.14), transparent 55%),
-                radial-gradient(600px 320px at 50% 110%, rgba(8,145,178,.12), transparent 50%),
-                #030B12`,
+                radial-gradient(1100px 560px at 18% -12%, ${alpha(slice.primary, 0.18)}, transparent 58%),
+                radial-gradient(900px 480px at 108% 8%, ${alpha(slice.secondary, 0.14)}, transparent 55%),
+                radial-gradient(600px 320px at 50% 110%, ${alpha(slice.primaryDark, 0.12)}, transparent 50%),
+                ${slice.backgroundDefault}`,
               backgroundAttachment: "fixed",
             },
           },
@@ -365,10 +378,9 @@ export function getTheme(mode = "light") {
         MuiPaper: {
           styleOverrides: {
             root: {
-              backgroundImage:
-                "linear-gradient(180deg, rgba(34,211,238,.05), rgba(255,255,255,0))",
-              border: "1px solid rgba(34,211,238,.28)",
-              boxShadow: "0 0 24px rgba(34,211,238,.16)",
+              backgroundImage: `linear-gradient(180deg, ${alpha(slice.primary, 0.05)}, rgba(255,255,255,0))`,
+              border: `1px solid ${alpha(slice.primary, 0.28)}`,
+              boxShadow: `0 0 24px ${alpha(slice.primary, 0.16)}`,
             },
           },
         },
@@ -379,8 +391,8 @@ export function getTheme(mode = "light") {
             root: {
               height: 24,
               fontSize: "0.72rem",
-              border: "1px solid rgba(45,212,191,.4)",
-              boxShadow: "0 0 12px rgba(34,211,238,.28)",
+              border: `1px solid ${alpha(slice.secondary, 0.4)}`,
+              boxShadow: `0 0 12px ${alpha(slice.primary, 0.28)}`,
             },
             sizeSmall: { height: 20, fontSize: "0.68rem" },
           },
@@ -395,28 +407,29 @@ export function getTheme(mode = "light") {
       mode: "light",
       customMode: "light",
       background: {
-        default: brand.mist,
-        paper: "rgba(255,255,255,0.9)",
+        default: slice.backgroundDefault,
+        paper: slice.backgroundPaper,
       },
       primary: {
-        light: "#3D9BB8",
-        main: "#1A7A9A",
-        dark: "#0F5A74",
-        contrastText: "#FFFFFF",
+        light: slice.primaryLight,
+        main: slice.primary,
+        dark: slice.primaryDark,
+        contrastText: primaryContrast,
       },
       secondary: {
-        light: "#5EEAD4",
-        main: "#14B8A6",
-        dark: "#0F766E",
-        contrastText: "#FFFFFF",
+        light: slice.secondaryLight,
+        main: slice.secondary,
+        dark: slice.secondaryDark,
+        contrastText: secondaryContrast,
       },
       text: {
-        primary: "#0F2A36",
-        secondary: "#3D6574",
+        primary: slice.textPrimary,
+        secondary: slice.textSecondary,
       },
-      divider: alpha("#0F2A36", 0.1),
+      divider: alpha(slice.textPrimary, 0.1),
       colors: commonColors,
       charts: getChartsPalette("light"),
+      brandPalette: palette,
     },
     shape: { borderRadius: 12 },
     typography: compactTypography({
@@ -429,9 +442,9 @@ export function getTheme(mode = "light") {
           html: { fontSize: "14px" },
           body: {
             background: `
-              radial-gradient(900px 460px at 15% -10%, rgba(26,122,154,.16), transparent 58%),
-              radial-gradient(820px 420px at 105% 5%, rgba(20,184,166,.14), transparent 55%),
-              linear-gradient(165deg, #F4FBFD 0%, #E3F4F8 42%, #D4F0F2 100%)`,
+              radial-gradient(900px 460px at 15% -10%, ${alpha(slice.primary, 0.16)}, transparent 58%),
+              radial-gradient(820px 420px at 105% 5%, ${alpha(slice.secondary, 0.14)}, transparent 55%),
+              linear-gradient(165deg, ${slice.backgroundDefault} 0%, ${alpha(slice.primaryLight, 0.35)} 42%, ${alpha(slice.secondary, 0.18)} 100%)`,
             backgroundAttachment: "fixed",
           },
         },
