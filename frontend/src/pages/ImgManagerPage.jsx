@@ -215,7 +215,16 @@ export default function ImgManagerPage() {
   const [pendingItems, setPendingItems] = useState([]);
   const [conflictPaths, setConflictPaths] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
+  const [uploadProgress, setUploadProgress] = useState({
+    done: 0,
+    total: 0,
+    current: "",
+    phase: "idle", // idle | preparing | uploading | done
+    ok: 0,
+    skipped: 0,
+    fail: 0,
+  });
+  const [progressOpen, setProgressOpen] = useState(false);
 
   const fetchScan = useCallback(
     async (targetFolder = folder) => {
@@ -292,10 +301,22 @@ export default function ImgManagerPage() {
     }
   };
 
-  const runBulkUpload = async (items, { replaceExisting }) => {
+  const runBulkUpload = async (items, { replaceExisting, conflictSet }) => {
     if (!items.length) return;
+    const conflicts = conflictSet || new Set(conflictPaths);
+    setConflictOpen(false);
     setUploading(true);
-    setUploadProgress({ done: 0, total: items.length });
+    setProgressOpen(true);
+    setUploadProgress({
+      done: 0,
+      total: items.length,
+      current: "",
+      phase: "uploading",
+      ok: 0,
+      skipped: 0,
+      fail: 0,
+    });
+
     let ok = 0;
     let fail = 0;
     let skipped = 0;
@@ -303,10 +324,26 @@ export default function ImgManagerPage() {
     try {
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        const isConflict = conflictPaths.includes(item.relPath);
+        const isConflict = conflicts.has(item.relPath);
+        setUploadProgress((prev) => ({
+          ...prev,
+          done: i,
+          current: item.relPath,
+          phase: "uploading",
+          ok,
+          skipped,
+          fail,
+        }));
+
         if (isConflict && !replaceExisting) {
           skipped += 1;
-          setUploadProgress({ done: i + 1, total: items.length });
+          setUploadProgress((prev) => ({
+            ...prev,
+            done: i + 1,
+            skipped,
+            ok,
+            fail,
+          }));
           continue;
         }
         try {
@@ -315,14 +352,31 @@ export default function ImgManagerPage() {
             file: item.file,
             folder: destFolder,
             name,
-            replace: isConflict ? true : false,
+            replace: Boolean(isConflict && replaceExisting),
           });
           ok += 1;
         } catch {
           fail += 1;
         }
-        setUploadProgress({ done: i + 1, total: items.length });
+        setUploadProgress((prev) => ({
+          ...prev,
+          done: i + 1,
+          ok,
+          skipped,
+          fail,
+          current: item.relPath,
+        }));
       }
+
+      setUploadProgress((prev) => ({
+        ...prev,
+        phase: "done",
+        current: "",
+        ok,
+        skipped,
+        fail,
+        done: items.length,
+      }));
 
       toast({
         message: `Subida lista: ${ok} ok, ${skipped} omitidos, ${fail} errores`,
@@ -331,10 +385,8 @@ export default function ImgManagerPage() {
       await fetchScan(folder);
     } finally {
       setUploading(false);
-      setConflictOpen(false);
       setPendingItems([]);
       setConflictPaths([]);
-      setUploadProgress({ done: 0, total: 0 });
     }
   };
 
@@ -369,23 +421,34 @@ export default function ImgManagerPage() {
       return;
     }
 
-    toast({
-      message: `Preparando ${items.length} imagen(es) en ${destFolders.size || 1} carpeta(s)…`,
-      variant: "info",
+    setProgressOpen(true);
+    setUploadProgress({
+      done: 0,
+      total: items.length,
+      current: `Preparando ${items.length} imagen(es) en ${destFolders.size || 1} carpeta(s)…`,
+      phase: "preparing",
+      ok: 0,
+      skipped: 0,
+      fail: 0,
     });
 
     try {
       const { data } = await checkImagesExistRequest(items.map((i) => i.relPath));
-      const existing = data?.existing || [];
+      const existing = Array.isArray(data?.existing) ? data.existing : [];
       setPendingItems(items);
       setConflictPaths(existing);
 
       if (existing.length > 0) {
+        setProgressOpen(false);
         setConflictOpen(true);
       } else {
-        await runBulkUpload(items, { replaceExisting: false });
+        await runBulkUpload(items, {
+          replaceExisting: false,
+          conflictSet: new Set(),
+        });
       }
     } catch (error) {
+      setProgressOpen(false);
       toast({
         message:
           error?.response?.data?.message ||
@@ -595,8 +658,8 @@ export default function ImgManagerPage() {
       {uploading ? (
         <Box sx={{ mb: 2 }}>
           <Typography variant="body2" sx={{ mb: 0.5 }}>
-            Subiendo {uploadProgress.done}/{uploadProgress.total} ({progressPct}
-            %)
+            Subiendo en segundo plano… {uploadProgress.done}/{uploadProgress.total} (
+            {progressPct}%)
           </Typography>
           <LinearProgress variant="determinate" value={progressPct} />
         </Box>
@@ -718,27 +781,39 @@ export default function ImgManagerPage() {
           setPendingItems([]);
           setConflictPaths([]);
         }}
-        title="Archivos que ya existen"
+        title="Archivos similares / ya existen"
         maxWidth="sm"
         fullWidth
         disableClose={uploading}
         hideClose={uploading}
       >
         <Typography variant="body2" sx={{ mb: 1 }}>
-          Hay <strong>{conflictPaths.length}</strong> archivo(s) que ya están en
-          el backend. ¿Qué querés hacer con ellos?
+          Hay <strong>{conflictPaths.length}</strong> archivo(s) con la misma ruta en el
+          servidor. ¿Los omitís o los reemplazás?
         </Typography>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-          Total a subir: {pendingItems.length} · Nuevos:{" "}
-          {pendingItems.length - conflictPaths.length} · Conflictos:{" "}
+          Total seleccionados: {pendingItems.length} · Nuevos:{" "}
+          {Math.max(0, pendingItems.length - conflictPaths.length)} · Ya existen:{" "}
           {conflictPaths.length}
         </Typography>
-        <List dense sx={{ maxHeight: 220, overflow: "auto", mb: 2, bgcolor: "action.hover", borderRadius: 1 }}>
+        <List
+          dense
+          sx={{
+            maxHeight: 220,
+            overflow: "auto",
+            mb: 2,
+            bgcolor: "action.hover",
+            borderRadius: 1,
+          }}
+        >
           {conflictPaths.slice(0, 40).map((p) => (
             <ListItem key={p} disableGutters sx={{ px: 1 }}>
               <ListItemText
                 primary={p}
-                primaryTypographyProps={{ variant: "caption", sx: { wordBreak: "break-all" } }}
+                primaryTypographyProps={{
+                  variant: "caption",
+                  sx: { wordBreak: "break-all" },
+                }}
               />
             </ListItem>
           ))}
@@ -751,39 +826,132 @@ export default function ImgManagerPage() {
             </ListItem>
           ) : null}
         </List>
-        {uploading ? (
-          <Box sx={{ mb: 1 }}>
-            <LinearProgress variant="determinate" value={progressPct} />
-            <Typography variant="caption">
-              {uploadProgress.done}/{uploadProgress.total}
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={uploading}
+            onClick={() =>
+              void runBulkUpload(pendingItems, {
+                replaceExisting: true,
+                conflictSet: new Set(conflictPaths),
+              })
+            }
+          >
+            Reemplazar existentes
+          </Button>
+          <Button
+            variant="contained"
+            disabled={uploading}
+            onClick={() =>
+              void runBulkUpload(pendingItems, {
+                replaceExisting: false,
+                conflictSet: new Set(conflictPaths),
+              })
+            }
+          >
+            Omitir existentes
+          </Button>
+          <Button
+            variant="outlined"
+            disabled={uploading}
+            onClick={() => {
+              setConflictOpen(false);
+              setPendingItems([]);
+              setConflictPaths([]);
+            }}
+          >
+            Cancelar
+          </Button>
+        </Stack>
+      </SimpleDialog>
+
+      <SimpleDialog
+        open={progressOpen}
+        onClose={() => {
+          if (uploading || uploadProgress.phase === "preparing") return;
+          setProgressOpen(false);
+          setUploadProgress({
+            done: 0,
+            total: 0,
+            current: "",
+            phase: "idle",
+            ok: 0,
+            skipped: 0,
+            fail: 0,
+          });
+        }}
+        title={
+          uploadProgress.phase === "preparing"
+            ? "Preparando subida…"
+            : uploadProgress.phase === "done"
+              ? "Subida finalizada"
+              : "Subiendo imágenes…"
+        }
+        maxWidth="sm"
+        fullWidth
+        disableClose={uploading || uploadProgress.phase === "preparing"}
+        hideClose={uploading || uploadProgress.phase === "preparing"}
+      >
+        {uploadProgress.phase === "preparing" ? (
+          <>
+            <Typography variant="body2" sx={{ mb: 1.5 }}>
+              {uploadProgress.current || "Comprobando archivos en el servidor…"}
             </Typography>
-          </Box>
+            <LinearProgress />
+          </>
         ) : (
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-            <Button
-              variant="contained"
-              color="warning"
-              onClick={() => void runBulkUpload(pendingItems, { replaceExisting: true })}
-            >
-              Reemplazar existentes
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => void runBulkUpload(pendingItems, { replaceExisting: false })}
-            >
-              Omitir existentes
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={() => {
-                setConflictOpen(false);
-                setPendingItems([]);
-                setConflictPaths([]);
-              }}
-            >
-              Cancelar
-            </Button>
-          </Stack>
+          <>
+            <Typography variant="body2" sx={{ mb: 0.75 }}>
+              {uploadProgress.done}/{uploadProgress.total} ({progressPct}%)
+            </Typography>
+            <LinearProgress
+              variant="determinate"
+              value={progressPct}
+              sx={{ mb: 1.5, height: 10, borderRadius: 1 }}
+            />
+            {uploadProgress.current ? (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                display="block"
+                sx={{ mb: 1, wordBreak: "break-all" }}
+              >
+                {uploadProgress.phase === "done"
+                  ? "Listo."
+                  : `Actual: ${uploadProgress.current}`}
+              </Typography>
+            ) : null}
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+              <Chip size="small" color="success" label={`Ok: ${uploadProgress.ok}`} />
+              <Chip size="small" label={`Omitidos: ${uploadProgress.skipped}`} />
+              <Chip
+                size="small"
+                color={uploadProgress.fail ? "error" : "default"}
+                label={`Errores: ${uploadProgress.fail}`}
+              />
+            </Stack>
+            {uploadProgress.phase === "done" ? (
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => {
+                  setProgressOpen(false);
+                  setUploadProgress({
+                    done: 0,
+                    total: 0,
+                    current: "",
+                    phase: "idle",
+                    ok: 0,
+                    skipped: 0,
+                    fail: 0,
+                  });
+                }}
+              >
+                Cerrar
+              </Button>
+            ) : null}
+          </>
         )}
       </SimpleDialog>
     </Box>
