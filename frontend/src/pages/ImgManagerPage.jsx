@@ -8,7 +8,9 @@ import {
   Box,
   Breadcrumbs,
   Button,
+  Checkbox,
   Chip,
+  FormControlLabel,
   IconButton,
   LinearProgress,
   Link,
@@ -44,98 +46,13 @@ import { pathImg } from "../api/axios.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|svg)$/i;
+const CHECK_EXISTS_BATCH = 200;
 
-/** Adjunta ruta relativa al File (como webkitRelativePath). */
-function withRelativePath(file, relPath) {
-  const rel = String(relPath || "").replace(/\\/g, "/");
-  try {
-    Object.defineProperty(file, "webkitRelativePath", {
-      configurable: true,
-      enumerable: true,
-      value: rel,
-    });
-    return file;
-  } catch {
-    const copy = new File([file], file.name, {
-      type: file.type,
-      lastModified: file.lastModified,
-    });
-    Object.defineProperty(copy, "webkitRelativePath", {
-      configurable: true,
-      enumerable: true,
-      value: rel,
-    });
-    return copy;
-  }
-}
-
-/** Lee recursivo un DirectoryHandle (File System Access API). */
-async function readDirHandleRecursive(dirHandle, prefix = "") {
-  const out = [];
-  for await (const [name, handle] of dirHandle.entries()) {
-    const rel = prefix ? `${prefix}/${name}` : name;
-    if (handle.kind === "file") {
-      const file = await handle.getFile();
-      out.push(withRelativePath(file, rel));
-    } else if (handle.kind === "directory") {
-      const nested = await readDirHandleRecursive(handle, rel);
-      out.push(...nested);
-    }
-  }
-  return out;
-}
-
-/**
- * Elige una carpeta y devuelve TODOS los archivos del árbol (subcarpetas incluidas).
- * Preferencia: showDirectoryPicker; fallback: input webkitdirectory nativo.
- * Cancel → null.
- */
-async function pickFolderTreeFiles() {
-  if (typeof window.showDirectoryPicker === "function") {
-    try {
-      const root = await window.showDirectoryPicker({ mode: "read" });
-      // Mismo formato que webkitRelativePath: "CarpetaElegida/sub/archivo.png"
-      return await readDirHandleRecursive(root, root.name);
-    } catch (err) {
-      if (err?.name === "AbortError") return null;
-      // sigue al fallback
-    }
-  }
-
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.setAttribute("webkitdirectory", "");
-    input.setAttribute("directory", "");
-    input.setAttribute("mozdirectory", "");
-    input.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
-    let settled = false;
-    const finish = (files) => {
-      if (settled) return;
-      settled = true;
-      input.remove();
-      resolve(files);
-    };
-    input.addEventListener("change", () => {
-      const list = Array.from(input.files || []);
-      finish(list.length ? list : null);
-    });
-    document.body.appendChild(input);
-    input.click();
-    // Cancelar en muchos navegadores no dispara change
-    window.addEventListener(
-      "focus",
-      () => {
-        setTimeout(() => {
-          if (settled) return;
-          const list = Array.from(input.files || []);
-          finish(list.length ? list : null);
-        }, 400);
-      },
-      { once: true },
-    );
-  });
+function formatBytes(n) {
+  const v = Number(n) || 0;
+  if (v < 1024) return `${v} B`;
+  if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB`;
+  return `${(v / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** Normaliza filtro de carpeta (la base ya es src/img). */
@@ -196,6 +113,49 @@ function breadcrumbParts(folder) {
   return f.split("/").filter(Boolean);
 }
 
+function buildUploadItems(fileList, baseFolder) {
+  const all = Array.from(fileList || []);
+  const files = all.filter((f) => {
+    const label = f.webkitRelativePath || f.name || "";
+    return IMAGE_EXT.test(label) || IMAGE_EXT.test(f.name || "");
+  });
+
+  const items = [];
+  const seen = new Set();
+  const destFolders = new Set();
+  let bytes = 0;
+
+  for (const file of files) {
+    const relPath = toRelPath(file, baseFolder);
+    if (!relPath || seen.has(relPath)) continue;
+    seen.add(relPath);
+    const { folder: destFolder } = splitRelPath(relPath);
+    if (destFolder) destFolders.add(destFolder);
+    bytes += Number(file.size) || 0;
+    items.push({ file, relPath });
+  }
+
+  // Carpetas = rutas únicas de destino (incluye anidadas)
+  return {
+    items,
+    imageCount: items.length,
+    folderCount: destFolders.size,
+    totalBytes: bytes,
+    destFolders: [...destFolders].sort(),
+    nonImageSkipped: Math.max(0, all.length - files.length),
+  };
+}
+
+async function checkExistingPaths(paths) {
+  const existing = [];
+  for (let i = 0; i < paths.length; i += CHECK_EXISTS_BATCH) {
+    const chunk = paths.slice(i, i + CHECK_EXISTS_BATCH);
+    const { data } = await checkImagesExistRequest(chunk);
+    if (Array.isArray(data?.existing)) existing.push(...data.existing);
+  }
+  return existing;
+}
+
 export default function ImgManagerPage() {
   const { user, toast } = useAuth();
   const [rows, setRows] = useState([]);
@@ -210,10 +170,29 @@ export default function ImgManagerPage() {
   const [loading, setLoading] = useState(true);
 
   const filesInputRef = useRef(null);
+  const folderInputRef = useRef(null);
 
+  /** Resumen previo a subir */
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewMeta, setPreviewMeta] = useState({
+    items: [],
+    imageCount: 0,
+    folderCount: 0,
+    totalBytes: 0,
+    destFolders: [],
+    nonImageSkipped: 0,
+  });
+
+  /** Conflictos (estilo Windows) */
   const [conflictOpen, setConflictOpen] = useState(false);
   const [pendingItems, setPendingItems] = useState([]);
   const [conflictPaths, setConflictPaths] = useState([]);
+  const [applyToAll, setApplyToAll] = useState(true);
+  /** Índice del conflicto actual cuando applyToAll=false */
+  const [conflictIndex, setConflictIndex] = useState(0);
+  /** Decisiones por ruta: 'skip' | 'replace' */
+  const conflictDecisionsRef = useRef(new Map());
+
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({
     done: 0,
@@ -301,10 +280,36 @@ export default function ImgManagerPage() {
     }
   };
 
-  const runBulkUpload = async (items, { replaceExisting, conflictSet }) => {
+  const resetUploadState = () => {
+    setPendingItems([]);
+    setConflictPaths([]);
+    setConflictIndex(0);
+    setApplyToAll(true);
+    conflictDecisionsRef.current = new Map();
+    setPreviewMeta({
+      items: [],
+      imageCount: 0,
+      folderCount: 0,
+      totalBytes: 0,
+      destFolders: [],
+      nonImageSkipped: 0,
+    });
+  };
+
+  const runBulkUpload = async (items, decisions) => {
     if (!items.length) return;
-    const conflicts = conflictSet || new Set(conflictPaths);
+    const map =
+      decisions instanceof Map
+        ? decisions
+        : new Map(
+            (conflictPaths || []).map((p) => [
+              p,
+              decisions?.replaceExisting ? "replace" : "skip",
+            ]),
+          );
+
     setConflictOpen(false);
+    setPreviewOpen(false);
     setUploading(true);
     setProgressOpen(true);
     setUploadProgress({
@@ -324,7 +329,7 @@ export default function ImgManagerPage() {
     try {
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        const isConflict = conflicts.has(item.relPath);
+        const decision = map.get(item.relPath);
         setUploadProgress((prev) => ({
           ...prev,
           done: i,
@@ -335,7 +340,7 @@ export default function ImgManagerPage() {
           fail,
         }));
 
-        if (isConflict && !replaceExisting) {
+        if (decision === "skip") {
           skipped += 1;
           setUploadProgress((prev) => ({
             ...prev,
@@ -346,13 +351,14 @@ export default function ImgManagerPage() {
           }));
           continue;
         }
+
         try {
           const { folder: destFolder, name } = splitRelPath(item.relPath);
           await uploadImageRequest({
             file: item.file,
             folder: destFolder,
             name,
-            replace: Boolean(isConflict && replaceExisting),
+            replace: decision === "replace",
           });
           ok += 1;
         } catch {
@@ -385,47 +391,52 @@ export default function ImgManagerPage() {
       await fetchScan(folder);
     } finally {
       setUploading(false);
-      setPendingItems([]);
-      setConflictPaths([]);
+      resetUploadState();
     }
   };
 
-  const prepareBulkFromFileList = async (fileList) => {
-    const all = Array.from(fileList || []);
-    const files = all.filter((f) => {
-      const label = f.webkitRelativePath || f.name || "";
-      return IMAGE_EXT.test(label) || IMAGE_EXT.test(f.name || "");
-    });
-    if (!files.length) {
-      toast({
-        message: "No hay imágenes válidas (.png .jpg .webp .gif .svg)",
-        variant: "warning",
-      });
+  const startConflictFlow = (items, existing) => {
+    setPendingItems(items);
+    setConflictPaths(existing);
+    setConflictIndex(0);
+    setApplyToAll(true);
+    conflictDecisionsRef.current = new Map();
+    setProgressOpen(false);
+    setConflictOpen(true);
+  };
+
+  const applyConflictDecision = async (action) => {
+    // action: 'skip' | 'replace'
+    const paths = conflictPaths;
+    if (!paths.length) {
+      await runBulkUpload(pendingItems, new Map());
       return;
     }
 
-    const items = [];
-    const seen = new Set();
-    const destFolders = new Set();
-    for (const file of files) {
-      const relPath = toRelPath(file, folder);
-      if (!relPath || seen.has(relPath)) continue;
-      seen.add(relPath);
-      const { folder: destFolder } = splitRelPath(relPath);
-      if (destFolder) destFolders.add(destFolder);
-      items.push({ file, relPath });
-    }
-
-    if (!items.length) {
-      toast({ message: "Sin rutas válidas para subir", variant: "warning" });
+    if (applyToAll) {
+      const map = new Map(paths.map((p) => [p, action]));
+      await runBulkUpload(pendingItems, map);
       return;
     }
 
+    // Uno por uno
+    const current = paths[conflictIndex];
+    if (current) conflictDecisionsRef.current.set(current, action);
+    const next = conflictIndex + 1;
+    if (next >= paths.length) {
+      await runBulkUpload(pendingItems, conflictDecisionsRef.current);
+    } else {
+      setConflictIndex(next);
+    }
+  };
+
+  const prepareAfterConfirm = async (items) => {
+    setPreviewOpen(false);
     setProgressOpen(true);
     setUploadProgress({
       done: 0,
       total: items.length,
-      current: `Preparando ${items.length} imagen(es) en ${destFolders.size || 1} carpeta(s)…`,
+      current: `Comprobando ${items.length} archivo(s) en el servidor…`,
       phase: "preparing",
       ok: 0,
       skipped: 0,
@@ -433,19 +444,11 @@ export default function ImgManagerPage() {
     });
 
     try {
-      const { data } = await checkImagesExistRequest(items.map((i) => i.relPath));
-      const existing = Array.isArray(data?.existing) ? data.existing : [];
-      setPendingItems(items);
-      setConflictPaths(existing);
-
+      const existing = await checkExistingPaths(items.map((i) => i.relPath));
       if (existing.length > 0) {
-        setProgressOpen(false);
-        setConflictOpen(true);
+        startConflictFlow(items, existing);
       } else {
-        await runBulkUpload(items, {
-          replaceExisting: false,
-          conflictSet: new Set(),
-        });
+        await runBulkUpload(items, new Map());
       }
     } catch (error) {
       setProgressOpen(false);
@@ -455,7 +458,24 @@ export default function ImgManagerPage() {
           "No se pudo comprobar archivos existentes",
         variant: "error",
       });
+      resetUploadState();
     }
+  };
+
+  const openPreviewFromFileList = (fileList) => {
+    const meta = buildUploadItems(fileList, folder);
+    if (!meta.items.length) {
+      toast({
+        message:
+          meta.nonImageSkipped > 0
+            ? "La carpeta no tiene imágenes válidas (.png .jpg .webp .gif .svg)"
+            : "No hay imágenes válidas para subir",
+        variant: "warning",
+      });
+      return;
+    }
+    setPreviewMeta(meta);
+    setPreviewOpen(true);
   };
 
   const columns = useMemo(
@@ -500,6 +520,11 @@ export default function ImgManagerPage() {
     uploadProgress.total > 0
       ? Math.round((uploadProgress.done / uploadProgress.total) * 100)
       : 0;
+
+  const currentConflictPath = conflictPaths[conflictIndex] || "";
+  const conflictTitle = applyToAll
+    ? "El destino ya tiene archivos con el mismo nombre"
+    : `Conflicto ${conflictIndex + 1} de ${conflictPaths.length}`;
 
   return (
     <Box>
@@ -602,26 +627,7 @@ export default function ImgManagerPage() {
           startIcon={<DriveFolderUploadIcon />}
           variant="outlined"
           disabled={uploading}
-          onClick={async () => {
-            try {
-              const list = await pickFolderTreeFiles();
-              if (!list) return; // canceló
-              if (!list.length) {
-                toast({
-                  message: "La carpeta no tiene archivos",
-                  variant: "info",
-                });
-                return;
-              }
-              await prepareBulkFromFileList(list);
-            } catch (error) {
-              toast({
-                message:
-                  error?.message || "No se pudo leer la carpeta con subcarpetas",
-                variant: "error",
-              });
-            }
-          }}
+          onClick={() => folderInputRef.current?.click()}
         >
           Subir carpeta
         </Button>
@@ -651,15 +657,34 @@ export default function ImgManagerPage() {
         onChange={(e) => {
           const list = e.target.files;
           e.target.value = "";
-          void prepareBulkFromFileList(list);
+          openPreviewFromFileList(list);
+        }}
+      />
+      <input
+        ref={(el) => {
+          folderInputRef.current = el;
+          if (el) {
+            el.setAttribute("webkitdirectory", "");
+            el.setAttribute("directory", "");
+            el.setAttribute("mozdirectory", "");
+          }
+        }}
+        type="file"
+        hidden
+        multiple
+        onChange={(e) => {
+          const list = e.target.files;
+          e.target.value = "";
+          if (!list?.length) return;
+          openPreviewFromFileList(list);
         }}
       />
 
       {uploading ? (
         <Box sx={{ mb: 2 }}>
           <Typography variant="body2" sx={{ mb: 0.5 }}>
-            Subiendo en segundo plano… {uploadProgress.done}/{uploadProgress.total} (
-            {progressPct}%)
+            Subiendo… {uploadProgress.done}/{uploadProgress.total} ({progressPct}
+            %)
           </Typography>
           <LinearProgress variant="determinate" value={progressPct} />
         </Box>
@@ -700,7 +725,7 @@ export default function ImgManagerPage() {
           }}
         >
           <FolderIcon fontSize="small" color="primary" />
-          <Typography variant="subtitle2" fontWeight={700}>
+          <Typography variant="subtitle2">
             Carpetas hijas {folder ? `de «${folder}»` : "(raíz img)"}
           </Typography>
         </Box>
@@ -710,25 +735,22 @@ export default function ImgManagerPage() {
           </Box>
         ) : folders.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-            No hay subcarpetas aquí. Usá «Subir carpeta» para crear el árbol con
-            archivos.
+            Sin subcarpetas aquí.
           </Typography>
         ) : (
           <List dense disablePadding>
             {folders.map((dir) => (
-              <ListItem key={dir.relPath} disablePadding divider>
+              <ListItem key={dir.relPath || dir.name} disablePadding>
                 <ListItemButton
-                  onClick={() => goToFolder(dir.relPath)}
                   disabled={uploading}
+                  onClick={() => goToFolder(dir.relPath || dir.name)}
                 >
                   <ListItemIcon sx={{ minWidth: 36 }}>
-                    <FolderIcon color="action" />
+                    <FolderIcon fontSize="small" />
                   </ListItemIcon>
                   <ListItemText
-                    primary={dir.name}
+                    primary={dir.name || dir.relPath}
                     secondary={dir.relPath}
-                    primaryTypographyProps={{ fontWeight: 600 }}
-                    secondaryTypographyProps={{ variant: "caption" }}
                   />
                 </ListItemButton>
               </ListItem>
@@ -773,92 +795,85 @@ export default function ImgManagerPage() {
         onClickAccept={confirmDelete}
       />
 
+      {/* 1) Resumen: carpetas + imágenes */}
       <SimpleDialog
-        open={conflictOpen}
+        open={previewOpen}
         onClose={() => {
           if (uploading) return;
-          setConflictOpen(false);
-          setPendingItems([]);
-          setConflictPaths([]);
+          setPreviewOpen(false);
+          resetUploadState();
         }}
-        title="Archivos similares / ya existen"
+        title="Preparar subida de carpeta"
         maxWidth="sm"
         fullWidth
-        disableClose={uploading}
-        hideClose={uploading}
       >
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          Hay <strong>{conflictPaths.length}</strong> archivo(s) con la misma ruta en el
-          servidor. ¿Los omitís o los reemplazás?
+        <Typography variant="body2" sx={{ mb: 1.5 }}>
+          Se va a subir el contenido seleccionado a{" "}
+          <strong>{folder ? `img/${folder}` : "img (raíz)"}</strong>.
         </Typography>
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-          Total seleccionados: {pendingItems.length} · Nuevos:{" "}
-          {Math.max(0, pendingItems.length - conflictPaths.length)} · Ya existen:{" "}
-          {conflictPaths.length}
-        </Typography>
-        <List
-          dense
-          sx={{
-            maxHeight: 220,
-            overflow: "auto",
-            mb: 2,
-            bgcolor: "action.hover",
-            borderRadius: 1,
-          }}
-        >
-          {conflictPaths.slice(0, 40).map((p) => (
-            <ListItem key={p} disableGutters sx={{ px: 1 }}>
-              <ListItemText
-                primary={p}
-                primaryTypographyProps={{
-                  variant: "caption",
-                  sx: { wordBreak: "break-all" },
-                }}
-              />
-            </ListItem>
-          ))}
-          {conflictPaths.length > 40 ? (
-            <ListItem>
-              <ListItemText
-                primary={`… y ${conflictPaths.length - 40} más`}
-                primaryTypographyProps={{ variant: "caption" }}
-              />
-            </ListItem>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+          <Chip color="primary" label={`Carpetas: ${previewMeta.folderCount}`} />
+          <Chip color="primary" label={`Imágenes: ${previewMeta.imageCount}`} />
+          <Chip label={`Tamaño: ${formatBytes(previewMeta.totalBytes)}`} />
+          {previewMeta.nonImageSkipped > 0 ? (
+            <Chip
+              variant="outlined"
+              label={`Ignorados (no imagen): ${previewMeta.nonImageSkipped}`}
+            />
           ) : null}
-        </List>
+        </Stack>
+        {previewMeta.destFolders.length ? (
+          <List
+            dense
+            sx={{
+              maxHeight: 180,
+              overflow: "auto",
+              mb: 2,
+              bgcolor: "action.hover",
+              borderRadius: 1,
+            }}
+          >
+            {previewMeta.destFolders.slice(0, 30).map((d) => (
+              <ListItem key={d} disableGutters sx={{ px: 1 }}>
+                <ListItemIcon sx={{ minWidth: 32 }}>
+                  <FolderIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText
+                  primary={d}
+                  primaryTypographyProps={{
+                    variant: "caption",
+                    sx: { wordBreak: "break-all" },
+                  }}
+                />
+              </ListItem>
+            ))}
+            {previewMeta.destFolders.length > 30 ? (
+              <ListItem>
+                <ListItemText
+                  primary={`… y ${previewMeta.destFolders.length - 30} carpetas más`}
+                  primaryTypographyProps={{ variant: "caption" }}
+                />
+              </ListItem>
+            ) : null}
+          </List>
+        ) : (
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+            Los archivos irán directo a la carpeta actual (sin subcarpetas nuevas).
+          </Typography>
+        )}
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
           <Button
             variant="contained"
-            color="warning"
-            disabled={uploading}
-            onClick={() =>
-              void runBulkUpload(pendingItems, {
-                replaceExisting: true,
-                conflictSet: new Set(conflictPaths),
-              })
-            }
+            startIcon={<DriveFolderUploadIcon />}
+            onClick={() => void prepareAfterConfirm(previewMeta.items)}
           >
-            Reemplazar existentes
-          </Button>
-          <Button
-            variant="contained"
-            disabled={uploading}
-            onClick={() =>
-              void runBulkUpload(pendingItems, {
-                replaceExisting: false,
-                conflictSet: new Set(conflictPaths),
-              })
-            }
-          >
-            Omitir existentes
+            Subir
           </Button>
           <Button
             variant="outlined"
-            disabled={uploading}
             onClick={() => {
-              setConflictOpen(false);
-              setPendingItems([]);
-              setConflictPaths([]);
+              setPreviewOpen(false);
+              resetUploadState();
             }}
           >
             Cancelar
@@ -866,6 +881,118 @@ export default function ImgManagerPage() {
         </Stack>
       </SimpleDialog>
 
+      {/* 2) Conflictos estilo Windows */}
+      <SimpleDialog
+        open={conflictOpen}
+        onClose={() => {
+          if (uploading) return;
+          setConflictOpen(false);
+          resetUploadState();
+        }}
+        title={conflictTitle}
+        maxWidth="sm"
+        fullWidth
+        disableClose={uploading}
+        hideClose={uploading}
+      >
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          {applyToAll ? (
+            <>
+              Hay <strong>{conflictPaths.length}</strong> archivo(s) que ya existen
+              en el servidor (de {pendingItems.length} seleccionados).
+            </>
+          ) : (
+            <>
+              Este archivo ya existe en el destino:
+              <Box
+                component="code"
+                sx={{ display: "block", mt: 0.75, wordBreak: "break-all" }}
+              >
+                {currentConflictPath}
+              </Box>
+            </>
+          )}
+        </Typography>
+
+        {applyToAll ? (
+          <List
+            dense
+            sx={{
+              maxHeight: 180,
+              overflow: "auto",
+              mb: 1.5,
+              bgcolor: "action.hover",
+              borderRadius: 1,
+            }}
+          >
+            {conflictPaths.slice(0, 40).map((p) => (
+              <ListItem key={p} disableGutters sx={{ px: 1 }}>
+                <ListItemText
+                  primary={p}
+                  primaryTypographyProps={{
+                    variant: "caption",
+                    sx: { wordBreak: "break-all" },
+                  }}
+                />
+              </ListItem>
+            ))}
+            {conflictPaths.length > 40 ? (
+              <ListItem>
+                <ListItemText
+                  primary={`… y ${conflictPaths.length - 40} más`}
+                  primaryTypographyProps={{ variant: "caption" }}
+                />
+              </ListItem>
+            ) : null}
+          </List>
+        ) : null}
+
+        <FormControlLabel
+          sx={{ mb: 1.5, display: "flex" }}
+          control={
+            <Checkbox
+              checked={applyToAll}
+              onChange={(e) => {
+                setApplyToAll(e.target.checked);
+                setConflictIndex(0);
+                conflictDecisionsRef.current = new Map();
+              }}
+              disabled={uploading}
+            />
+          }
+          label={`Aplicar a todos los conflictos (${conflictPaths.length})`}
+        />
+
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          <Button
+            variant="contained"
+            disabled={uploading}
+            onClick={() => void applyConflictDecision("skip")}
+          >
+            Omitir
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={uploading}
+            onClick={() => void applyConflictDecision("replace")}
+          >
+            Reemplazar
+          </Button>
+          <Button
+            variant="outlined"
+            disabled={uploading}
+            onClick={() => {
+              setConflictOpen(false);
+              resetUploadState();
+            }}
+          >
+            Cancelar
+          </Button>
+        </Stack>
+      </SimpleDialog>
+
+      {/* 3) Progreso */}
       <SimpleDialog
         open={progressOpen}
         onClose={() => {
