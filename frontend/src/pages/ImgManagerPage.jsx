@@ -45,6 +45,99 @@ import { useAuth } from "../context/AuthContext.jsx";
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|svg)$/i;
 
+/** Adjunta ruta relativa al File (como webkitRelativePath). */
+function withRelativePath(file, relPath) {
+  const rel = String(relPath || "").replace(/\\/g, "/");
+  try {
+    Object.defineProperty(file, "webkitRelativePath", {
+      configurable: true,
+      enumerable: true,
+      value: rel,
+    });
+    return file;
+  } catch {
+    const copy = new File([file], file.name, {
+      type: file.type,
+      lastModified: file.lastModified,
+    });
+    Object.defineProperty(copy, "webkitRelativePath", {
+      configurable: true,
+      enumerable: true,
+      value: rel,
+    });
+    return copy;
+  }
+}
+
+/** Lee recursivo un DirectoryHandle (File System Access API). */
+async function readDirHandleRecursive(dirHandle, prefix = "") {
+  const out = [];
+  for await (const [name, handle] of dirHandle.entries()) {
+    const rel = prefix ? `${prefix}/${name}` : name;
+    if (handle.kind === "file") {
+      const file = await handle.getFile();
+      out.push(withRelativePath(file, rel));
+    } else if (handle.kind === "directory") {
+      const nested = await readDirHandleRecursive(handle, rel);
+      out.push(...nested);
+    }
+  }
+  return out;
+}
+
+/**
+ * Elige una carpeta y devuelve TODOS los archivos del árbol (subcarpetas incluidas).
+ * Preferencia: showDirectoryPicker; fallback: input webkitdirectory nativo.
+ * Cancel → null.
+ */
+async function pickFolderTreeFiles() {
+  if (typeof window.showDirectoryPicker === "function") {
+    try {
+      const root = await window.showDirectoryPicker({ mode: "read" });
+      // Mismo formato que webkitRelativePath: "CarpetaElegida/sub/archivo.png"
+      return await readDirHandleRecursive(root, root.name);
+    } catch (err) {
+      if (err?.name === "AbortError") return null;
+      // sigue al fallback
+    }
+  }
+
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.setAttribute("webkitdirectory", "");
+    input.setAttribute("directory", "");
+    input.setAttribute("mozdirectory", "");
+    input.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+    let settled = false;
+    const finish = (files) => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(files);
+    };
+    input.addEventListener("change", () => {
+      const list = Array.from(input.files || []);
+      finish(list.length ? list : null);
+    });
+    document.body.appendChild(input);
+    input.click();
+    // Cancelar en muchos navegadores no dispara change
+    window.addEventListener(
+      "focus",
+      () => {
+        setTimeout(() => {
+          if (settled) return;
+          const list = Array.from(input.files || []);
+          finish(list.length ? list : null);
+        }, 400);
+      },
+      { once: true },
+    );
+  });
+}
+
 /** Normaliza filtro de carpeta (la base ya es src/img). */
 function normalizeFolderInput(raw) {
   let s = String(raw || "")
@@ -116,7 +209,6 @@ export default function ImgManagerPage() {
   const [rowToDelete, setRowToDelete] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const folderInputRef = useRef(null);
   const filesInputRef = useRef(null);
 
   const [conflictOpen, setConflictOpen] = useState(false);
@@ -161,15 +253,6 @@ export default function ImgManagerPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.loginRol]);
-
-  // Asegurar selección recursiva de carpeta (Chrome/Edge/Firefox)
-  useEffect(() => {
-    const el = folderInputRef.current;
-    if (!el) return;
-    el.setAttribute("webkitdirectory", "");
-    el.setAttribute("directory", "");
-    el.setAttribute("mozdirectory", "");
-  }, []);
 
   if (user?.loginRol !== "Programador") return <Navigate to="/" replace />;
 
@@ -361,8 +444,10 @@ export default function ImgManagerPage() {
         Control de imágenes
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Base: <strong>{pathImg}</strong> — navegá carpetas hijas, bajá ZIP o subí
-        una carpeta local (con subcarpetas y archivos).
+        Base: <strong>{pathImg}</strong> — navegá carpetas hijas, bajá ZIP o usá{" "}
+        <strong>Subir carpeta</strong> para mandar un árbol completo (subcarpetas +
+        imágenes). Elegí la carpeta <code>img</code> local o cualquier carpeta con
+        subcarpetas.
       </Typography>
 
       <Breadcrumbs
@@ -454,13 +539,25 @@ export default function ImgManagerPage() {
           startIcon={<DriveFolderUploadIcon />}
           variant="outlined"
           disabled={uploading}
-          onClick={() => {
-            const el = folderInputRef.current;
-            if (!el) return;
-            el.setAttribute("webkitdirectory", "");
-            el.setAttribute("directory", "");
-            el.setAttribute("mozdirectory", "");
-            el.click();
+          onClick={async () => {
+            try {
+              const list = await pickFolderTreeFiles();
+              if (!list) return; // canceló
+              if (!list.length) {
+                toast({
+                  message: "La carpeta no tiene archivos",
+                  variant: "info",
+                });
+                return;
+              }
+              await prepareBulkFromFileList(list);
+            } catch (error) {
+              toast({
+                message:
+                  error?.message || "No se pudo leer la carpeta con subcarpetas",
+                variant: "error",
+              });
+            }
           }}
         >
           Subir carpeta
@@ -482,18 +579,6 @@ export default function ImgManagerPage() {
         </Button>
       </Stack>
 
-      <input
-        ref={folderInputRef}
-        type="file"
-        hidden
-        multiple
-        {...{ webkitdirectory: "", directory: "", mozdirectory: "" }}
-        onChange={(e) => {
-          const list = e.target.files;
-          e.target.value = "";
-          void prepareBulkFromFileList(list);
-        }}
-      />
       <input
         ref={filesInputRef}
         type="file"

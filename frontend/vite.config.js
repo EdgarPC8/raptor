@@ -33,7 +33,8 @@ export default defineConfig(({ mode, command }) => {
   );
   const apiPort = env.VITE_API_PORT || "3001";
   const apiTarget = `http://127.0.0.1:${apiPort}`;
-  const defaultPort = mode === "store" ? 5174 : mode === "raptor" ? 5175 : 5173;
+  const defaultPort =
+    mode === "store" ? 5174 : mode === "tienda" ? 5176 : mode === "raptor" ? 5175 : 5173;
   const devPort = Number(env.VITE_DEV_PORT || defaultPort);
   const appName = env.VITE_APP_NAME || mode;
   const apiLabel = formatApiModeLabel({ isDev, apiMode, shellOnly, explicit });
