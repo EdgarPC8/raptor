@@ -873,8 +873,8 @@ export default function AppSettingsPage() {
                 }
               />
               <SettingsRow
-                label="Ajuste de stock al entregar pedidos"
-                description="Si falta stock, Admin puede registrar un ajuste desde pedidos."
+                label="Autocompletar stock"
+                description="Si falta stock al cobrar en caja o al entregar un pedido, permite registrar un ajuste e completar. Solo Admin/Programador."
                 control={
                   <FormControlLabel
                     sx={{ m: 0 }}

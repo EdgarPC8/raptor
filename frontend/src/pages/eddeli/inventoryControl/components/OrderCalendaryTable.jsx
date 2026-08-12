@@ -496,7 +496,7 @@ export default forwardRef(function OrderCalendarView({
   const canManageOrders = ['Administrador', 'Programador'].includes(user?.loginRol);
   /** Ajuste de stock con movimiento `ajuste`: solo Programador y Administrador */
   const canAdjustStock = canManageOrders;
-  /** Config local: modal tipo caja al entregar sin stock (solo Admin/Programador). */
+  /** Config: Autocompletar stock (caja + entrega de pedidos). Solo Admin/Programador. */
   const allowDeliverStockAdjust =
     Boolean(activeApp?.ordersAllowDeliverStockAdjust) && canAdjustStock;
 
@@ -798,7 +798,7 @@ export default forwardRef(function OrderCalendarView({
           quantity: nuevoStock,
           description:
             deliverAdjustNote?.trim() ||
-            `Ajuste desde entrega de pedidos #${orderId || '—'} · ${line.name}`,
+            `Autocompletar stock · pedido #${orderId || '—'} · ${line.name}`,
           price: null,
           referenceType: 'order',
           referenceId: orderId || null,
@@ -2032,12 +2032,12 @@ export default forwardRef(function OrderCalendarView({
             ))}
             {storeStockAvail.some((l) => !l.ok) && allowDeliverStockAdjust ? (
               <Alert severity="info" sx={{ py: 0.5, mt: 0.75 }}>
-                Falta stock. Al confirmar se abrirá el ajuste (movimiento en pedidos) y luego la entrega.
+                Falta stock. Al confirmar se abrirá Autocompletar stock (ajuste) y luego la entrega.
               </Alert>
             ) : null}
             {storeStockAvail.some((l) => !l.ok) && !allowDeliverStockAdjust ? (
               <Alert severity="warning" sx={{ py: 0.5, mt: 0.75 }}>
-                Sin stock suficiente. Activá en Configuración «Pedidos: permitir ajuste…» (solo Admin).
+                Sin stock suficiente. Activá en Configuración → Inventario «Autocompletar stock» (solo Admin).
               </Alert>
             ) : null}
           </Stack>
@@ -2102,16 +2102,16 @@ export default forwardRef(function OrderCalendarView({
       maxWidth="sm"
     >
       <DialogTitle sx={{ fontWeight: 700, fontSize: '1rem' }}>
-        Stock insuficiente · ajuste desde pedidos
+        Autocompletar stock · entrega de pedido
       </DialogTitle>
       <DialogContent dividers>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-          Se registrará un movimiento tipo <strong>ajuste</strong> (desde entrega de pedidos
+          Se registrará un movimiento tipo <strong>ajuste</strong> (pedido
           #{deliverOrder?.id || '—'}) y luego se completará la entrega
           {multiStockEnabled && deliverStoreId
             ? ` desde el local #${deliverStoreId}`
             : ''}
-          . Solo Admin/Programador con la opción activa en Configuración.
+          . Requiere «Autocompletar stock» activo en Configuración.
         </Typography>
         <TableContainer sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mb: 1.5 }}>
           <Table size="small">
@@ -2178,7 +2178,7 @@ export default forwardRef(function OrderCalendarView({
           disabled={deliverBusy}
           onClick={() => void confirmDeliverAdjustAndDeliver()}
         >
-          {deliverBusy ? '…' : 'Ajustar y entregar'}
+          {deliverBusy ? '…' : 'Autocompletar y entregar'}
         </Button>
       </DialogActions>
     </Dialog>

@@ -38,7 +38,7 @@ export const RAPTOR_UNCONFIGURED_FALLBACK = {
   showProductCostInSelect: false,
   moneyDisplayDecimals: 2,
   moneyRoundingMode: "up",
-  ordersAllowDeliverStockAdjust: false,
+  ordersAllowDeliverStockAdjust: true,
   receiptDetailSettings: {
     productNameCase: "as_stored",
     showLineNumber: false,
@@ -81,7 +81,7 @@ export const EDDELI_FALLBACK = {
   showProductCostInSelect: false,
   moneyDisplayDecimals: 2,
   moneyRoundingMode: "up",
-  ordersAllowDeliverStockAdjust: false,
+  ordersAllowDeliverStockAdjust: true,
   receiptDetailSettings: {
     productNameCase: "as_stored",
     showLineNumber: false,

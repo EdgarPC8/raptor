@@ -201,6 +201,9 @@ export default function CajaPage() {
   const isAdmin = user?.loginRol === "Administrador" || isProgrammer;
   /** Admin/Programador: canasta de accesos rápidos sin tope de stock. */
   const allowBasketOverStock = isAdmin;
+  /** Config Inventario: Autocompletar stock (caja + pedidos). */
+  const allowAutoCompleteStock =
+    Boolean(activeApp?.ordersAllowDeliverStockAdjust) && isAdmin;
   const draftUserId = user?.userId != null ? String(user.userId) : null;
   const [products, setProducts] = useState([]);
   const [tierGroups, setTierGroups] = useState([]);
@@ -1084,20 +1087,18 @@ export default function CajaPage() {
       for (const issue of stockIssues) {
         const raw = String(stockAdjustQty[issue.productId] ?? "").trim().replace(",", ".");
         const adj = Number(raw);
+        const nuevoStock = Number(issue.systemStock) + adj;
         await registerMovement({
           productId: issue.productId,
-          type: "entrada",
-          reason: "ENTRADA_OTRA",
-          quantity: adj,
-          description: adjustmentNote || "Entrada desde caja (ajuste de stock del local)",
+          type: "ajuste",
+          reason: "AJUSTE_INVENTARIO",
+          quantity: nuevoStock,
+          description: adjustmentNote || "Autocompletar stock desde caja",
           price: null,
           referenceType: "caja_stock_adjust",
           storeId: Number(stockStoreId),
         });
-        stockPatches.set(
-          Number(issue.productId),
-          Number(issue.systemStock) + adj,
-        );
+        stockPatches.set(Number(issue.productId), nuevoStock);
       }
       if (stockPatches.size > 0) {
         setProducts((prev) =>
@@ -1222,6 +1223,15 @@ export default function CajaPage() {
 
     const issues = buildStockIssues(cart, products);
     if (issues.length > 0) {
+      if (!allowAutoCompleteStock) {
+        void toast?.({
+          message: `Stock insuficiente: ${issues
+            .map((i) => `${i.name} (hay ${i.systemStock}, pide ${i.requested})`)
+            .join("; ")}. Activá «Autocompletar stock» en Configuración → Inventario (Admin).`,
+          variant: "warning",
+        });
+        return;
+      }
       setPendingCheckout({
         resolvedCustomerId,
         isInvoice,
@@ -2039,14 +2049,13 @@ export default function CajaPage() {
 
       <Dialog open={stockDialogOpen} onClose={closeStockDialog} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontSize: "1rem", py: 1.5 }}>
-          Este local tiene menos stock que el carrito
+          Autocompletar stock · caja
         </DialogTitle>
         <DialogContent dividers sx={{ pt: 1 }}>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-            La entrada se suma al stock de{" "}
-            <strong>{activeShift?.store?.name || "este local"}</strong> (no a Bodega) y luego se
-            cobra. Si el producto está en Bodega, conviene trasladarlo; aquí es un ajuste rápido
-            con marca de revisión.
+            Se registra un movimiento tipo <strong>ajuste</strong> en{" "}
+            <strong>{activeShift?.store?.name || "este local"}</strong> y luego se cobra. Si el
+            producto está en Bodega, conviene trasladarlo; aquí es un autocompletado rápido.
           </Typography>
           <TableContainer sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, mb: 1.5 }}>
             <Table size="small">
@@ -2088,7 +2097,7 @@ export default function CajaPage() {
           <TextField
             fullWidth
             size="small"
-            label="Nota (opcional)"
+            label="Nota del ajuste (opcional)"
             placeholder="Conteo, mercancía no cargada…"
             value={adjustmentNote}
             onChange={(e) => setAdjustmentNote(e.target.value)}
@@ -2104,7 +2113,7 @@ export default function CajaPage() {
             onClick={() => void handleConfirmStockAdjustAndCheckout()}
             disabled={saving}
           >
-            {saving ? "…" : "Ajustar y cobrar"}
+            {saving ? "…" : "Autocompletar y cobrar"}
           </Button>
         </DialogActions>
       </Dialog>
