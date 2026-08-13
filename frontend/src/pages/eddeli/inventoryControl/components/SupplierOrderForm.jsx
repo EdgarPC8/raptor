@@ -191,6 +191,7 @@ function hydratePacksAndLots(rawItems) {
       productId: item.productId,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
+      discount: Number(item.discount) || 0,
       hasIva: Number(item.taxRate) > 0,
       taxRate: Number(item.taxRate) || 0,
       name: item.ERP_inventory_product?.name || item.name || "",
@@ -203,7 +204,7 @@ function hydratePacksAndLots(rawItems) {
   for (const pack of packs) {
     const sum = items
       .filter((it) => it.packKey === pack.key)
-      .reduce((acc, it) => acc + formatOrderLineTotal(it.quantity, it.unitPrice), 0);
+      .reduce((acc, it) => acc + formatOrderLineTotal(it.quantity, it.unitPrice, it.discount), 0);
     pack.totalPrice = sum > 0 ? String(Number(sum.toFixed(2))) : "";
   }
 
@@ -528,6 +529,7 @@ function SupplierOrderForm(
         productId,
         quantity,
         unitPrice,
+        discount: 0,
         hasIva: productIva > 0,
         taxRate: productIva,
         name: product?.name || "",
@@ -582,6 +584,7 @@ function SupplierOrderForm(
         productId,
         quantity: Number(row.quantity) || 0,
         unitPrice: Number(row.unitPrice) || 0,
+        discount: Math.max(0, Number(row.discount) || 0),
         hasIva: taxRate > 0,
         taxRate,
         name: product.name || row.description || "",
@@ -797,7 +800,7 @@ function SupplierOrderForm(
       const rows = packItems.map((it) => ({
         lineId: it.lineId,
         qty: Number(it.quantity),
-        line: formatOrderLineTotal(it.quantity, it.unitPrice),
+        line: formatOrderLineTotal(it.quantity, it.unitPrice, it.discount),
       }));
       const sumQty = rows.reduce((a, r) => a + (r.qty > 0 ? r.qty : 0), 0);
       const sumLine = rows.reduce((a, r) => a + (r.line > 0 ? r.line : 0), 0);
@@ -814,12 +817,12 @@ function SupplierOrderForm(
         if (!(qty > 0)) return it;
         let newUnit;
         if (sumLine > 1e-9) {
-          const line = formatOrderLineTotal(it.quantity, it.unitPrice);
+          const line = formatOrderLineTotal(it.quantity, it.unitPrice, it.discount);
           newUnit = (total * (line / sumLine)) / qty;
         } else {
           newUnit = total / sumQty;
         }
-        return { ...it, unitPrice: Number(newUnit.toFixed(8)) };
+        return { ...it, unitPrice: Number(newUnit.toFixed(8)), discount: 0 };
       });
     });
     toast({
@@ -923,7 +926,7 @@ function SupplierOrderForm(
     let sub = 0;
     let iva = 0;
     items.forEach((it) => {
-      const line = formatOrderLineTotal(it.quantity, it.unitPrice);
+      const line = formatOrderLineTotal(it.quantity, it.unitPrice, it.discount);
       sub += line;
       if (it.hasIva) {
         const rate = (Number(it.taxRate) || Number(ivaRate) || 0) / 100;
@@ -961,6 +964,7 @@ function SupplierOrderForm(
           productId: it.productId,
           quantity: Number(it.quantity),
           unitPrice: Number(it.unitPrice),
+          discount: Math.max(0, Number(it.discount) || 0),
           taxRate: it.hasIva ? Number(it.taxRate) || Number(ivaRate) || 0 : 0,
           ...lotFields,
         };
@@ -1079,12 +1083,14 @@ function SupplierOrderForm(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datos, isEditing, prefillSupplierId, prefillDate]);
 
-  const { subtotal, ivaTotal, itemsTotal } = useMemo(() => {
+  const { subtotal, ivaTotal, itemsTotal, discountTotal } = useMemo(() => {
     const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
     let sub = 0;
     let iva = 0;
+    let disc = 0;
     items.forEach((it) => {
-      const line = formatOrderLineTotal(it.quantity, it.unitPrice);
+      const line = formatOrderLineTotal(it.quantity, it.unitPrice, it.discount);
+      disc += Math.max(0, Number(it.discount) || 0);
       sub += line;
       if (it.hasIva) {
         const rate = (Number(it.taxRate) || Number(ivaRate) || 0) / 100;
@@ -1093,7 +1099,12 @@ function SupplierOrderForm(
     });
     const rSub = round2(sub);
     const rIva = round2(iva);
-    return { subtotal: rSub, ivaTotal: rIva, itemsTotal: round2(rSub + rIva) };
+    return {
+      subtotal: rSub,
+      ivaTotal: rIva,
+      itemsTotal: round2(rSub + rIva),
+      discountTotal: round2(disc),
+    };
   }, [items, ivaRate]);
 
   const sleep = (ms) => new Promise((r) => window.setTimeout(r, ms));
@@ -1131,6 +1142,7 @@ function SupplierOrderForm(
             productId: p.id,
             quantity: qty,
             unitPrice,
+            discount: 0,
             hasIva: Number(p?.taxRate) > 0,
             taxRate: Number(p?.taxRate) || 0,
             name: p.name,
@@ -1540,6 +1552,14 @@ function SupplierOrderForm(
 
             {items.length > 0 && (
               <Box sx={{ mt: "auto", pt: 1, borderTop: 1, borderColor: "divider" }}>
+                {discountTotal > 0 ? (
+                  <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Descuentos
+                    </Typography>
+                    <Typography variant="body2">−{formatProductPrice(discountTotal)}</Typography>
+                  </Box>
+                ) : null}
                 <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                   <Typography variant="body2" color="text.secondary">
                     Subtotal
@@ -1794,6 +1814,8 @@ export const SUPPLIER_ORDER_DIALOG_PAPER_SX = {
   flexDirection: "column",
   height: { xs: "100%", sm: "min(90vh, 900px)" },
   maxHeight: "92vh",
+  width: { sm: "min(96vw, 1400px)" },
+  maxWidth: { sm: "1400px" },
 };
 
 export const SUPPLIER_ORDER_DIALOG_CONTENT_SX = {

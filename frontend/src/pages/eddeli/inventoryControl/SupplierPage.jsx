@@ -197,7 +197,7 @@ function SupplierPage() {
             ? `Nueva compra / pedido — ${orderPrefill.supplierName}`
             : "Nueva compra / pedido a proveedor"
         }
-        maxWidth="lg"
+        maxWidth="xl"
         fullWidth
         paperSx={SUPPLIER_ORDER_DIALOG_PAPER_SX}
         contentSx={SUPPLIER_ORDER_DIALOG_CONTENT_SX}

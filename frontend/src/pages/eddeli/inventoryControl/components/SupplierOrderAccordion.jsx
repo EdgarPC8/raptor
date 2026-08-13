@@ -67,7 +67,9 @@ function supplierTotal(order) {
   let sub = 0;
   let iva = 0;
   (order.ERP_supplier_order_items || []).forEach((it) => {
-    const line = Number(it.quantity || 0) * Number(it.unitPrice || 0);
+    const gross = Number(it.quantity || 0) * Number(it.unitPrice || 0);
+    const disc = Math.max(0, Number(it.discount || 0));
+    const line = Math.max(0, gross - disc);
     sub += line;
     iva += line * (Number(it.taxRate || 0) / 100);
   });
@@ -756,13 +758,14 @@ export default function SupplierOrderAccordion({
 
           {(order.ERP_supplier_order_items || []).map((item) => {
             const unit = getProductUnitLabel(item.ERP_inventory_product);
-            const lineBase = formatOrderLineTotal(item.quantity, item.unitPrice);
+            const lineBase = formatOrderLineTotal(item.quantity, item.unitPrice, item.discount);
             const rate = Number(item.taxRate || 0);
             const lineTotal = lineBase * (1 + rate / 100);
             return (
               <Typography key={item.id} variant="body2" sx={{ mb: 0.5 }}>
                 • {item.ERP_inventory_product?.name || "Producto"} — {item.quantity} {unit} ×{" "}
                 {formatUnitPrice(item.unitPrice)}
+                {Number(item.discount) > 0 ? ` − desc. ${formatProductPrice(item.discount)}` : ""}
                 {rate > 0 ? ` + IVA ${rate}%` : ""} = {formatProductPrice(lineTotal)}
               </Typography>
             );

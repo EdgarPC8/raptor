@@ -134,7 +134,7 @@ function DraggableLine({
   const [menuAnchor, setMenuAnchor] = useState(null);
   const lineTaxRate = Number(item.taxRate ?? ivaRate) || 0;
   const lineTotal =
-    formatOrderLineTotal(item.quantity, item.unitPrice) *
+    formatOrderLineTotal(item.quantity, item.unitPrice, item.discount) *
     (showIva && item.hasIva ? 1 + lineTaxRate / 100 : 1);
 
   const otherPacks = packs.filter((p) => p.key !== item.packKey);
@@ -283,6 +283,16 @@ function DraggableLine({
           InputLabelProps={{ shrink: true }}
           inputProps={{ min: 0, step: "any" }}
           sx={{ width: 100 }}
+        />
+        <TextField
+          label="Desc. $"
+          type="number"
+          size="small"
+          value={item.discount ?? 0}
+          onChange={(e) => onUpdateField(item.lineId, "discount", e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          inputProps={{ min: 0, step: "any" }}
+          sx={{ width: 88 }}
         />
         {showIva && (
           <FormControlLabel
@@ -452,7 +462,7 @@ export default function SupplierOrderItemsBoard({
         const packLoose = items.filter((it) => it.packKey === pack.key && !it.lotKey);
         const packItems = items.filter((it) => it.packKey === pack.key);
         const linesSum = packItems.reduce(
-          (acc, it) => acc + formatOrderLineTotal(it.quantity, it.unitPrice),
+          (acc, it) => acc + formatOrderLineTotal(it.quantity, it.unitPrice, it.discount),
           0,
         );
         const expanded = pack.expanded !== false;

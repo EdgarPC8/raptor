@@ -33,11 +33,13 @@ export function getProductUnitLabel(product) {
   return unit?.abbreviation || unit?.name || "u.";
 }
 
-export function formatOrderLineTotal(quantity, unitPrice) {
+export function formatOrderLineTotal(quantity, unitPrice, discount = 0) {
   const qty = Number(quantity);
   const price = Number(unitPrice);
+  const disc = Number(discount);
   if (!Number.isFinite(qty) || !Number.isFinite(price)) return 0;
-  return qty * price;
+  const d = Number.isFinite(disc) && disc > 0 ? disc : 0;
+  return Math.max(0, qty * price - d);
 }
 
 export function OrderLineSummary({ quantity, unitPrice, unitLabel, sx }) {

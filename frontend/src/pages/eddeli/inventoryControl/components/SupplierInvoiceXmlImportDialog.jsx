@@ -621,7 +621,7 @@ export default function SupplierInvoiceXmlImportDialog({
         open={open}
         onClose={creatingAll ? undefined : onClose}
         fullWidth
-        maxWidth="lg"
+        maxWidth="xl"
         scroll="paper"
       >
         <Box
@@ -814,6 +814,7 @@ export default function SupplierInvoiceXmlImportDialog({
                     <TableCell>Descripción (XML)</TableCell>
                     <TableCell align="right">Cant</TableCell>
                     <TableCell align="right">P.U.</TableCell>
+                    <TableCell align="right">Desc.</TableCell>
                     <TableCell align="right">IVA%</TableCell>
                     <TableCell sx={{ minWidth: 260 }}>Producto en sistema</TableCell>
                   </TableRow>
@@ -885,6 +886,7 @@ export default function SupplierInvoiceXmlImportDialog({
                       </TableCell>
                       <TableCell align="right">{money(row.quantity)}</TableCell>
                       <TableCell align="right">{money(row.unitPrice)}</TableCell>
+                      <TableCell align="right">{money(row.discount)}</TableCell>
                       <TableCell align="right">{row.taxRate || 0}</TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={0.75} alignItems="flex-start">

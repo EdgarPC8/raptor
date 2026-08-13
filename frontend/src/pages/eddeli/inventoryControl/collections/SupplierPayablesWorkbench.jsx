@@ -985,7 +985,7 @@ export default function SupplierPayablesWorkbench() {
             ? `Editar pedido a proveedor #${orderToEdit.id}`
             : "Editar pedido a proveedor"
         }
-        maxWidth="lg"
+        maxWidth="xl"
         fullWidth
         paperSx={SUPPLIER_ORDER_DIALOG_PAPER_SX}
         contentSx={SUPPLIER_ORDER_DIALOG_CONTENT_SX}

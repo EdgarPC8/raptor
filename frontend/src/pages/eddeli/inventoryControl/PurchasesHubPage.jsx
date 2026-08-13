@@ -398,7 +398,7 @@ export default function PurchasesHubPage() {
         open={formOpen}
         onClose={closeForm}
         tittle={isEditing ? "Editar compra / pedido a proveedor" : "Nueva compra a proveedor"}
-        maxWidth="lg"
+        maxWidth="xl"
         fullWidth
         paperSx={SUPPLIER_ORDER_DIALOG_PAPER_SX}
         contentSx={SUPPLIER_ORDER_DIALOG_CONTENT_SX}
