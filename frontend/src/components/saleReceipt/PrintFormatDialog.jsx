@@ -15,13 +15,12 @@ import {
   Typography,
 } from "@mui/material";
 import PrintIcon from "@mui/icons-material/Print";
-import DescriptionIcon from "@mui/icons-material/Description";
-import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import ImageIcon from "@mui/icons-material/Image";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import SaleReceiptContent from "./SaleReceiptContent.jsx";
+import PrintFormatToggle from "./PrintFormatToggle.jsx";
 import {
   DOCUMENT_TYPE_OPTIONS,
   applyReceiptDocumentType,
@@ -32,7 +31,7 @@ import {
   downloadReceiptAsPdf,
   downloadReceiptAsPng,
 } from "../../utils/saleReceiptExport.js";
-import { getReceiptLayout } from "../../utils/receiptFormats.js";
+import { getReceiptLayout, normalizePrintFormat } from "../../utils/receiptFormats.js";
 import { enrichReceiptWithFiscal } from "../../utils/invoiceFiscalUtils.js";
 import { fetchSriBillingSettings } from "../../api/sriBillingRequest.js";
 import { fetchSriInvoices } from "../../api/sriInvoicesRequest.js";
@@ -43,11 +42,16 @@ export default function PrintFormatDialog({
   open,
   onClose,
   receipt,
-  initialFormat = "a4",
+  initialFormat = null,
   sriInvoice: sriInvoiceProp = null,
 }) {
   const { activeApp } = useAppSettings();
-  const [format, setFormat] = useState(initialFormat);
+  const settingsFormat = normalizePrintFormat(
+    activeApp?.receiptDetailSettings?.defaultPrintFormat,
+  );
+  const [format, setFormat] = useState(
+    () => normalizePrintFormat(initialFormat || settingsFormat),
+  );
   const [documentType, setDocumentType] = useState("documento");
   const [showNotes, setShowNotes] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -65,13 +69,13 @@ export default function PrintFormatDialog({
 
   useEffect(() => {
     if (open) {
-      setFormat(initialFormat);
+      setFormat(normalizePrintFormat(initialFormat || settingsFormat));
       setDocumentType(receipt?.documentType || "documento");
       setShowNotes(true);
       setCopied(false);
       setSriInvoice(sriInvoiceProp || null);
     }
-  }, [open, initialFormat, receipt?.documentType, sriInvoiceProp]);
+  }, [open, initialFormat, settingsFormat, receipt?.documentType, sriInvoiceProp]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -191,26 +195,7 @@ export default function PrintFormatDialog({
             <Typography variant="body2" color="text.secondary" gutterBottom>
               Formato
             </Typography>
-            <ToggleButtonGroup
-              exclusive
-              value={format}
-              onChange={(_, v) => v && setFormat(v)}
-              size="small"
-              sx={{ flexWrap: "wrap", gap: 0.5 }}
-            >
-              <ToggleButton value="a4">
-                <DescriptionIcon fontSize="small" sx={{ mr: 0.5 }} />
-                A4
-              </ToggleButton>
-              <ToggleButton value="ticket80">
-                <ReceiptLongIcon fontSize="small" sx={{ mr: 0.5 }} />
-                Ticket 80 mm
-              </ToggleButton>
-              <ToggleButton value="ticket55">
-                <ReceiptLongIcon fontSize="small" sx={{ mr: 0.5 }} />
-                Ticket 55 mm
-              </ToggleButton>
-            </ToggleButtonGroup>
+            <PrintFormatToggle value={format} onChange={setFormat} />
           </Box>
 
           {isFactura ? (

@@ -1,5 +1,17 @@
 /** Formatos de comprobante: A4 y tickets térmicos. */
+export const PRINT_FORMATS = ["a4", "ticket80", "ticket55"];
 export const TICKET_FORMATS = ["ticket80", "ticket55"];
+
+export const PRINT_FORMAT_OPTIONS = [
+  { value: "a4", label: "A4" },
+  { value: "ticket80", label: "Ticket 80 mm" },
+  { value: "ticket55", label: "Ticket 55 mm" },
+];
+
+export function normalizePrintFormat(value, fallback = "a4") {
+  const v = String(value || "").trim();
+  return PRINT_FORMATS.includes(v) ? v : fallback;
+}
 
 export function isTicketFormat(format) {
   return TICKET_FORMATS.includes(format);

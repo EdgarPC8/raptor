@@ -46,6 +46,7 @@ import { amountToSpanishDollars } from "../../../../utils/amountToSpanishWords.j
 import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
 import { useAuth } from "../../../../context/AuthContext.jsx";
 import { buildCustomerDisplayName } from "../../../../utils/customerUtils.js";
+import { normalizePrintFormat } from "../../../../utils/receiptFormats.js";
 
 const escapeHtml = (s) =>
   String(s ?? "")
@@ -187,10 +188,13 @@ export default function DebtReportDialog({
 }) {
   const captureRef = useRef(null);
   const { activeApp } = useAppSettings();
+  const settingsFormat = normalizePrintFormat(
+    activeApp?.receiptDetailSettings?.defaultPrintFormat,
+  );
   const { user: accountUser } = useAuth();
   const isProgrammer = accountUser?.loginRol === "Programador";
   const [busy, setBusy] = useState(false);
-  const [format, setFormat] = useState("a4");
+  const [format, setFormat] = useState(settingsFormat);
   const [viewMode, setViewMode] = useState("resumen"); // resumen | acta
   const [copied, setCopied] = useState(false);
   /** Monto editable en constancia (solo Programador). */
@@ -203,8 +207,11 @@ export default function DebtReportDialog({
   const isGroup = !!group;
 
   useEffect(() => {
-    if (open) setViewMode("resumen");
-  }, [open, isGroup, customer?.id]);
+    if (open) {
+      setViewMode("resumen");
+      setFormat(settingsFormat);
+    }
+  }, [open, isGroup, customer?.id, settingsFormat]);
 
   const bakeryName = activeApp?.name || "Panadería";
   const bakeryAlias = activeApp?.alias || bakeryName;

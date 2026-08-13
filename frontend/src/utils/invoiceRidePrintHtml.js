@@ -125,14 +125,14 @@ function issuerHtml(receipt, fiscal, isTicket) {
   </div>`;
 }
 
-export function buildInvoiceRidePrintHtml(receipt, format = "a4") {
+export function buildInvoiceRidePrintHtml(receipt, format = "a4", options = {}) {
   if (!receipt) return "";
   const layout = getReceiptLayout(format);
   const isTicket = layout.isTicket;
   const fiscal = receipt.fiscal || {};
   const items = receipt.items || [];
   const detailCfg = normalizeReceiptDetailSettings(
-    getActiveAppSettings()?.receiptDetailSettings,
+    options.detailSettings ?? getActiveAppSettings()?.receiptDetailSettings,
   );
   const docType = receipt.documentType || "factura";
   const ivaRate = dominantIvaRate(items);

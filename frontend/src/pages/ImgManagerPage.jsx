@@ -55,6 +55,65 @@ function formatBytes(n) {
   return `${(v / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Adjunta ruta relativa al File (como webkitRelativePath). */
+function withRelativePath(file, relPath) {
+  const rel = String(relPath || "").replace(/\\/g, "/");
+  try {
+    Object.defineProperty(file, "webkitRelativePath", {
+      configurable: true,
+      enumerable: true,
+      value: rel,
+    });
+    return file;
+  } catch {
+    const copy = new File([file], file.name, {
+      type: file.type,
+      lastModified: file.lastModified,
+    });
+    Object.defineProperty(copy, "webkitRelativePath", {
+      configurable: true,
+      enumerable: true,
+      value: rel,
+    });
+    return copy;
+  }
+}
+
+/** Lee recursivo un DirectoryHandle (File System Access API). */
+async function readDirHandleRecursive(dirHandle, prefix = "") {
+  const out = [];
+  for await (const [name, handle] of dirHandle.entries()) {
+    const rel = prefix ? `${prefix}/${name}` : name;
+    if (handle.kind === "file") {
+      const file = await handle.getFile();
+      out.push(withRelativePath(file, rel));
+    } else if (handle.kind === "directory") {
+      const nested = await readDirHandleRecursive(handle, rel);
+      out.push(...nested);
+    }
+  }
+  return out;
+}
+
+/**
+ * Elige carpeta sin el diálogo de Brave/Chrome
+ * «¿Deseas cargar N archivos a este sitio?» (eso solo sale con <input webkitdirectory>).
+ * Usa File System Access API: lee local y luego subimos nosotros → sale nuestro modal.
+ * Cancel → null. No soportado → undefined.
+ */
+async function pickFolderTreeFiles() {
+  if (typeof window.showDirectoryPicker !== "function") {
+    return undefined;
+  }
+  try {
+    const root = await window.showDirectoryPicker({ mode: "read" });
+    return await readDirHandleRecursive(root, root.name);
+  } catch (err) {
+    if (err?.name === "AbortError") return null;
+    throw err;
+  }
+}
+
 /** Normaliza filtro de carpeta (la base ya es src/img). */
 function normalizeFolderInput(raw) {
   let s = String(raw || "")
@@ -170,7 +229,6 @@ export default function ImgManagerPage() {
   const [loading, setLoading] = useState(true);
 
   const filesInputRef = useRef(null);
-  const folderInputRef = useRef(null);
 
   /** Resumen previo a subir */
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -532,10 +590,9 @@ export default function ImgManagerPage() {
         Control de imágenes
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Base: <strong>{pathImg}</strong> — navegá carpetas hijas, bajá ZIP o usá{" "}
-        <strong>Subir carpeta</strong> para mandar un árbol completo (subcarpetas +
-        imágenes). Elegí la carpeta <code>img</code> local o cualquier carpeta con
-        subcarpetas.
+        Base: <strong>{pathImg}</strong> — con <strong>Subir carpeta</strong> el navegador
+        solo pide elegir la carpeta; el resumen, duplicados y la barra de progreso son del
+        sistema (no el aviso de «cargar N archivos»).
       </Typography>
 
       <Breadcrumbs
@@ -627,7 +684,35 @@ export default function ImgManagerPage() {
           startIcon={<DriveFolderUploadIcon />}
           variant="outlined"
           disabled={uploading}
-          onClick={() => folderInputRef.current?.click()}
+          onClick={async () => {
+            try {
+              const list = await pickFolderTreeFiles();
+              if (list === undefined) {
+                toast({
+                  message:
+                    "Este navegador no deja leer carpetas sin el aviso de «cargar N archivos». Usá Chrome/Brave actualizado o «Subir archivos» / un ZIP por archivos sueltos.",
+                  variant: "warning",
+                });
+                return;
+              }
+              if (list === null) return; // canceló el selector de carpeta
+              if (!list.length) {
+                toast({
+                  message: "La carpeta no tiene archivos",
+                  variant: "info",
+                });
+                return;
+              }
+              openPreviewFromFileList(list);
+            } catch (error) {
+              toast({
+                message:
+                  error?.message ||
+                  "No se pudo leer la carpeta. Revisá el permiso del navegador y reintentá.",
+                variant: "error",
+              });
+            }
+          }}
         >
           Subir carpeta
         </Button>
@@ -657,25 +742,6 @@ export default function ImgManagerPage() {
         onChange={(e) => {
           const list = e.target.files;
           e.target.value = "";
-          openPreviewFromFileList(list);
-        }}
-      />
-      <input
-        ref={(el) => {
-          folderInputRef.current = el;
-          if (el) {
-            el.setAttribute("webkitdirectory", "");
-            el.setAttribute("directory", "");
-            el.setAttribute("mozdirectory", "");
-          }
-        }}
-        type="file"
-        hidden
-        multiple
-        onChange={(e) => {
-          const list = e.target.files;
-          e.target.value = "";
-          if (!list?.length) return;
           openPreviewFromFileList(list);
         }}
       />

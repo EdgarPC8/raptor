@@ -1,6 +1,7 @@
 /**
  * Formato del detalle de productos en factura / nota de venta.
  */
+import { normalizePrintFormat } from "./receiptFormats.js";
 
 export const PRODUCT_NAME_CASE_OPTIONS = [
   { value: "as_stored", label: "Como está en la base de datos" },
@@ -19,6 +20,7 @@ export const DEFAULT_RECEIPT_DETAIL_SETTINGS = {
   collapseSpaces: true,
   applyToFactura: true,
   applyToNotaVenta: true,
+  defaultPrintFormat: "a4",
 };
 
 export function normalizeReceiptDetailSettings(raw) {
@@ -46,6 +48,7 @@ export function normalizeReceiptDetailSettings(raw) {
     applyToFactura: src.applyToFactura !== false && src.applyToFactura !== "false",
     applyToNotaVenta:
       src.applyToNotaVenta !== false && src.applyToNotaVenta !== "false",
+    defaultPrintFormat: normalizePrintFormat(src.defaultPrintFormat, "a4"),
   };
 }
 

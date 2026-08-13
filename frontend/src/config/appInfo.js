@@ -49,6 +49,7 @@ export const RAPTOR_UNCONFIGURED_FALLBACK = {
     collapseSpaces: true,
     applyToFactura: true,
     applyToNotaVenta: true,
+    defaultPrintFormat: "a4",
   },
   themePalette: null,
 };
@@ -92,6 +93,7 @@ export const EDDELI_FALLBACK = {
     collapseSpaces: true,
     applyToFactura: true,
     applyToNotaVenta: true,
+    defaultPrintFormat: "a4",
   },
   themePalette: null,
 };

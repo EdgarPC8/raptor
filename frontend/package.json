@@ -25,6 +25,7 @@
     "git-push-eddeli": "node scripts/git-push-eddeli.mjs",
     "git-push-store": "node scripts/git-push-store.mjs",
     "git-push-tienda": "node scripts/git-push-tienda.mjs",
+    "git-push-apps": "node scripts/git-push-apps.mjs",
     "generate:guest-data": "node scripts/generate-guest-data.mjs",
     "preview": "vite preview --mode eddeli",
     "preview:store": "vite preview --mode store",

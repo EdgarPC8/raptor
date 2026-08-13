@@ -316,7 +316,7 @@ export function applyReceiptCustomerOverrides(receipt, fields = {}) {
 
 export function printSaleReceipt(receipt, format, options = {}) {
   const html = isFacturaDocument(receipt)
-    ? buildInvoiceRidePrintHtml(receipt, format)
+    ? buildInvoiceRidePrintHtml(receipt, format, options)
     : buildPrintHtml(receipt, format, options);
   printHtmlDocument(html, { format });
 }
@@ -361,7 +361,7 @@ function buildPrintHtml(receipt, format, options = {}) {
         </div>
       </div>`;
   const detailCfg = normalizeReceiptDetailSettings(
-    getActiveAppSettings()?.receiptDetailSettings,
+    options.detailSettings ?? getActiveAppSettings()?.receiptDetailSettings,
   );
   const docType = receipt.documentType || "nota_venta";
   const rows = (receipt.items || [])

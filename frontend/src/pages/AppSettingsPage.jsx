@@ -43,6 +43,7 @@ import AppTimeClockPanel from "../components/AppTimeClockPanel.jsx";
 import SriBillingSettingsPanel from "../components/SriBillingSettingsPanel.jsx";
 import ReceiptDetailPreviewDialog from "../components/settings/ReceiptDetailPreviewDialog.jsx";
 import ThemePaletteEditor from "../components/settings/ThemePaletteEditor.jsx";
+import PrintFormatToggle from "../components/saleReceipt/PrintFormatToggle.jsx";
 import { PageSkeleton } from "../components/ContentSkeleton.jsx";
 import TourHelpButton from "../components/TourHelpButton.jsx";
 import { usePageTour } from "../hooks/usePageTour.js";
@@ -122,7 +123,7 @@ function SettingsSection({ title, hint, children, tourId }) {
 }
 
 /** Fila estilo menú de juego: etiqueta a la izquierda, control a la derecha. */
-function SettingsRow({ label, description, control, align = "center" }) {
+function SettingsRow({ label, description, control, align = "center", wide = false }) {
   return (
     <Box
       sx={(theme) => ({
@@ -157,8 +158,8 @@ function SettingsRow({ label, description, control, align = "center" }) {
       <Box
         sx={{
           flexShrink: 0,
-          minWidth: { sm: 200 },
-          maxWidth: { sm: 360 },
+          minWidth: { sm: wide ? 280 : 200 },
+          maxWidth: { sm: wide ? 480 : 360 },
           width: { xs: "100%", sm: "auto" },
           display: "flex",
           justifyContent: { xs: "stretch", sm: "flex-end" },
@@ -285,6 +286,15 @@ export default function AppSettingsPage() {
           key === "maxNameLength"
             ? Number(value) || 0
             : value,
+      },
+    }));
+  };
+  const onDefaultPrintFormat = (value) => {
+    setForm((f) => ({
+      ...f,
+      receiptDetailSettings: {
+        ...(f.receiptDetailSettings || DEFAULT_RECEIPT_DETAIL_SETTINGS),
+        defaultPrintFormat: value,
       },
     }));
   };
@@ -924,10 +934,11 @@ export default function AppSettingsPage() {
           )}
 
           {tab === "comprobantes" && (
+            <>
             <SettingsSection
-              title="Texto del detalle"
-              hint="Cómo se ven los productos en factura / nota de venta. No cambia la BD."
-              tourId="config-receipt-detail"
+              title="Impresión"
+              hint="Tamaño de papel para factura, nota de venta y el resto del sistema (caja, pedidos, cobros)."
+              tourId="config-receipt-print"
             >
               <Stack
                 direction={{ xs: "column", sm: "row" }}
@@ -946,6 +957,24 @@ export default function AppSettingsPage() {
                   Ver plantilla de prueba
                 </Button>
               </Stack>
+              <SettingsRow
+                label="Formato predeterminado"
+                description="A4, ticket 80 mm o 55 mm. Se puede cambiar en cada impresión."
+                align="flex-start"
+                wide
+                control={
+                  <PrintFormatToggle
+                    value={form.receiptDetailSettings?.defaultPrintFormat || "a4"}
+                    onChange={onDefaultPrintFormat}
+                  />
+                }
+              />
+            </SettingsSection>
+            <SettingsSection
+              title="Texto del detalle"
+              hint="Cómo se ven los productos en factura / nota de venta. No cambia la BD."
+              tourId="config-receipt-detail"
+            >
               <SettingsRow
                 label="Mayúsculas / minúsculas"
                 description="Formato del nombre del producto en el comprobante."
@@ -1014,6 +1043,7 @@ export default function AppSettingsPage() {
                 );
               })}
             </SettingsSection>
+            </>
           )}
 
           {tab === "publico" && (
@@ -1079,6 +1109,7 @@ export default function AppSettingsPage() {
         onClose={() => setPreviewOpen(false)}
         settings={form.receiptDetailSettings}
         businessName={form.alias || form.name || activeApp?.alias}
+        onFormatChange={onDefaultPrintFormat}
       />
 
       <Button
