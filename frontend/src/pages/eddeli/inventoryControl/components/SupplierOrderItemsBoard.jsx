@@ -25,6 +25,7 @@ import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import MoveToInboxIcon from "@mui/icons-material/MoveToInbox";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import {
   formatOrderLineTotal,
   formatProductPrice,
@@ -365,6 +366,7 @@ export default function SupplierOrderItemsBoard({
   onCreateLot,
   onUpdateLot,
   onRemoveLot,
+  onOpenShoppingList,
 }) {
   const freeItems = items.filter((it) => !it.packKey);
 
@@ -377,6 +379,22 @@ export default function SupplierOrderItemsBoard({
         <Typography variant="subtitle2" fontWeight={700} sx={{ flex: 1 }}>
           Productos ({items.length})
         </Typography>
+        {typeof onOpenShoppingList === "function" ? (
+          <Tooltip title="Lista de pedido (copiar / PNG / PDF)">
+            <span>
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={onOpenShoppingList}
+                disabled={!items.length}
+                aria-label="Lista de pedido"
+                sx={{ border: 1, borderColor: "divider" }}
+              >
+                <DescriptionOutlinedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        ) : null}
         <Button
           size="small"
           variant="outlined"

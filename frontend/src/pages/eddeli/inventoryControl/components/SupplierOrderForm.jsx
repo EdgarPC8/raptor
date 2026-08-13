@@ -25,7 +25,6 @@ import SearchIcon from "@mui/icons-material/Search";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import ImageIcon from "@mui/icons-material/Image";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useForm } from "react-hook-form";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -55,6 +54,7 @@ import ProductPriceReference, {
 } from "./ProductPriceReference";
 import SupplierOrderItemsBoard, { ZONE } from "./SupplierOrderItemsBoard.jsx";
 import SupplierInvoiceXmlImportDialog from "./SupplierInvoiceXmlImportDialog.jsx";
+import SupplierOrderShoppingListDialog from "./SupplierOrderShoppingListDialog.jsx";
 import { uploadSupplierOrderVoucher } from "../../../../api/documentRequest.js";
 import { useBarcodeScanner } from "../../../../hooks/useBarcodeScanner.js";
 import {
@@ -269,6 +269,7 @@ function SupplierOrderForm(
   const [supplierDialogOpen, setSupplierDialogOpen] = useState(false);
   const [xmlImportOpen, setXmlImportOpen] = useState(false);
   const [xmlParsed, setXmlParsed] = useState(null);
+  const [shoppingListOpen, setShoppingListOpen] = useState(false);
   const xmlFileInputRef = useRef(null);
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -1534,6 +1535,7 @@ function SupplierOrderForm(
               onCreateLot={createLot}
               onUpdateLot={updateLot}
               onRemoveLot={removeLot}
+              onOpenShoppingList={() => setShoppingListOpen(true)}
             />
 
             {items.length > 0 && (
@@ -1767,6 +1769,18 @@ function SupplierOrderForm(
           });
           setSelectedSupplier(String(supplier.id));
         }}
+      />
+
+      <SupplierOrderShoppingListDialog
+        open={shoppingListOpen}
+        onClose={() => setShoppingListOpen(false)}
+        items={items}
+        supplierName={
+          suppliers.find((s) => String(s.id) === String(selectedSupplier))?.name || ""
+        }
+        dateLabel={watch("date") || ""}
+        notes={watch("notes") || ""}
+        orderId={isEditing ? datos?.id : null}
       />
     </Box>
   );

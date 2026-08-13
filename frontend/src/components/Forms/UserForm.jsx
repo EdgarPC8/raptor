@@ -24,7 +24,9 @@ const EMPTY_FORM = {
   username: "",
   ci: "",
   firstName: "",
+  secondName: "",
   firstLastName: "",
+  secondLastName: "",
   password: "",
   roles: [],
   isActive: true,
@@ -32,7 +34,7 @@ const EMPTY_FORM = {
 
 export default function UsersForm({ onSubmit, initialData }) {
   const { user } = useAuth();
-  const { roles, isLoading: isLoadingRoles } = useRoles();
+  const { roles } = useRoles();
   const [form, setForm] = useState(EMPTY_FORM);
 
   const canManageProgramador = user?.loginRol === INTERNAL_ROLE;
@@ -60,7 +62,9 @@ export default function UsersForm({ onSubmit, initialData }) {
         username: initialData.username || "",
         ci: initialData.ci || "",
         firstName: initialData.firstName || "",
+        secondName: initialData.secondName || "",
         firstLastName: initialData.firstLastName || "",
+        secondLastName: initialData.secondLastName || "",
         password: initialData.password || "",
         roles: initialData.roles || [],
         isActive: initialData.isActive !== false,
@@ -137,7 +141,7 @@ export default function UsersForm({ onSubmit, initialData }) {
             required
           />
         </Grid>
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6}>
           <TextField
             fullWidth
             size="small"
@@ -148,7 +152,17 @@ export default function UsersForm({ onSubmit, initialData }) {
             required
           />
         </Grid>
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            fullWidth
+            size="small"
+            label="Segundo nombre"
+            name="secondName"
+            value={form.secondName}
+            onChange={handleChange}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6}>
           <TextField
             fullWidth
             size="small"
@@ -157,6 +171,16 @@ export default function UsersForm({ onSubmit, initialData }) {
             value={form.firstLastName}
             onChange={handleChange}
             required
+          />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            fullWidth
+            size="small"
+            label="Segundo apellido"
+            name="secondLastName"
+            value={form.secondLastName}
+            onChange={handleChange}
           />
         </Grid>
         <Grid item xs={12}>

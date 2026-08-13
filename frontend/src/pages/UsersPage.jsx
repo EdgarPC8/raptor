@@ -132,8 +132,10 @@ export default function UsersPage() {
                   setUserId(r.id);
                   setForm({
                     email: r.email || r.account?.email || "",
-                    firstName: r.firstName,
-                    firstLastName: r.firstLastName,
+                    firstName: r.firstName || "",
+                    secondName: r.secondName || "",
+                    firstLastName: r.firstLastName || "",
+                    secondLastName: r.secondLastName || "",
                     username: r.account?.username || "",
                     ci: r.ci,
                     password: "",

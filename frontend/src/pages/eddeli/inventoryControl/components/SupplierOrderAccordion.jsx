@@ -29,6 +29,7 @@ import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
 import EditCalendarIcon from "@mui/icons-material/EditCalendar";
 import EditIcon from "@mui/icons-material/Edit";
 import CloseIcon from "@mui/icons-material/Close";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import {
   deleteSupplierOrderRequest,
   markSupplierOrderReceivedRequest,
@@ -42,6 +43,7 @@ import { formatDateTime } from "../../../../helpers/functions.js";
 import DocumentAttachmentIcon from "./DocumentAttachmentIcon";
 import DocumentUploadButton from "./DocumentUploadButton";
 import ProductForm from "./ProductForm.jsx";
+import SupplierOrderShoppingListDialog from "./SupplierOrderShoppingListDialog.jsx";
 import {
   getProductUnitLabel,
   formatOrderLineTotal,
@@ -168,6 +170,7 @@ export default function SupplierOrderAccordion({
   const [receiveStoreId, setReceiveStoreId] = useState("");
   const [inventoryStores, setInventoryStores] = useState([]);
   const [storesLoading, setStoresLoading] = useState(false);
+  const [shoppingListOpen, setShoppingListOpen] = useState(false);
 
   const total = supplierTotal(order);
   const paid = supplierPaid(order);
@@ -701,6 +704,21 @@ export default function SupplierOrderAccordion({
                   </IconButton>
                 </Tooltip>
               )}
+              {(order.ERP_supplier_order_items || []).length > 0 && (
+                <Tooltip title="Lista de pedido (copiar / PNG / PDF)">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShoppingListOpen(true);
+                    }}
+                    onFocus={(e) => e.stopPropagation()}
+                    aria-label="Lista de pedido"
+                  >
+                    <DescriptionOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
               {canManage && !order.receivedAt && (
                 <Tooltip title="Eliminar">
                   <IconButton
@@ -850,6 +868,29 @@ export default function SupplierOrderAccordion({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <SupplierOrderShoppingListDialog
+        open={shoppingListOpen}
+        onClose={() => setShoppingListOpen(false)}
+        items={(order.ERP_supplier_order_items || []).map((item) => ({
+          lineId: item.id,
+          productId: item.productId,
+          name: item.ERP_inventory_product?.name || "Producto",
+          quantity: item.quantity,
+          unitLabel: getProductUnitLabel(item.ERP_inventory_product),
+          ERP_inventory_product: item.ERP_inventory_product,
+        }))}
+        supplierName={order.ERP_supplier?.name || ""}
+        dateLabel={
+          order.date
+            ? String(order.date).slice(0, 10)
+            : order.createdAt
+              ? String(order.createdAt).slice(0, 10)
+              : ""
+        }
+        notes={order.notes || ""}
+        orderId={order.id}
+      />
     </>
   );
 }
