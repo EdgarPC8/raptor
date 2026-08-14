@@ -74,7 +74,8 @@ function toActiveApp(settings, { offline = false } = {}) {
     cajaQuickCategoryMatch: resolved.cajaQuickCategoryMatch || "",
     walkInCustomerLabel: resolved.walkInCustomerLabel || "Consumidor Final",
     timezone: resolved.timezone || APP_SETTINGS_FALLBACK.timezone || "America/Guayaquil",
-    // Sin configurar / plantilla: sin catálogo ni locales públicos
+    // Flags operativos: siempre desde settings/API. No anularlos por branding
+    // “sin logo” ( Troya Market tenía ordersAllowDeliverStockAdjust=1 pero caja lo veía off ).
     showPublicCatalog: unconfigured
       ? false
       : resolved.showPublicCatalog !== false,
@@ -84,27 +85,38 @@ function toActiveApp(settings, { offline = false } = {}) {
     showPublicStoresVitrina: unconfigured
       ? false
       : resolved.showPublicStoresVitrina !== false,
-    multiStockEnabled: unconfigured
+    multiStockEnabled: SHELL_ONLY
       ? false
-      : Boolean(resolved.multiStockEnabled),
-    showProductCostInSelect: unconfigured
+      : Boolean(settings?.multiStockEnabled ?? resolved.multiStockEnabled),
+    showProductCostInSelect: SHELL_ONLY
       ? false
-      : Boolean(resolved.showProductCostInSelect),
+      : Boolean(settings?.showProductCostInSelect ?? resolved.showProductCostInSelect),
     moneyDisplayDecimals: unconfigured
       ? 2
-      : normalizeMoneyDisplayDecimals(resolved.moneyDisplayDecimals, 2),
+      : normalizeMoneyDisplayDecimals(
+          settings?.moneyDisplayDecimals ?? resolved.moneyDisplayDecimals,
+          2,
+        ),
     moneyRoundingMode: unconfigured
       ? "up"
-      : normalizeMoneyRoundingMode(resolved.moneyRoundingMode, "up"),
-    ordersAllowDeliverStockAdjust: unconfigured
+      : normalizeMoneyRoundingMode(
+          settings?.moneyRoundingMode ?? resolved.moneyRoundingMode,
+          "up",
+        ),
+    ordersAllowDeliverStockAdjust: SHELL_ONLY
       ? false
-      : Boolean(resolved.ordersAllowDeliverStockAdjust),
+      : Boolean(
+          settings?.ordersAllowDeliverStockAdjust ??
+            resolved.ordersAllowDeliverStockAdjust,
+        ),
     receiptDetailSettings: unconfigured
       ? { ...DEFAULT_RECEIPT_DETAIL_SETTINGS }
-      : normalizeReceiptDetailSettings(resolved.receiptDetailSettings),
+      : normalizeReceiptDetailSettings(
+          settings?.receiptDetailSettings ?? resolved.receiptDetailSettings,
+        ),
     themePalette: unconfigured
       ? normalizeThemePalette(DEFAULT_THEME_PALETTE)
-      : normalizeThemePalette(resolved.themePalette),
+      : normalizeThemePalette(settings?.themePalette ?? resolved.themePalette),
     year: new Date().getFullYear(),
     background: "#F0F9FB",
   };

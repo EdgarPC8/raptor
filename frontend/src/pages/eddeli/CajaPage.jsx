@@ -1224,10 +1224,15 @@ export default function CajaPage() {
     const issues = buildStockIssues(cart, products);
     if (issues.length > 0) {
       if (!allowAutoCompleteStock) {
+        const settingOn = Boolean(activeApp?.ordersAllowDeliverStockAdjust);
+        const hint =
+          settingOn && !isAdmin
+            ? "Solo Admin/Programador puede autocompletar stock en caja."
+            : "Activá «Autocompletar stock» en Configuración → Inventario (Admin).";
         void toast?.({
           message: `Stock insuficiente: ${issues
             .map((i) => `${i.name} (hay ${i.systemStock}, pide ${i.requested})`)
-            .join("; ")}. Activá «Autocompletar stock» en Configuración → Inventario (Admin).`,
+            .join("; ")}. ${hint}`,
           variant: "warning",
         });
         return;

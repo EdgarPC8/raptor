@@ -125,9 +125,9 @@ export function looksUnconfigured(settings) {
     if (/eddeli/i.test(alias) || /eddeli/i.test(name) || /panader/i.test(name)) return true;
     if (/^softed$/i.test(author)) return true;
     if (!alias || !name) return true;
-    if (!logoPath) return true;
-    // Plantilla Raptor aún sin personalizar
-    if (/^raptor$/i.test(alias) && /^raptor$/i.test(name) && !logoPath) return true;
+    // Plantilla Raptor aún sin personalizar (nombre propio = ya en uso).
+    // Logo vacío no cuenta como “sin configurar”: se usa marca Raptor de placeholder.
+    if (/^raptor$/i.test(alias) && /^raptor$/i.test(name)) return true;
     return false;
   }
 
