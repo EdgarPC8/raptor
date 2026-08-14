@@ -369,6 +369,13 @@ export default function CajaPage() {
     }
 
     setProducts(nextProducts);
+    setCart((prev) =>
+      prev.map((row) => {
+        const p = nextProducts.find((x) => Number(x.id) === Number(row.productId));
+        if (!p) return row;
+        return { ...row, stock: Number(p.stock || 0) };
+      }),
+    );
     setCustomers(nextCustomers);
     setTierGroups(nextTierGroups);
     setActiveShift(nextShift);
