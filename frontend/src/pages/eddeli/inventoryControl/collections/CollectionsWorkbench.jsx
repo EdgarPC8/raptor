@@ -57,7 +57,9 @@ import { buildReportTxtByProduct } from "./reportBuilders.js";
 import ItemsTable from "./ItemsTable.jsx";
 import CollectionsDialogs from "./CollectionsDialogs.jsx";
 import CollectionsPendingViewTab from "./CollectionsPendingViewTab.jsx";
+import CreditOrdersTab from "./CreditOrdersTab.jsx";
 import OrderForm from "../components/OrderForm.jsx";
+import CustomerOrderPayDialog from "../components/CustomerOrderPayDialog.jsx";
 import SimpleDialog from "../../../../components/Dialogs/SimpleDialog.jsx";
 import DebtReportDialog from "./DebtReportDialog.jsx";
 
@@ -77,6 +79,7 @@ export default function CollectionsWorkbench() {
   const [selectedItemIds, setSelectedItemIds] = useState([]);
   const [selectedPaidItemIds, setSelectedPaidItemIds] = useState([]);
   const [tab, setTab] = useState(0);
+  const [showAllCustomers, setShowAllCustomers] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createMode, setCreateMode] = useState("pending");
@@ -106,6 +109,7 @@ export default function CollectionsWorkbench() {
   const [debtReportMode, setDebtReportMode] = useState("account");
   const [editOrderOpen, setEditOrderOpen] = useState(false);
   const [orderToEdit, setOrderToEdit] = useState(null);
+  const [creditOrderToPay, setCreditOrderToPay] = useState(null);
 
   const loadWorkbench = async (keepSelection = true) => {
     try {
@@ -271,6 +275,13 @@ export default function CollectionsWorkbench() {
             (totalCobrableByCustomer[b.id] ?? 0) - (totalCobrableByCustomer[a.id] ?? 0)
         ),
     [customers, totalCobrableByCustomer]
+  );
+  const visibleCustomers = useMemo(
+    () =>
+      showAllCustomers
+        ? [...customers].sort((a, b) => String(a.name).localeCompare(String(b.name), "es"))
+        : customersWithDebt,
+    [customers, customersWithDebt, showAllCustomers]
   );
 
   const customerOrders = useMemo(
@@ -1030,11 +1041,19 @@ export default function CollectionsWorkbench() {
       <Card variant="outlined" sx={{ mb: 2, width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
         <CardContent sx={{ px: { xs: 1.5, sm: 2 }, py: { xs: 1.5, sm: 2 }, width: "100%", boxSizing: "border-box" }}>
           <Typography variant="subtitle1" sx={{ mb: 1, fontSize: { xs: "0.9rem", sm: "1rem" } }}>
-            Clientes (ordenados por deuda)
+            {showAllCustomers ? "Todos los clientes" : "Clientes con deuda (ordenados por saldo)"}
           </Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => setShowAllCustomers((current) => !current)}
+            sx={{ mb: 1 }}
+          >
+            {showAllCustomers ? "Ver solo con deuda" : "Ver todos e historial"}
+          </Button>
           {customers.length === 0 ? (
             <Alert severity="info">No hay clientes.</Alert>
-          ) : customersWithDebt.length === 0 ? (
+          ) : visibleCustomers.length === 0 ? (
             <Alert severity="success">No hay clientes con deuda pendiente.</Alert>
           ) : (
             <Box
@@ -1060,7 +1079,7 @@ export default function CollectionsWorkbench() {
                   width: "100%",
                 }}
               >
-                {customersWithDebt.map((c) => {
+                {visibleCustomers.map((c) => {
                   const active = c.id === selectedCustomerId;
                   const amount = Number(totalCobrableByCustomer[c.id] ?? 0);
                   const displayName = c.name.length > 25 ? `${c.name.slice(0, 22)}...` : c.name;
@@ -1146,6 +1165,16 @@ export default function CollectionsWorkbench() {
             <Tab label={`Pagados (${itemsPaidUngrouped.length})`} />
             <Tab label={`Grupos (${customerGroups.length})`} />
             <Tab label="Detalle" />
+            <Tab
+              label={`Créditos (${
+                customerOrders.filter(
+                  (order) =>
+                    Array.isArray(order.paymentInstallments) &&
+                    order.paymentInstallments.length > 0 &&
+                    Number(order.remainingAmount) > 0.009,
+                ).length
+              })`}
+            />
           </Tabs>
           <Divider />
 
@@ -1574,6 +1603,18 @@ export default function CollectionsWorkbench() {
               )}
             </Box>
           )}
+          {tab === 4 && (
+            <CreditOrdersTab
+              orders={orders}
+              partyLabel="Cliente"
+              getPartyName={(order) =>
+                customers.find((item) => Number(item.id) === Number(order.customerId))?.name ||
+                "Cliente"
+              }
+              onPay={setCreditOrderToPay}
+              loading={loading}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -1595,6 +1636,14 @@ export default function CollectionsWorkbench() {
           />
         ) : null}
       </SimpleDialog>
+
+      <CustomerOrderPayDialog
+        open={Boolean(creditOrderToPay)}
+        order={creditOrderToPay}
+        onClose={() => setCreditOrderToPay(null)}
+        onPaid={() => loadWorkbench(true)}
+        toast={toastAuth}
+      />
 
       <CollectionsDialogs
         createOpen={createOpen}

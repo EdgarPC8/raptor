@@ -252,8 +252,12 @@ export default function SupplierOrderAccordion({
         ),
       );
       setInventoryStores(list);
+      // Por defecto recibir en sucursal propia (donde se vende en caja).
+      // Bodega queda disponible en el selector para quien quiera almacenar.
+      const propia = list.find((s) => normalizeLocationKind(s.locationKind) === "propia");
       const bodega = list.find((s) => normalizeLocationKind(s.locationKind) === "bodega");
-      setReceiveStoreId(bodega ? String(bodega.id) : list[0] ? String(list[0].id) : "");
+      const preferred = propia || bodega || list[0];
+      setReceiveStoreId(preferred ? String(preferred.id) : "");
     } catch {
       setInventoryStores([]);
       setReceiveStoreId("");
@@ -414,7 +418,9 @@ export default function SupplierOrderAccordion({
         <DialogTitle sx={{ fontWeight: 700 }}>Recibir pedido #{order.id}</DialogTitle>
         <DialogContent dividers>
           <Alert severity="warning" sx={{ py: 0.75, mb: 1.5 }}>
-            Multistock activo: elige <strong>dónde entra</strong> la mercadería (Bodega o sucursal).
+            Multistock activo: elige <strong>dónde entra</strong> la mercadería.
+            Si recibes en Bodega y vendes en Sucursal, el stock no aparecerá en caja
+            hasta que lo traspasés.
           </Alert>
           <TextField
             select
@@ -427,7 +433,7 @@ export default function SupplierOrderAccordion({
             helperText={
               storesLoading
                 ? "Cargando locales…"
-                : "Luego puedes traspasar entre locales desde Locales."
+                : "Recomendado: la misma sucursal donde abres caja."
             }
           >
             {inventoryStores.map((s) => (

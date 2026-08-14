@@ -45,6 +45,7 @@ import {
   toNum,
 } from "./helpers.js";
 import SupplierPendingViewTab from "./SupplierPendingViewTab.jsx";
+import CreditOrdersTab from "./CreditOrdersTab.jsx";
 import SupplierOrderForm, {
   SUPPLIER_ORDER_DIALOG_CONTENT_SX,
   SUPPLIER_ORDER_DIALOG_PAPER_SX,
@@ -73,6 +74,7 @@ export default function SupplierPayablesWorkbench() {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
+  const [showAllSuppliers, setShowAllSuppliers] = useState(false);
   const [mainTab, setMainTab] = useState(0); // 0 vista · 1 pagados · 2 grupos · 3 pacas · 4 detalle
 
   const [editOrderOpen, setEditOrderOpen] = useState(false);
@@ -363,6 +365,13 @@ export default function SupplierPayablesWorkbench() {
   const totalDebt = useMemo(
     () => roundSum(suppliers.map((s) => toNum(s.debtTotal))),
     [suppliers]
+  );
+  const visibleSuppliers = useMemo(
+    () =>
+      showAllSuppliers
+        ? suppliers
+        : suppliers.filter((supplierRow) => toNum(supplierRow.debtTotal) > 0.009),
+    [suppliers, showAllSuppliers]
   );
 
   const openPay = (order) => {
@@ -718,8 +727,18 @@ export default function SupplierPayablesWorkbench() {
           <Divider sx={{ my: 1.5 }} />
 
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-            Proveedores con deuda (primero los que más debes)
+            {showAllSuppliers
+              ? "Todos los proveedores (incluye los ya pagados)"
+              : "Proveedores con deuda (primero los que más debes)"}
           </Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => setShowAllSuppliers((current) => !current)}
+            sx={{ mb: 1 }}
+          >
+            {showAllSuppliers ? "Ver solo con deuda" : "Ver todos e historial"}
+          </Button>
           <Box
             sx={{
               display: "flex",
@@ -733,8 +752,12 @@ export default function SupplierPayablesWorkbench() {
               <Typography variant="body2" color="text.secondary">
                 No hay proveedores registrados.
               </Typography>
+            ) : visibleSuppliers.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No hay proveedores con deuda pendiente.
+              </Typography>
             ) : (
-              suppliers.map((s) => {
+              visibleSuppliers.map((s) => {
                 const active = s.id === selectedSupplierId;
                 const amount = toNum(s.debtTotal);
                 const creditHint = s.nextCreditDue
@@ -806,6 +829,17 @@ export default function SupplierPayablesWorkbench() {
                 <Tab label={`Grupos (${paymentGroups.length})`} sx={{ minHeight: 40, textTransform: "none" }} />
                 <Tab label={`Pacas (${cartonPacks.length})`} sx={{ minHeight: 40, textTransform: "none" }} />
                 <Tab label="Detalle" sx={{ minHeight: 40, textTransform: "none" }} />
+                <Tab
+                  label={`Créditos (${
+                    orders.filter(
+                      (order) =>
+                        Array.isArray(order.paymentInstallments) &&
+                        order.paymentInstallments.length > 0 &&
+                        toNum(order.remainingAmount) > 0.009,
+                    ).length
+                  })`}
+                  sx={{ minHeight: 40, textTransform: "none" }}
+                />
               </Tabs>
             </CardContent>
           </Card>
@@ -971,6 +1005,22 @@ export default function SupplierPayablesWorkbench() {
                   </>
                 )}
               </CardContent>
+            </Card>
+          ) : null}
+          {mainTab === 5 ? (
+            <Card variant="outlined">
+              <CreditOrdersTab
+                orders={orders}
+                partyLabel="Proveedor"
+                color="error"
+                getPartyName={(order) =>
+                  suppliers.find(
+                    (item) => Number(item.id) === Number(order.supplierId),
+                  )?.name || "Proveedor"
+                }
+                onPay={openPay}
+                loading={loading}
+              />
             </Card>
           ) : null}
         </Stack>

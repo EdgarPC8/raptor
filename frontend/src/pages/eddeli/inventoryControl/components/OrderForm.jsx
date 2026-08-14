@@ -55,6 +55,10 @@ import {
   resolveItemLotFields,
   reorderItemInZone,
   moveItemToZone,
+  buildBoardOrder,
+  moveBoardEntry,
+  applyBoardOrderToItems,
+  syncBoardOrder,
 } from "./orderPackUtils.js";
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -109,6 +113,8 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
   const [items, setItems] = useState([]);
   const [packs, setPacks] = useState([]);
   const [lots, setLots] = useState([]);
+  const [boardOrder, setBoardOrder] = useState([]);
+  const packsRef = useRef([]);
   const [customers, setCustomers] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState("");
@@ -127,6 +133,10 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
   useEffect(() => {
     lotsRef.current = lots;
   }, [lots]);
+
+  useEffect(() => {
+    packsRef.current = packs;
+  }, [packs]);
 
   const selectedProductId = watch("productId");
   const watchQuantity = watch("quantity");
@@ -221,10 +231,11 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
       return;
     }
     const product = products.find((p) => p.id === productId);
+    const lineId = newPackKey("line");
     setItems((prev) => [
       ...prev,
       {
-        lineId: newPackKey("line"),
+        lineId,
         productId,
         quantity,
         unitPrice,
@@ -235,6 +246,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
         lotKey: null,
       },
     ]);
+    setBoardOrder((prev) => [...prev, { type: "item", key: lineId }]);
     setValue("productId", "");
     setSelectedProduct("");
     setValue("quantity", "");
@@ -243,6 +255,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
 
   const removeItem = (lineId) => {
     setItems((prev) => prev.filter((it) => it.lineId !== lineId));
+    setBoardOrder((prev) => prev.filter((entry) => !(entry.type === "item" && entry.key === lineId)));
   };
 
   const updateItemField = (lineId, field, rawValue) => {
@@ -255,6 +268,28 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
     );
   };
 
+  // El total visible de una paca siempre representa sus productos, incluso
+  // cuando se cambia cantidad o precio directamente en una línea.
+  useEffect(() => {
+    setPacks((prev) => {
+      let changed = false;
+      const next = prev.map((pack) => {
+        const packItems = items.filter((item) => item.packKey === pack.key);
+        if (!packItems.length) return pack;
+        const total = packItems.reduce(
+          (sum, item) =>
+            sum + formatOrderLineTotal(item.quantity, item.unitPrice, item.discount),
+          0,
+        );
+        const totalPrice = String(Number(total.toFixed(2)));
+        if (pack.totalPrice === totalPrice) return pack;
+        changed = true;
+        return { ...pack, totalPrice };
+      });
+      return changed ? next : prev;
+    });
+  }, [items]);
+
   const toggleItemIva = () => {};
 
   const handleDropItem = (lineId, zoneType, zoneKey, beforeLineId = null) => {
@@ -266,16 +301,33 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
         const lot = lotsRef.current.find((l) => l.key === zoneKey);
         assign = { packKey: lot?.packKey || null, lotKey: zoneKey };
       } else return prev;
-      return moveItemToZone(prev, lineId, assign, beforeLineId);
+      const next = moveItemToZone(prev, lineId, assign, beforeLineId);
+      setBoardOrder((bo) => syncBoardOrder(bo, next, packsRef.current));
+      return next;
     });
   };
 
   const moveItem = (lineId, direction) => {
-    setItems((prev) => reorderItemInZone(prev, lineId, direction));
+    const current = items.find((it) => it.lineId === lineId);
+    if (!current) return;
+    if (current.packKey) {
+      setItems((prev) => reorderItemInZone(prev, lineId, direction));
+      return;
+    }
+    setBoardOrder((prev) => {
+      const next = moveBoardEntry(prev, "item", lineId, direction);
+      if (next === prev) return prev;
+      setItems((itemsPrev) => applyBoardOrderToItems(itemsPrev, next));
+      return next;
+    });
   };
 
   const assignItem = (lineId, assign) => {
-    setItems((prev) => moveItemToZone(prev, lineId, assign, null));
+    setItems((prev) => {
+      const next = moveItemToZone(prev, lineId, assign, null);
+      setBoardOrder((bo) => syncBoardOrder(bo, next, packsRef.current));
+      return next;
+    });
   };
 
   const createPack = () => {
@@ -293,6 +345,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
         expanded: true,
       },
     ]);
+    setBoardOrder((prev) => [...prev, { type: "pack", key }]);
   };
 
   const updatePack = (packKey, patch) => {
@@ -323,23 +376,38 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
   };
 
   const removePack = (packKey) => {
-    setItems((prev) =>
-      prev.map((it) => (it.packKey === packKey ? { ...it, packKey: null, lotKey: null } : it)),
-    );
+    let freedKeys = [];
+    setItems((prev) => {
+      freedKeys = prev.filter((it) => it.packKey === packKey).map((it) => it.lineId);
+      return prev.map((it) => (it.packKey === packKey ? { ...it, packKey: null, lotKey: null } : it));
+    });
     setLots((prev) => prev.filter((l) => l.packKey !== packKey));
     setPacks((prev) => prev.filter((p) => p.key !== packKey));
+    setBoardOrder((prev) => {
+      const idx = prev.findIndex((entry) => entry.type === "pack" && entry.key === packKey);
+      const freed = freedKeys.map((key) => ({ type: "item", key }));
+      if (idx < 0) {
+        return syncBoardOrder(
+          [...prev.filter((entry) => !(entry.type === "pack" && entry.key === packKey)), ...freed],
+          items.map((it) =>
+            it.packKey === packKey ? { ...it, packKey: null, lotKey: null } : it,
+          ),
+          packs.filter((p) => p.key !== packKey),
+        );
+      }
+      return [
+        ...prev.slice(0, idx),
+        ...freed,
+        ...prev.slice(idx + 1).filter((entry) => !(entry.type === "pack" && entry.key === packKey)),
+      ];
+    });
   };
 
   const movePack = (packKey, direction) => {
-    setPacks((prev) => {
-      const i = prev.findIndex((p) => p.key === packKey);
-      if (i < 0) return prev;
-      const j = i + direction;
-      if (j < 0 || j >= prev.length) return prev;
-      const next = [...prev];
-      const tmp = next[i];
-      next[i] = next[j];
-      next[j] = tmp;
+    setBoardOrder((prev) => {
+      const next = moveBoardEntry(prev, "pack", packKey, direction);
+      if (next === prev) return prev;
+      setItems((itemsPrev) => applyBoardOrderToItems(itemsPrev, next));
       return next;
     });
   };
@@ -386,6 +454,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
     setItems([]);
     setPacks([]);
     setLots([]);
+    setBoardOrder([]);
     setSelectedCustomer("");
     setSelectedProduct("");
     setValue("productId", "");
@@ -457,7 +526,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
       notes: data.notes,
       dateMs: localDT.getTime(),
       date: toLocalISOWithOffset(localDT),
-      items: items.map((it) => {
+      items: applyBoardOrderToItems(items, boardOrder).map((it) => {
         const lotFields = resolveItemLotFields(it, packs, lots);
         return {
           id: it.id || undefined,
@@ -520,6 +589,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
       );
       setPacks(hydrated.packs);
       setLots(hydrated.lots);
+      setBoardOrder(buildBoardOrder(hydrated.items, hydrated.packs));
       const sched = Array.isArray(datos.paymentInstallments) ? datos.paymentInstallments : [];
       setInstallments(
         sched.map((r) => ({
@@ -568,6 +638,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
       setItems([]);
       setPacks([]);
       setLots([]);
+      setBoardOrder([]);
       setSelectedProduct("");
       const picks = [
         products.find((p) => Number(p.id) === 101),
@@ -585,10 +656,11 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
         setValue("price", price);
         await sleep(220);
         if (gen !== tourGenRef.current) return;
+        const lineId = newPackKey("line");
         setItems((prev) => [
           ...prev,
           {
-            lineId: newPackKey("line"),
+            lineId,
             productId: p.id,
             quantity: qty,
             unitPrice: price,
@@ -600,6 +672,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
             _tourDemo: true,
           },
         ]);
+        setBoardOrder((prev) => [...prev, { type: "item", key: lineId }]);
         setSelectedProduct("");
         setValue("productId", "");
         setValue("quantity", "");
@@ -616,6 +689,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
         setItems((prev) => prev.filter((it) => !it._tourDemo));
         setPacks([]);
         setLots([]);
+        setBoardOrder([]);
         setSelectedProduct("");
       }
     },
@@ -828,6 +902,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
               items={items}
               packs={packs}
               lots={lots}
+              boardOrder={boardOrder}
               ivaRate={0}
               showIva={false}
               tourIdPrefix="pedido-cliente"

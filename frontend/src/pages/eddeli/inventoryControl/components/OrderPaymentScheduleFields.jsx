@@ -15,6 +15,7 @@ import {
   TextField,
   Typography,
   Chip,
+  MenuItem,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -107,6 +108,8 @@ export default function OrderPaymentScheduleFields({
         dueDate: paymentDueDate || deliveryDate || "",
         amount: Math.max(0, diff),
         locked: false,
+        reminderEnabled: true,
+        reminderDaysBefore: 1,
       },
     ]);
   };
@@ -271,6 +274,39 @@ export default function OrderPaymentScheduleFields({
                         }
                         sx={{ width: { xs: "100%", sm: 140 } }}
                       />
+                      <FormControlLabel
+                        sx={{ m: 0, minWidth: { sm: 145 } }}
+                        control={
+                          <Checkbox
+                            size="small"
+                            checked={row.reminderEnabled !== false}
+                            disabled={Boolean(row.locked)}
+                            onChange={(e) =>
+                              updateRow(idx, { reminderEnabled: e.target.checked })
+                            }
+                          />
+                        }
+                        label={<Typography variant="caption">Recordarme</Typography>}
+                      />
+                      <TextField
+                        select
+                        size="small"
+                        label="Aviso"
+                        value={
+                          [0, 1, 2].includes(Number(row.reminderDaysBefore))
+                            ? Number(row.reminderDaysBefore)
+                            : 1
+                        }
+                        disabled={Boolean(row.locked) || row.reminderEnabled === false}
+                        onChange={(e) =>
+                          updateRow(idx, { reminderDaysBefore: Number(e.target.value) })
+                        }
+                        sx={{ width: { xs: "100%", sm: 145 } }}
+                      >
+                        <MenuItem value={0}>Mismo día</MenuItem>
+                        <MenuItem value={1}>1 día antes</MenuItem>
+                        <MenuItem value={2}>2 días antes</MenuItem>
+                      </TextField>
                       <IconButton
                         size="small"
                         color="error"

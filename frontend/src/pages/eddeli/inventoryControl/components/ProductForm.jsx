@@ -288,7 +288,7 @@ const moneyAdornment = (
 );
 
 /* ===================== FORM DE PRODUCTO ===================== */
-function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
+function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenStock }) {
   const { toast: toastAuth } = useAuth();
   const { activeApp } = useAppSettings();
   const multiStockEnabled = activeApp?.multiStockEnabled !== false;
@@ -860,25 +860,32 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload }) {
           />
         </Grid>
         <Grid item xs={4} sm={2} data-tour="producto-form-stock">
-          <TextField
-            label={multiStockEnabled && isEditing ? "Stk Σ" : "Stock"}
-            type="number"
-            size="small"
-            fullWidth
-            variant="standard"
-            margin="none"
-            sx={denseFieldSx}
-            inputProps={{ min: 0, readOnly: Boolean(multiStockEnabled && isEditing) }}
-            placeholder="0"
-            title={
-              multiStockEnabled
-                ? isEditing
-                  ? "Suma por locales. Ajustá en Locales."
-                  : "Al crear entra a Bodega (multistock)."
-                : undefined
-            }
-            {...register("stock")}
-          />
+          {multiStockEnabled && isEditing ? (
+            <Button
+              fullWidth
+              size="small"
+              variant="outlined"
+              onClick={() => onOpenStock?.({ ...datos, stock: watch("stock") })}
+              title="Ver stock por local y traspasar"
+              sx={{ mt: 0.5, textTransform: "none" }}
+            >
+              Stock Σ: {Number(watch("stock") || 0)}
+            </Button>
+          ) : (
+            <TextField
+              label="Stock"
+              type="number"
+              size="small"
+              fullWidth
+              variant="standard"
+              margin="none"
+              sx={denseFieldSx}
+              inputProps={{ min: 0 }}
+              placeholder="0"
+              title={multiStockEnabled ? "Al crear entra a Bodega (multistock)." : undefined}
+              {...register("stock")}
+            />
+          )}
         </Grid>
         <Grid item xs={6} sm={3} data-tour="producto-form-net-weight">
           <TextField

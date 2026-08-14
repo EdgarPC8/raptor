@@ -49,6 +49,8 @@ export function buildEqualInstallments({ startDate, endDate, count, total }) {
     dueDate,
     amount: base,
     locked: false,
+    reminderEnabled: true,
+    reminderDaysBefore: 1,
     paidAmount: 0,
     remainingAmount: base,
     isPaid: false,
@@ -71,6 +73,10 @@ export function normalizeScheduleForApi(rows) {
       sequence: i + 1,
       dueDate: toDateOnly(r.dueDate),
       amount: money2(r.amount),
+      reminderEnabled: r.reminderEnabled !== false,
+      reminderDaysBefore: [0, 1, 2].includes(Number(r.reminderDaysBefore))
+        ? Number(r.reminderDaysBefore)
+        : 1,
     }))
     .filter((r) => r.dueDate && r.amount > 0);
 }

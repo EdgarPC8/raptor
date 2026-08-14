@@ -100,3 +100,29 @@ export function getLastPurchaseForProduct(map, productId) {
   if (!map || productId == null || productId === "") return null;
   return map.get(Number(productId)) || null;
 }
+
+function orderHasPacks(order) {
+  const lines = order?.ERP_supplier_order_items || order?.items || [];
+  return lines.some((it) => Boolean(it?.packKey) || Boolean(String(it?.packName || "").trim()));
+}
+
+/**
+ * Último pedido del proveedor (más reciente por recepción/fecha).
+ * @param {{ requirePacks?: boolean }} [opts]
+ */
+export function findLatestSupplierOrder(orders, supplierId, opts = {}) {
+  const sid = Number(supplierId);
+  if (!sid) return null;
+  const requirePacks = Boolean(opts.requirePacks);
+  const sorted = [...(Array.isArray(orders) ? orders : [])]
+    .filter((order) => Number(order?.supplierId) === sid)
+    .sort((a, b) => orderSortKey(b) - orderSortKey(a));
+
+  if (requirePacks) {
+    return sorted.find((order) => orderHasPacks(order)) || null;
+  }
+  return sorted.find((order) => {
+    const lines = order?.ERP_supplier_order_items || order?.items || [];
+    return lines.length > 0;
+  }) || null;
+}

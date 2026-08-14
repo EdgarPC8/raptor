@@ -34,6 +34,7 @@ import TourHelpButton from "../../../components/TourHelpButton.jsx";
 import ProductForm from "./components/ProductForm";
 import ProductsGridView from "./components/ProductsGridView";
 import ProductsByStoreView from "./components/ProductsByStoreView";
+import ProductStoreStocksDialog from "./ProductStoreStocksDialog.jsx";
 import {
   getAllProductsAll,
   unwrapListResponse,
@@ -72,6 +73,7 @@ function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [allCategories, setAllCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [stockProduct, setStockProduct] = useState(null);
 
   useEffect(() => {
     if (!multiStockEnabled && viewMode === "byStore") {
@@ -130,6 +132,10 @@ function ProductsPage() {
     setIsEditing(true);
     settitleUserDialog("Editar Producto");
     setOpenDialog(true);
+  };
+  const openProductStock = (product) => {
+    if (!multiStockEnabled || !product?.id) return;
+    setStockProduct(product);
   };
 
   const openNewProductWithBarcode = useCallback((rawCode) => {
@@ -300,6 +306,18 @@ function ProductsPage() {
       label: multiStockEnabled ? "Stock (suma)" : "Stock",
       id: "stock",
       width: 90,
+      render: multiStockEnabled
+        ? (row) => (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => openProductStock(row)}
+              title="Ver distribución y traspasar entre locales"
+            >
+              {Number(row.stock || 0)}
+            </Button>
+          )
+        : undefined,
     },
     {
       label: "Acciones",
@@ -395,6 +413,7 @@ function ProductsPage() {
             isEditing={isEditing}
             datos={datos}
             reload={fecthData}
+            onOpenStock={openProductStock}
           />
         </DialogContent>
 
@@ -424,6 +443,15 @@ function ProductsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {multiStockEnabled ? (
+        <ProductStoreStocksDialog
+          open={Boolean(stockProduct)}
+          product={stockProduct}
+          onClose={() => setStockProduct(null)}
+          onChanged={fecthData}
+        />
+      ) : null}
 
       <Paper
         data-tour="productos-header"

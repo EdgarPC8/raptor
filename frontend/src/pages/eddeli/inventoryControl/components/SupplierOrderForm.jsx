@@ -64,11 +64,17 @@ import {
 import {
   buildLastPurchaseByProductId,
   getLastPurchaseForProduct,
+  findLatestSupplierOrder,
 } from "../../../../utils/supplierLastPurchase.js";
 import { parseSriPurchaseInvoiceXml } from "../../../../utils/parseSriPurchaseInvoiceXml.js";
 import {
   reorderItemInZone,
   moveItemToZone,
+  buildBoardOrder,
+  moveBoardEntry,
+  applyBoardOrderToItems,
+  syncBoardOrder,
+  applyPackStructureToItems,
 } from "./orderPackUtils.js";
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -141,7 +147,8 @@ function hydratePacksAndLots(rawItems) {
         expiresAt: "",
         manufacturedAt: "",
         totalPrice: "",
-        expanded: true,
+        // Los packs reconstruidos pertenecen a un pedido existente.
+        expanded: false,
       };
       packByKey.set(packKey, pack);
       packs.push(pack);
@@ -261,6 +268,7 @@ function SupplierOrderForm(
   const [items, setItems] = useState([]);
   const [packs, setPacks] = useState([]);
   const [lots, setLots] = useState([]);
+  const [boardOrder, setBoardOrder] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState("");
   const [pendingVoucherFile, setPendingVoucherFile] = useState(null);
@@ -289,11 +297,16 @@ function SupplierOrderForm(
   const [supplierOrdersCache, setSupplierOrdersCache] = useState([]);
   const tourGenRef = useRef(0);
   const lotsRef = useRef([]);
+  const packsRef = useRef([]);
   const { toast } = useAuth();
 
   useEffect(() => {
     lotsRef.current = lots;
   }, [lots]);
+
+  useEffect(() => {
+    packsRef.current = packs;
+  }, [packs]);
 
   const selectedProductId = watch("productId");
   const watchQuantity = watch("quantity");
@@ -319,6 +332,28 @@ function SupplierOrderForm(
     () => getLastPurchaseForProduct(lastPurchaseByProductId, selectedProductId),
     [lastPurchaseByProductId, selectedProductId],
   );
+
+  const lastOrderWithPacks = useMemo(
+    () => findLatestSupplierOrder(supplierOrdersCache, selectedSupplier, { requirePacks: true }),
+    [supplierOrdersCache, selectedSupplier],
+  );
+
+  const lastOrderAny = useMemo(
+    () => findLatestSupplierOrder(supplierOrdersCache, selectedSupplier, { requirePacks: false }),
+    [supplierOrdersCache, selectedSupplier],
+  );
+
+  const cartMatchesLastPacks = useMemo(() => {
+    if (!lastOrderWithPacks || !items.length) return 0;
+    const packedProductIds = new Set();
+    for (const it of lastOrderWithPacks.ERP_supplier_order_items || lastOrderWithPacks.items || []) {
+      if (it?.packKey || String(it?.packName || "").trim()) {
+        const pid = Number(it.productId);
+        if (pid) packedProductIds.add(pid);
+      }
+    }
+    return items.filter((it) => packedProductIds.has(Number(it.productId))).length;
+  }, [lastOrderWithPacks, items]);
 
   // Historial de pedidos a proveedor (última compra + filtro “solo vendidos”)
   useEffect(() => {
@@ -522,10 +557,11 @@ function SupplierOrderForm(
     const product = products.find((p) => p.id === productId);
     const productIva = Number(product?.taxRate) || 0;
     if (productIva > 0) setIvaRate(productIva);
+    const lineId = newKey("line");
     setItems((prev) => [
       ...prev,
       {
-        lineId: newKey("line"),
+        lineId,
         productId,
         quantity,
         unitPrice,
@@ -538,6 +574,7 @@ function SupplierOrderForm(
         lotKey: null,
       },
     ]);
+    setBoardOrder((prev) => [...prev, { type: "item", key: lineId }]);
     setValue("productId", "");
     setSelectedProduct("");
     setValue("quantity", "");
@@ -623,6 +660,10 @@ function SupplierOrderForm(
     }
 
     setItems((prev) => [...prev, ...nextLines]);
+    setBoardOrder((prev) => [
+      ...prev,
+      ...nextLines.map((line) => ({ type: "item", key: line.lineId })),
+    ]);
     if (maxIva > 0) setIvaRate(maxIva);
     if (sid && !lockSupplier) {
       setSelectedSupplier(String(sid));
@@ -649,6 +690,7 @@ function SupplierOrderForm(
 
   const removeItem = (lineId) => {
     setItems((prev) => prev.filter((it) => it.lineId !== lineId));
+    setBoardOrder((prev) => prev.filter((entry) => !(entry.type === "item" && entry.key === lineId)));
   };
 
   const updateItemField = (lineId, field, rawValue) => {
@@ -660,6 +702,28 @@ function SupplierOrderForm(
       }),
     );
   };
+
+  // Si se modifica una línea, el valor mostrado para su paca vuelve a ser
+  // exactamente la suma de las líneas que contiene.
+  useEffect(() => {
+    setPacks((prev) => {
+      let changed = false;
+      const next = prev.map((pack) => {
+        const packItems = items.filter((item) => item.packKey === pack.key);
+        if (!packItems.length) return pack;
+        const total = packItems.reduce(
+          (sum, item) =>
+            sum + formatOrderLineTotal(item.quantity, item.unitPrice, item.discount),
+          0,
+        );
+        const totalPrice = String(Number(total.toFixed(2)));
+        if (pack.totalPrice === totalPrice) return pack;
+        changed = true;
+        return { ...pack, totalPrice };
+      });
+      return changed ? next : prev;
+    });
+  }, [items]);
 
   const toggleItemIva = (lineId, checked) => {
     setItems((prev) =>
@@ -689,16 +753,33 @@ function SupplierOrderForm(
         const lot = lotsRef.current.find((l) => l.key === zoneKey);
         assign = { packKey: lot?.packKey || null, lotKey: zoneKey };
       } else return prev;
-      return moveItemToZone(prev, lineId, assign, beforeLineId);
+      const next = moveItemToZone(prev, lineId, assign, beforeLineId);
+      setBoardOrder((bo) => syncBoardOrder(bo, next, packsRef.current));
+      return next;
     });
   };
 
   const moveItem = (lineId, direction) => {
-    setItems((prev) => reorderItemInZone(prev, lineId, direction));
+    const current = items.find((it) => it.lineId === lineId);
+    if (!current) return;
+    if (current.packKey) {
+      setItems((prev) => reorderItemInZone(prev, lineId, direction));
+      return;
+    }
+    setBoardOrder((prev) => {
+      const next = moveBoardEntry(prev, "item", lineId, direction);
+      if (next === prev) return prev;
+      setItems((itemsPrev) => applyBoardOrderToItems(itemsPrev, next));
+      return next;
+    });
   };
 
   const assignItem = (lineId, assign) => {
-    setItems((prev) => moveItemToZone(prev, lineId, assign, null));
+    setItems((prev) => {
+      const next = moveItemToZone(prev, lineId, assign, null);
+      setBoardOrder((bo) => syncBoardOrder(bo, next, packsRef.current));
+      return next;
+    });
   };
 
   const createPack = () => {
@@ -716,9 +797,108 @@ function SupplierOrderForm(
         expanded: true,
       },
     ]);
+    setBoardOrder((prev) => [...prev, { type: "pack", key }]);
     toast({
       message: "Paca vacía creada. Arrastrá productos, usá ↑↓ o el menú ⋮ para meterlos.",
       variant: "info",
+    });
+  };
+
+  const applyPacksFromLastOrder = () => {
+    if (isEditing) return;
+    if (!lastOrderWithPacks) {
+      toast({
+        message: "Este proveedor aún no tiene un pedido anterior con pacas.",
+        variant: "warning",
+      });
+      return;
+    }
+    if (!items.length) {
+      toast({
+        message: "Agregá productos al carrito y después armamos las pacas como el último pedido.",
+        variant: "info",
+      });
+      return;
+    }
+    const result = applyPackStructureToItems(
+      items,
+      lastOrderWithPacks.ERP_supplier_order_items || lastOrderWithPacks.items || [],
+    );
+    if (!result.matched) {
+      toast({
+        message:
+          "Ningún producto del carrito coincide con las pacas del último pedido. Agregá esos productos primero.",
+        variant: "warning",
+      });
+      return;
+    }
+    setItems(result.items);
+    setPacks(result.packs);
+    setLots(result.lots);
+    setBoardOrder(result.boardOrder);
+    toast({
+      message: `Pacas armadas como el pedido #${lastOrderWithPacks.id} (${result.matched} producto${result.matched === 1 ? "" : "s"}).`,
+      variant: "success",
+    });
+  };
+
+  const importLastSupplierOrder = () => {
+    if (isEditing) return;
+    const source = lastOrderWithPacks || lastOrderAny;
+    if (!source) {
+      toast({
+        message: "Este proveedor aún no tiene pedidos anteriores para copiar.",
+        variant: "warning",
+      });
+      return;
+    }
+    if (items.length > 0) {
+      const ok = window.confirm(
+        "Esto reemplaza el carrito actual por el último pedido (productos + pacas). ¿Continuar?",
+      );
+      if (!ok) return;
+    }
+
+    const raw = (source.ERP_supplier_order_items || source.items || []).map((item) => ({
+      ...item,
+      // Borrador nuevo: sin ids ni vencimientos viejos
+      id: undefined,
+      expiresAt: null,
+      manufacturedAt: null,
+      lotCode: item.lotCode || null,
+    }));
+    const hydrated = hydratePacksAndLots(raw);
+    const packsNext = hydrated.packs.map((pack) => ({
+      ...pack,
+      lotCode: "",
+      expiresAt: "",
+      manufacturedAt: "",
+      useLots: false,
+      expanded: Boolean(hydrated.items.some((it) => it.packKey === pack.key)) ? false : true,
+    }));
+    const itemsNext = hydrated.items.map((it) => ({
+      ...it,
+      lotKey: null,
+      name:
+        it.name ||
+        products.find((p) => Number(p.id) === Number(it.productId))?.name ||
+        "",
+      unitLabel:
+        it.unitLabel ||
+        getProductUnitLabel(products.find((p) => Number(p.id) === Number(it.productId))),
+    }));
+
+    setItems(itemsNext);
+    setPacks(packsNext);
+    setLots([]);
+    setBoardOrder(buildBoardOrder(itemsNext, packsNext));
+
+    const firstIva = itemsNext.find((it) => Number(it.taxRate) > 0);
+    if (firstIva) setIvaRate(Number(firstIva.taxRate) || 15);
+
+    toast({
+      message: `Se cargó el pedido #${source.id}. Sacá lo que no necesites.`,
+      variant: "success",
     });
   };
 
@@ -764,23 +944,37 @@ function SupplierOrderForm(
   };
 
   const removePack = (packKey) => {
-    setItems((prev) =>
-      prev.map((it) =>
+    let freedKeys = [];
+    setItems((prev) => {
+      freedKeys = prev.filter((it) => it.packKey === packKey).map((it) => it.lineId);
+      return prev.map((it) =>
         it.packKey === packKey ? { ...it, packKey: null, lotKey: null } : it,
-      ),
-    );
+      );
+    });
     setLots((prev) => prev.filter((l) => l.packKey !== packKey));
     setPacks((prev) => prev.filter((p) => p.key !== packKey));
+    setBoardOrder((prev) => {
+      const idx = prev.findIndex((entry) => entry.type === "pack" && entry.key === packKey);
+      const freed = freedKeys.map((key) => ({ type: "item", key }));
+      if (idx < 0) {
+        return [
+          ...prev.filter((entry) => !(entry.type === "pack" && entry.key === packKey)),
+          ...freed,
+        ];
+      }
+      return [
+        ...prev.slice(0, idx),
+        ...freed,
+        ...prev.slice(idx + 1).filter((entry) => !(entry.type === "pack" && entry.key === packKey)),
+      ];
+    });
   };
 
   const movePack = (packKey, direction) => {
-    setPacks((prev) => {
-      const i = prev.findIndex((p) => p.key === packKey);
-      if (i < 0) return prev;
-      const j = i + direction;
-      if (j < 0 || j >= prev.length) return prev;
-      const next = [...prev];
-      [next[i], next[j]] = [next[j], next[i]];
+    setBoardOrder((prev) => {
+      const next = moveBoardEntry(prev, "pack", packKey, direction);
+      if (next === prev) return prev;
+      setItems((itemsPrev) => applyBoardOrderToItems(itemsPrev, next));
       return next;
     });
   };
@@ -958,7 +1152,7 @@ function SupplierOrderForm(
       notes: data.notes || null,
       invoiceNumber: invoiceNumberClean,
       date: toLocalISOWithOffset(localDT),
-      items: items.map((it) => {
+      items: applyBoardOrderToItems(items, boardOrder).map((it) => {
         const lotFields = resolveItemLotFields(it, packs, lots);
         return {
           productId: it.productId,
@@ -1017,6 +1211,7 @@ function SupplierOrderForm(
       setItems([]);
       setPacks([]);
       setLots([]);
+      setBoardOrder([]);
       setPendingVoucherFile(null);
       setPaymentDueDate("");
       setSplitPayments(false);
@@ -1041,6 +1236,7 @@ function SupplierOrderForm(
       setItems(hydrated.items);
       setPacks(hydrated.packs);
       setLots(hydrated.lots);
+      setBoardOrder(buildBoardOrder(hydrated.items, hydrated.packs));
       const firstIva = (datos.ERP_supplier_order_items || []).find(
         (item) => Number(item.taxRate) > 0,
       );
@@ -1071,6 +1267,7 @@ function SupplierOrderForm(
     setItems([]);
     setPacks([]);
     setLots([]);
+    setBoardOrder([]);
     setPendingVoucherFile(null);
     setPaymentDueDate("");
     setSplitPayments(false);
@@ -1119,6 +1316,7 @@ function SupplierOrderForm(
       setItems([]);
       setPacks([]);
       setLots([]);
+      setBoardOrder([]);
       const picks = [
         products.find((p) => Number(p.id) === 101),
         products.find((p) => Number(p.id) === 201),
@@ -1135,10 +1333,11 @@ function SupplierOrderForm(
         setValue("unitPrice", unitPrice);
         await sleep(220);
         if (gen !== tourGenRef.current) return;
+        const lineId = newKey("line");
         setItems((prev) => [
           ...prev,
           {
-            lineId: newKey("line"),
+            lineId,
             productId: p.id,
             quantity: qty,
             unitPrice,
@@ -1152,6 +1351,7 @@ function SupplierOrderForm(
             _tourDemo: true,
           },
         ]);
+        setBoardOrder((prev) => [...prev, { type: "item", key: lineId }]);
         setSelectedProduct("");
         setValue("productId", "");
         setValue("quantity", "");
@@ -1164,6 +1364,7 @@ function SupplierOrderForm(
         setItems((prev) => prev.filter((it) => !it._tourDemo));
         setPacks([]);
         setLots([]);
+        setBoardOrder([]);
         setSelectedProduct("");
       }
     },
@@ -1528,10 +1729,54 @@ function SupplierOrderForm(
               overflow: "auto",
             }}
           >
+            {!isEditing && selectedSupplier && (lastOrderWithPacks || lastOrderAny) ? (
+              <Alert
+                severity="info"
+                sx={{ py: 0.5, "& .MuiAlert-message": { width: "100%" } }}
+              >
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+                  <Typography variant="body2">
+                    {lastOrderWithPacks
+                      ? `Último pedido con pacas: #${lastOrderWithPacks.id}. Podés reutilizar esa estructura.`
+                      : `Último pedido: #${lastOrderAny.id}. Todavía no tenía pacas; igual podés traerlo.`}
+                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={!lastOrderWithPacks || cartMatchesLastPacks === 0}
+                      onClick={applyPacksFromLastOrder}
+                    >
+                      Armar pacas del carrito
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      disableElevation
+                      onClick={importLastSupplierOrder}
+                    >
+                      Traer último pedido
+                    </Button>
+                  </Box>
+                  {!items.length ? (
+                    <Typography variant="caption" color="text.secondary">
+                      Opción 1: agregá productos y después “Armar pacas del carrito”. Opción 2: traé
+                      todo y andá quitando.
+                    </Typography>
+                  ) : lastOrderWithPacks && cartMatchesLastPacks === 0 ? (
+                    <Typography variant="caption" color="text.secondary">
+                      Los productos del carrito no coinciden con las pacas del último pedido.
+                    </Typography>
+                  ) : null}
+                </Box>
+              </Alert>
+            ) : null}
+
             <SupplierOrderItemsBoard
               items={items}
               packs={packs}
               lots={lots}
+              boardOrder={boardOrder}
               ivaRate={ivaRate}
               onRemoveItem={removeItem}
               onUpdateItemField={updateItemField}
