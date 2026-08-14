@@ -8,6 +8,9 @@
  *   npm run git-push-eddeli -- "mensaje"
  *   npm run git-push-store -- "mensaje"
  *   npm run git-push-tienda -- "mensaje"
+ *
+ * Gestor (repo aparte):
+ *   npm run git-push-gestor -- "mensaje"
  */
 import { parseNote, pushApps } from "./git-push-lib.mjs";
 
