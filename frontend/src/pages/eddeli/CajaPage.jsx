@@ -34,6 +34,7 @@ import { alpha } from "@mui/material/styles";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
+import CreditScoreIcon from "@mui/icons-material/CreditScore";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
@@ -96,6 +97,8 @@ import TourHelpButton from "../../components/TourHelpButton.jsx";
 import { usePageTour } from "../../hooks/usePageTour.js";
 import { CAJA_TOUR_ID, getCajaTourSteps } from "../../tours/cajaTour.js";
 import { stockColor, stockFmt } from "../../utils/productSelectDisplay.jsx";
+import OrderPaymentScheduleFields from "./inventoryControl/components/OrderPaymentScheduleFields.jsx";
+import { normalizeScheduleForApi } from "../../utils/orderPaymentSchedule.js";
 
 const to2 = (n) => Number(Number(n || 0).toFixed(2));
 
@@ -217,6 +220,11 @@ export default function CajaPage() {
   const [saleType, setSaleType] = useState("contado");
   const [paymentMethod, setPaymentMethod] = useState("efectivo");
   const [amountReceived, setAmountReceived] = useState("");
+  const [creditScheduleOpen, setCreditScheduleOpen] = useState(false);
+  const [paymentDueDate, setPaymentDueDate] = useState("");
+  const [splitCreditPayments, setSplitCreditPayments] = useState(false);
+  const [creditInstallmentCount, setCreditInstallmentCount] = useState(2);
+  const [creditInstallments, setCreditInstallments] = useState([]);
   const [useCustomerData, setUseCustomerData] = useState(false);
   const [stockDialogOpen, setStockDialogOpen] = useState(false);
   const [stockIssues, setStockIssues] = useState([]);
@@ -244,6 +252,7 @@ export default function CajaPage() {
   const draftTokenRef = useRef(null);
   const draftChoicesOpenRef = useRef(false);
   const skipDefaultCustomerRef = useRef(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     draftChoicesOpenRef.current = Boolean(draftChoices?.length);
@@ -944,6 +953,15 @@ export default function CajaPage() {
       saleType: isCreditSale ? "credito" : "contado",
       paymentMethod: payMethod,
       documentType: storedDocType,
+      paymentInstallments: isCreditSale
+        ? normalizeScheduleForApi(
+            creditInstallments.length
+              ? creditInstallments
+              : paymentDueDate
+                ? [{ dueDate: paymentDueDate, amount: total }]
+                : [],
+          )
+        : [],
       cashRegisterId:
         activeShift?.activeCashRegisterId ??
         activeShift?.activeCashRegister?.id ??
@@ -1043,6 +1061,17 @@ export default function CajaPage() {
     setNotes("");
     setSelectedProductId("");
     setAmountReceived("");
+    setDocumentType("documento");
+    setSaleType("contado");
+    setPaymentMethod("efectivo");
+    setUseCustomerData(false);
+    setPaymentDueDate("");
+    setSplitCreditPayments(false);
+    setCreditInstallmentCount(2);
+    setCreditInstallments([]);
+    setCreditScheduleOpen(false);
+    const consumidorFinal = findConsumidorFinalCustomer(customers);
+    if (consumidorFinal) setCustomerId(String(consumidorFinal.id));
     if (draftUserId != null && activeDraftId) {
       clearCajaDraft(activeApp, draftUserId, activeDraftId);
       const freshId = createTabDraftId();
@@ -1061,7 +1090,7 @@ export default function CajaPage() {
   };
 
   const handleConfirmStockAdjustAndCheckout = async () => {
-    if (!pendingCheckout) return;
+    if (!pendingCheckout || savingRef.current) return;
     const stockStoreId = activeShift?.storeId || activeShift?.store?.id;
     if (!stockStoreId) {
       void toast?.({
@@ -1082,6 +1111,7 @@ export default function CajaPage() {
       }
     }
     try {
+      savingRef.current = true;
       setSaving(true);
       const stockPatches = new Map();
       for (const issue of stockIssues) {
@@ -1145,11 +1175,13 @@ export default function CajaPage() {
         variant: "error",
       });
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
   const onCheckout = async () => {
+    if (savingRef.current) return;
     if (!activeShift) {
       void toast?.({
         message: "Debes abrir un turno en Turno antes de cobrar.",
@@ -1193,6 +1225,21 @@ export default function CajaPage() {
           message: "Selecciona el cliente para la venta a crédito.",
           variant: "warning",
         });
+        return;
+      }
+      const creditSchedule = normalizeScheduleForApi(
+        creditInstallments.length
+          ? creditInstallments
+          : paymentDueDate
+            ? [{ dueDate: paymentDueDate, amount: total }]
+            : [],
+      );
+      if (!creditSchedule.length) {
+        void toast?.({
+          message: "Definí la fecha de cobro o las cuotas del crédito antes de cobrar.",
+          variant: "warning",
+        });
+        setCreditScheduleOpen(true);
         return;
       }
     }
@@ -1255,6 +1302,7 @@ export default function CajaPage() {
     }
 
     try {
+      savingRef.current = true;
       setSaving(true);
       const receipt = await performSaleDelivery({
         resolvedCustomerId,
@@ -1272,6 +1320,7 @@ export default function CajaPage() {
         variant: "error",
       });
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -1784,9 +1833,25 @@ export default function CajaPage() {
                 <MenuItem value="credito">Crédito</MenuItem>
               </TextField>
               {saleType === "credito" ? (
-                <Typography variant="caption" color="text.secondary">
-                  Queda pendiente de cobro; no suma al turno hasta cobrarla en Cobranzas.
-                </Typography>
+                <Stack spacing={0.5}>
+                  <Typography variant="caption" color="text.secondary">
+                    Queda pendiente de cobro; no suma al turno hasta cobrarla en Cobranzas.
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant={paymentDueDate || creditInstallments.length ? "outlined" : "text"}
+                    color={paymentDueDate || creditInstallments.length ? "warning" : "inherit"}
+                    startIcon={<CreditScoreIcon />}
+                    onClick={() => setCreditScheduleOpen(true)}
+                    sx={{ alignSelf: "flex-start", textTransform: "none", px: 0.5 }}
+                  >
+                    {creditInstallments.length
+                      ? `Crédito: ${creditInstallments.length} cuota(s)`
+                      : paymentDueDate
+                        ? `Crédito hasta ${paymentDueDate}`
+                        : "Definir fecha o cuotas"}
+                  </Button>
+                </Stack>
               ) : null}
               <FormControlLabel
                 control={
@@ -2048,6 +2113,39 @@ export default function CajaPage() {
           ) : null}
           <Button onClick={startFreshCajaDraft} size="small" variant={draftModalLocked ? "outlined" : "text"}>
             Empezar limpia
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={creditScheduleOpen}
+        onClose={() => !saving && setCreditScheduleOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontSize: "1rem", py: 1.5 }}>Crédito de la venta</DialogTitle>
+        <DialogContent dividers sx={{ pt: 1 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+            Definí la fecha máxima de cobro o dividí el total de esta venta en cuotas. El
+            seguimiento y los abonos se gestionan después desde Cobranzas.
+          </Typography>
+          <OrderPaymentScheduleFields
+            deliveryDate={new Date().toISOString().slice(0, 10)}
+            orderTotal={total}
+            paymentDueDate={paymentDueDate}
+            onPaymentDueDateChange={setPaymentDueDate}
+            splitPayments={splitCreditPayments}
+            onSplitPaymentsChange={setSplitCreditPayments}
+            installmentCount={creditInstallmentCount}
+            onInstallmentCountChange={setCreditInstallmentCount}
+            installments={creditInstallments}
+            onInstallmentsChange={setCreditInstallments}
+            partyKind="customer"
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5 }}>
+          <Button size="small" onClick={() => setCreditScheduleOpen(false)} disabled={saving}>
+            Listo
           </Button>
         </DialogActions>
       </Dialog>
