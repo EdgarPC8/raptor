@@ -268,17 +268,35 @@ export function exportPurchasesInvoicesExcel(purchaseRows, opts = {}) {
     else totalAnulados += total;
     totalCosto += tax.sinImpuestos || round2(o.subtotal);
 
-    const estab = String(o.establishmentCode || o.estab || "").trim();
-    const pto = String(o.emissionPointCode || o.ptoEmi || "").trim();
-    const seq = String(
+    const invRaw = String(o.invoiceNumber || o.supplierInvoiceNumber || "").trim();
+    const invParts = invRaw.split("-").map((p) => p.trim()).filter(Boolean);
+    let estab = String(o.establishmentCode || o.estab || "").trim();
+    let pto = String(o.emissionPointCode || o.ptoEmi || "").trim();
+    let seq = String(
       o.invoiceSequential ||
         o.sequential ||
-        o.supplierInvoiceNumber ||
         o.numero ||
-        o.id ||
         "",
     ).replace(/\D/g, "");
-    const seqLabel = seq ? seq.padStart(9, "0") : String(o.id || "").padStart(9, "0");
+    if (invParts.length >= 3) {
+      if (!estab) estab = invParts[0];
+      if (!pto) pto = invParts[1];
+      if (!seq) seq = invParts.slice(2).join("").replace(/\D/g, "");
+    } else if (!seq && invRaw) {
+      seq = invRaw.replace(/\D/g, "");
+    }
+    // Fallback: columnas ya mapeadas en PurchasesHubPage
+    if (!estab && o.estabPtoEmi && o.estabPtoEmi !== "—") {
+      const [e, p] = String(o.estabPtoEmi).split("-");
+      if (e) estab = e;
+      if (p) pto = p;
+    }
+    if (!seq && o.numero && o.numero !== "—") {
+      seq = String(o.numero).replace(/\D/g, "");
+    }
+    const seqLabel = seq
+      ? seq.padStart(9, "0")
+      : String(o.id || "").padStart(9, "0");
 
     aoa.push([
       o.dateIso || o.emissionDate || "",

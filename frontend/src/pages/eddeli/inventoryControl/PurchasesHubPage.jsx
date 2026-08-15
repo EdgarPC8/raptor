@@ -72,6 +72,31 @@ function paymentBucketsFromList(payments = [], fallbackTotal = 0, paidAt = null)
   return out;
 }
 
+/** Parsea Nº factura proveedor: "001-001-000000123" → estab-ptoEmi + secuencial. */
+function splitSupplierInvoiceNumber(raw) {
+  const invoiceNumber = String(raw || "").trim();
+  if (!invoiceNumber) {
+    return { invoiceNumber: "", estabPtoEmi: "—", numero: "—" };
+  }
+  const parts = invoiceNumber.split("-").map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 3) {
+    const estab = parts[0].padStart(3, "0");
+    const pto = parts[1].padStart(3, "0");
+    const seq = parts.slice(2).join("").replace(/\D/g, "") || parts[2];
+    return {
+      invoiceNumber,
+      estabPtoEmi: `${estab}-${pto}`,
+      numero: seq ? String(seq).padStart(9, "0") : invoiceNumber,
+    };
+  }
+  const digits = invoiceNumber.replace(/\D/g, "");
+  return {
+    invoiceNumber,
+    estabPtoEmi: "—",
+    numero: digits ? digits.padStart(9, "0") : invoiceNumber,
+  };
+}
+
 /** Compras: registrar factura proveedor + reporte diario. */
 export default function PurchasesHubPage() {
   const { toast } = useAuth();
@@ -84,6 +109,7 @@ export default function PurchasesHubPage() {
     dateFrom: monthStartIso(),
     dateTo: todayIso(),
     supplier: "",
+    invoiceSearch: "",
   });
 
   const load = async (from, to) => {
@@ -144,6 +170,10 @@ export default function PurchasesHubPage() {
   }, [orders]);
 
   const rows = useMemo(() => {
+    const q = String(filters.invoiceSearch || "")
+      .trim()
+      .toLowerCase();
+    const qDigits = q.replace(/\D/g, "");
     return orders
       .map((o) => {
         const dateIso = orderDateIso(o);
@@ -178,12 +208,14 @@ export default function PurchasesHubPage() {
           o.paidAmount || total,
           o.paidAt,
         );
+        const inv = splitSupplierInvoiceNumber(o.invoiceNumber);
         return {
           ...o,
           dateIso,
           emissionDate: dateIso || "—",
-          estabPtoEmi: "—",
-          numero: String(o.id || "—").padStart(9, "0"),
+          invoiceNumber: inv.invoiceNumber || o.invoiceNumber || "",
+          estabPtoEmi: inv.estabPtoEmi,
+          numero: inv.numero,
           supplierLabel: supplierName,
           subtotal: Number(subtotal.toFixed(2)),
           discount,
@@ -209,10 +241,24 @@ export default function PurchasesHubPage() {
         if (filters.supplier && row.supplierLabel !== filters.supplier.toUpperCase()) {
           return false;
         }
+        if (q) {
+          const hay = [
+            row.invoiceNumber,
+            row.estabPtoEmi,
+            row.numero,
+            row.supplierLabel,
+          ]
+            .map((v) => String(v || "").toLowerCase())
+            .join(" ");
+          const hayDigits = hay.replace(/\D/g, "");
+          const textMatch = hay.includes(q);
+          const digitsMatch = qDigits && hayDigits.includes(qDigits);
+          if (!textMatch && !digitsMatch) return false;
+        }
         return true;
       })
       .sort((a, b) => String(b.dateIso).localeCompare(String(a.dateIso)));
-  }, [orders, filters.supplier]);
+  }, [orders, filters.supplier, filters.invoiceSearch]);
 
   const totals = useMemo(() => {
     const sum = (key) => rows.reduce((a, r) => a + Number(r[key] || 0), 0);
@@ -296,6 +342,18 @@ export default function PurchasesHubPage() {
           Filtros de búsqueda
         </Typography>
         <Grid container spacing={1.5} alignItems="center">
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Nº factura"
+              placeholder="001-001-000000123"
+              value={filters.invoiceSearch}
+              onChange={(e) =>
+                setFilters((p) => ({ ...p, invoiceSearch: e.target.value }))
+              }
+            />
+          </Grid>
           <Grid item xs={6} md={2}>
             <TextField
               fullWidth
@@ -335,7 +393,7 @@ export default function PurchasesHubPage() {
               ))}
             </TextField>
           </Grid>
-          <Grid item xs={12} md={5}>
+          <Grid item xs={12} md={2}>
             <Button
               variant="outlined"
               startIcon={<RestartAltIcon />}
@@ -344,6 +402,7 @@ export default function PurchasesHubPage() {
                   dateFrom: monthStartIso(),
                   dateTo: todayIso(),
                   supplier: "",
+                  invoiceSearch: "",
                 })
               }
             >
@@ -359,7 +418,7 @@ export default function PurchasesHubPage() {
         columns={[
           { id: "emissionDate", label: "Fecha emisión" },
           { id: "estabPtoEmi", label: "Estab-PtoEmi" },
-          { id: "numero", label: "Número" },
+          { id: "numero", label: "Nº factura" },
           { id: "supplierLabel", label: "Proveedor" },
           { id: "subtotalLabel", label: "Subtotal", align: "right" },
           { id: "discountLabel", label: "Descuento", align: "right" },

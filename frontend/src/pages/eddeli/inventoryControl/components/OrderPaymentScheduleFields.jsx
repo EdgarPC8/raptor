@@ -25,9 +25,11 @@ import CreditScoreIcon from "@mui/icons-material/CreditScore";
 import {
   buildEqualInstallments,
   sumInstallmentAmounts,
+  toDateOnly,
 } from "../../../../utils/orderPaymentSchedule.js";
 
 const money2 = (n) => Number(Number(n || 0).toFixed(2));
+const dateInputValue = (v) => toDateOnly(v) || "";
 
 /**
  * @param {object} props
@@ -185,9 +187,15 @@ export default function OrderPaymentScheduleFields({
                 type="date"
                 label={payLabel}
                 InputLabelProps={{ shrink: true }}
-                value={paymentDueDate || ""}
+                value={dateInputValue(paymentDueDate)}
                 onChange={(e) => onPaymentDueDateChange(e.target.value)}
                 helperText="Fecha límite para liquidar todo"
+                sx={{
+                  "& input[type='date']": {
+                    minWidth: 0,
+                    width: "100%",
+                  },
+                }}
               />
             </Grid>
             <Grid item xs={12} sm={6} sx={{ display: "flex", alignItems: "center" }}>
@@ -236,18 +244,34 @@ export default function OrderPaymentScheduleFields({
 
             {installments?.length ? (
               <Grid item xs={12}>
-                <Stack spacing={1}>
+                <Stack spacing={1.25}>
                   {installments.map((row, idx) => (
-                    <Stack
+                    <Box
                       key={row.id || `new-${idx}`}
-                      direction={{ xs: "column", sm: "row" }}
-                      spacing={1}
-                      alignItems={{ sm: "center" }}
+                      sx={{
+                        display: "grid",
+                        gap: 1,
+                        alignItems: "center",
+                        gridTemplateColumns: {
+                          xs: "auto 1fr",
+                          sm: "auto minmax(168px, 1.2fr) minmax(110px, 0.7fr) auto minmax(130px, 0.8fr) auto",
+                        },
+                        gridTemplateAreas: {
+                          xs: `
+                            "idx date"
+                            "idx amount"
+                            "idx remind"
+                            "idx notice"
+                            "idx del"
+                          `,
+                          sm: `"idx date amount remind notice del"`,
+                        },
+                      }}
                     >
                       <Typography
                         variant="caption"
                         fontWeight={700}
-                        sx={{ minWidth: 52 }}
+                        sx={{ gridArea: "idx", minWidth: 36 }}
                       >
                         #{idx + 1}
                         {row.locked ? " ✓" : ""}
@@ -257,10 +281,17 @@ export default function OrderPaymentScheduleFields({
                         type="date"
                         label="Fecha cuota"
                         InputLabelProps={{ shrink: true }}
-                        value={row.dueDate || ""}
+                        value={dateInputValue(row.dueDate)}
                         disabled={Boolean(row.locked)}
                         onChange={(e) => updateRow(idx, { dueDate: e.target.value })}
-                        sx={{ flex: 1 }}
+                        sx={{
+                          gridArea: "date",
+                          minWidth: 0,
+                          "& input[type='date']": {
+                            minWidth: 0,
+                            width: "100%",
+                          },
+                        }}
                       />
                       <TextField
                         size="small"
@@ -272,10 +303,10 @@ export default function OrderPaymentScheduleFields({
                         onChange={(e) =>
                           updateRow(idx, { amount: money2(e.target.value) })
                         }
-                        sx={{ width: { xs: "100%", sm: 140 } }}
+                        sx={{ gridArea: "amount", minWidth: 0 }}
                       />
                       <FormControlLabel
-                        sx={{ m: 0, minWidth: { sm: 145 } }}
+                        sx={{ m: 0, gridArea: "remind", whiteSpace: "nowrap" }}
                         control={
                           <Checkbox
                             size="small"
@@ -301,7 +332,7 @@ export default function OrderPaymentScheduleFields({
                         onChange={(e) =>
                           updateRow(idx, { reminderDaysBefore: Number(e.target.value) })
                         }
-                        sx={{ width: { xs: "100%", sm: 145 } }}
+                        sx={{ gridArea: "notice", minWidth: 0 }}
                       >
                         <MenuItem value={0}>Mismo día</MenuItem>
                         <MenuItem value={1}>1 día antes</MenuItem>
@@ -313,10 +344,11 @@ export default function OrderPaymentScheduleFields({
                         disabled={Boolean(row.locked)}
                         onClick={() => removeRow(idx)}
                         aria-label="Quitar cuota"
+                        sx={{ gridArea: "del", justifySelf: { xs: "start", sm: "center" } }}
                       >
                         <DeleteOutlineIcon fontSize="small" />
                       </IconButton>
-                    </Stack>
+                    </Box>
                   ))}
                 </Stack>
               </Grid>
