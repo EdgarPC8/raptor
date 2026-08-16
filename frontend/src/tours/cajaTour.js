@@ -94,6 +94,16 @@ export function getCajaTourSteps() {
       },
     },
     {
+      element: "[data-tour='caja-cobrar']",
+      popover: {
+        title: "Sin stock y empaques",
+        description:
+          "Si falta stock y en Configuración → Inventario está activo «Sugerir abrir empaque en caja», al cobrar puede salir un modal para abrir una paca/caja enlazada y reponer unidades. Sin enlace o sin esa opción, verás stock insuficiente o autocompletar (si aplica).",
+        side: "top",
+        align: "center",
+      },
+    },
+    {
       element: "[data-tour='caja-open-tab']",
       popover: {
         title: "Otra caja",

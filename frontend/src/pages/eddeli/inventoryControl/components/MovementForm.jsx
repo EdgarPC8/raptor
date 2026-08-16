@@ -41,6 +41,7 @@ import { useAuth } from "../../../../context/AuthContext";
 import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
 import {
   getAllProductsAll,
+  getProductStoreStocksRequest,
   getStoresRequest,
   openPresentationMovementRequest,
   registerMovement,
@@ -160,6 +161,8 @@ function MovementForm({
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [products, setProducts] = useState(() => productOptions || []);
   const [inventoryStores, setInventoryStores] = useState([]);
+  const [openingStoreId, setOpeningStoreId] = useState("");
+  const [openingStoreStocks, setOpeningStoreStocks] = useState([]);
   /** Local destino/origen de la línea que se está armando (multistock). */
   const [draftStoreId, setDraftStoreId] = useState("");
 
@@ -255,14 +258,6 @@ function MovementForm({
     return map;
   }, [products]);
 
-  const genericById = useMemo(() => {
-    const map = new Map();
-    (products || []).forEach((p) => {
-      if (p.isGenericIngredient && !p.genericProductId) map.set(Number(p.id), p);
-    });
-    return map;
-  }, [products]);
-
   const filteredProductOptions = useMemo(() => {
     if (isApertura) {
       return (products || []).filter(isPresentationProduct);
@@ -296,10 +291,10 @@ function MovementForm({
     return productById.get(pid) || null;
   }, [selectedProductId, productById]);
 
-  const linkedGeneric = useMemo(() => {
+  const linkedTarget = useMemo(() => {
     if (!selectedProduct?.genericProductId) return null;
-    return genericById.get(Number(selectedProduct.genericProductId)) || null;
-  }, [selectedProduct, genericById]);
+    return productById.get(Number(selectedProduct.genericProductId)) || null;
+  }, [selectedProduct, productById]);
 
   const unitAbbr = getUnitAbbr(selectedProduct);
   const quantityLabel = getMovementQuantityLabel(selectedProduct, { isAjuste });
@@ -361,16 +356,60 @@ function MovementForm({
     if (!isApertura || !selectedProduct) return null;
     const gramsPerPack = estimateGramsPerPack(selectedProduct);
     const totalGrams = gramsPerPack * packsToOpen;
-    const genericDisplay = linkedGeneric
-      ? gramsToGenericDisplay(linkedGeneric, totalGrams)
+    const targetQty = Number.isInteger(Number(selectedProduct.unitsPerPack)) &&
+      Number(selectedProduct.unitsPerPack) > 0
+      ? Number(selectedProduct.unitsPerPack) * packsToOpen
+      : null;
+    const genericDisplay = linkedTarget?.isGenericIngredient
+      ? gramsToGenericDisplay(linkedTarget, totalGrams)
       : null;
     return {
       gramsPerPack,
       totalGrams,
       genericDisplay,
+      targetQty,
       presStock: Number(selectedProduct.stock ?? 0),
     };
-  }, [isApertura, selectedProduct, packsToOpen, linkedGeneric]);
+  }, [isApertura, selectedProduct, packsToOpen, linkedTarget]);
+  const openingSelectedStock = useMemo(() => {
+    if (!multiStockEnabled) return Number(selectedProduct?.stock ?? 0);
+    return Number(
+      openingStoreStocks.find((row) => String(row.storeId) === String(openingStoreId))
+        ?.quantity ?? 0,
+    );
+  }, [multiStockEnabled, selectedProduct, openingStoreStocks, openingStoreId]);
+
+  useEffect(() => {
+    if (!isApertura || !selectedProduct?.id || !multiStockEnabled) {
+      setOpeningStoreStocks([]);
+      setOpeningStoreId("");
+      return;
+    }
+    let active = true;
+    void getProductStoreStocksRequest(selectedProduct.id)
+      .then(({ data }) => {
+        if (!active) return;
+        const rows = Array.isArray(data?.storeStocks) ? data.storeStocks : [];
+        const available = rows.filter((row) => Number(row.quantity || 0) > 0);
+        setOpeningStoreStocks(available);
+        if (available.length === 1) {
+          setOpeningStoreId(String(available[0].storeId));
+        } else {
+          setOpeningStoreId((current) =>
+            available.some((row) => String(row.storeId) === String(current)) ? current : "",
+          );
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setOpeningStoreStocks([]);
+          setOpeningStoreId("");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [isApertura, selectedProduct?.id, multiStockEnabled]);
 
   useEffect(() => {
     if (!movementToEdit) return;
@@ -601,15 +640,32 @@ function MovementForm({
     const dateApi = isProgrammer ? movementDateForApi(movementDate) : undefined;
 
     if (isApertura && !isEdit) {
+      if (
+        multiStockEnabled &&
+        openingStoreId &&
+        draftStoreId &&
+        String(openingStoreId) !== String(draftStoreId) &&
+        !openingStoreStocks.some(
+          (row) =>
+            String(row.storeId) === String(draftStoreId) &&
+            Number(row.quantity || 0) >= packsToOpen,
+        )
+      ) {
+        const accepted = window.confirm(
+          `No hay suficiente stock en ${storeLabelById(draftStoreId)}. Se abrirá desde ${storeLabelById(openingStoreId)}. ¿Confirmas?`,
+        );
+        if (!accepted) return;
+      }
       const promise = openPresentationMovementRequest({
         presentationProductId: Number(formData.productId),
         packsToOpen,
+        ...(multiStockEnabled && openingStoreId ? { storeId: Number(openingStoreId) } : {}),
         description: formData.description?.trim() || undefined,
         ...(dateApi ? { date: dateApi } : {}),
       });
       toastAuth({
         promise,
-        successMessage: "Empaque abierto — stock pasado al insumo genérico",
+        successMessage: "Empaque abierto — stock transferido al destino",
         onSuccess: () => {
           onClose?.();
           onSaved?.(Number(formData.productId));
@@ -813,8 +869,9 @@ function MovementForm({
       return (
         Boolean(selectedProduct?.genericProductId) &&
         packsToOpen >= 1 &&
-        Number(selectedProduct?.stock ?? 0) >= packsToOpen &&
-        (aperturaPreview?.totalGrams ?? 0) > 0
+        (!multiStockEnabled || Boolean(openingStoreId)) &&
+        openingSelectedStock >= packsToOpen &&
+        ((aperturaPreview?.targetQty ?? 0) > 0 || (aperturaPreview?.totalGrams ?? 0) > 0)
       );
     }
     if (isProduccion && !isEdit) {
@@ -833,6 +890,9 @@ function MovementForm({
     selectedProduct,
     packsToOpen,
     aperturaPreview,
+    multiStockEnabled,
+    openingStoreId,
+    openingSelectedStock,
     isProduccion,
     quantityIsEmpty,
     quantityValue,
@@ -871,11 +931,13 @@ function MovementForm({
         aperturaPreview && selectedProduct ? (
           <Stack spacing={0.75}>
             <Typography variant="body2">
-              <strong>{selectedProduct.name}</strong> → {linkedGeneric?.name || "genérico"}
+              <strong>{selectedProduct.name}</strong> → {linkedTarget?.name || "destino"}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               −{packsToOpen} {unitAbbr || "u"} · +
-              {aperturaPreview.totalGrams.toLocaleString("es-EC")} g
+              {aperturaPreview.targetQty != null
+                ? `${aperturaPreview.targetQty.toLocaleString("es-EC")} ${linkedTarget?.unitAbbrev || "u"}`
+                : `${aperturaPreview.totalGrams.toLocaleString("es-EC")} g`}
               {aperturaPreview.genericDisplay && (
                 <>
                   {" "}
@@ -893,7 +955,7 @@ function MovementForm({
           </Stack>
         ) : (
           <Typography variant="body2" color="text.secondary">
-            Elige un empaque enlazado (producto final → genérico).
+            Elige una presentación enlazada a un insumo o producto final.
           </Typography>
         )
       ) : isAjuste ? (
@@ -1030,7 +1092,7 @@ function MovementForm({
                 <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <SearchableSelect
-                      label={isApertura ? "Empaque a abrir (tipo final)" : "Producto"}
+                      label={isApertura ? "Paca/caja a abrir (tipo final)" : "Producto"}
                       items={filteredProductOptions}
                       value={selectedProductId || ""}
                       disabled={isEdit}
@@ -1047,7 +1109,7 @@ function MovementForm({
                       }}
                       getOptionValue={(opt) => opt?.id ?? ""}
                       placeholder={
-                        isApertura ? "Quintal de harina, arroba…" : "Busca un producto…"
+                        isApertura ? "Paca de sal, caja, saco…" : "Busca un producto…"
                       }
                     />
                   </Box>
@@ -1073,10 +1135,15 @@ function MovementForm({
                   <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
                     <Chip
                       size="small"
-                      label={`Stock: ${Number(selectedProduct.stock ?? 0)} ${unitAbbr || ""}`}
+                      label={`Stock${multiStockEnabled ? " en local" : ""}: ${openingSelectedStock} ${unitAbbr || ""}`}
                     />
-                    {linkedGeneric && (
-                      <Chip size="small" color="warning" variant="outlined" label={linkedGeneric.name} />
+                    {linkedTarget && (
+                      <Chip
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                        label={`→ ${linkedTarget.name}`}
+                      />
                     )}
                     <TextField
                       label="A abrir"
@@ -1088,6 +1155,30 @@ function MovementForm({
                       onChange={(e) => setValue("packsToOpen", e.target.value, { shouldDirty: true })}
                     />
                   </Stack>
+                )}
+                {isApertura && selectedProduct && multiStockEnabled && (
+                  <TextField
+                    select
+                    size="small"
+                    fullWidth
+                    label="Local de donde se abre"
+                    value={openingStoreId}
+                    onChange={(e) => setOpeningStoreId(e.target.value)}
+                    disabled={openingStoreStocks.length <= 1}
+                    helperText={
+                      openingStoreStocks.length === 0
+                        ? "No hay stock de esta presentación en los locales."
+                        : openingStoreStocks.length === 1
+                          ? "Se seleccionó automáticamente el único local con stock."
+                          : "Hay stock en varios locales: elige de cuál abrir."
+                    }
+                  >
+                    {openingStoreStocks.map((row) => (
+                      <MenuItem key={row.storeId} value={String(row.storeId)}>
+                        {storeLabelById(row.storeId)} · Disponible: {Number(row.quantity || 0)}
+                      </MenuItem>
+                    ))}
+                  </TextField>
                 )}
 
                 {selectedProduct && !isApertura && (

@@ -1,7 +1,10 @@
 /** Tour Configuración → pestañas de negocio (no SRI). */
 export const CONFIG_APP_TOUR_ID = "config-app";
 
-export function getConfigAppTourSteps() {
+/**
+ * @param {{ goInventarioTab?: () => void }} [hooks]
+ */
+export function getConfigAppTourSteps(hooks = {}) {
   return [
     {
       element: "[data-tour='config-header']",
@@ -50,6 +53,27 @@ export function getConfigAppTourSteps() {
         description:
           "Nombre completo, alias corto, versión, autor y descripción que se muestran en la app.",
         side: "top",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='config-open-pack']",
+      allowMissing: true,
+      onHighlightStarted: (_el, _step, { driver }) => {
+        hooks?.goInventarioTab?.();
+        window.setTimeout(() => {
+          try {
+            driver.refresh();
+          } catch {
+            /* ignore */
+          }
+        }, 120);
+      },
+      popover: {
+        title: "Sugerir abrir empaque en caja",
+        description:
+          "En Inventario: si al cobrar falta stock y hay un empaque enlazado con existencias, Caja pregunta si querés abrirlo. Primero enlazá en Producción → Insumos y presentaciones.",
+        side: "left",
         align: "start",
       },
     },

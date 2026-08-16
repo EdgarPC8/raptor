@@ -46,6 +46,7 @@ import {
   registerMovement,
   getTierGroups,
   getStoreStocksRequest,
+  openPresentationMovementRequest,
 } from "../../api/inventoryControlRequest.js";
 import { getAllCustomersRequest, posCheckoutRequest } from "../../api/ordersRequest.js";
 import { getActiveShift, setActiveCashRegister } from "../../api/shiftRequest.js";
@@ -96,6 +97,10 @@ import RestoreIcon from "@mui/icons-material/Restore";
 import TourHelpButton from "../../components/TourHelpButton.jsx";
 import { usePageTour } from "../../hooks/usePageTour.js";
 import { CAJA_TOUR_ID, getCajaTourSteps } from "../../tours/cajaTour.js";
+import {
+  CAJA_OPEN_PACK_TOUR_ID,
+  getCajaOpenPackTourSteps,
+} from "../../tours/cajaOpenPackTour.js";
 import { stockColor, stockFmt } from "../../utils/productSelectDisplay.jsx";
 import OrderPaymentScheduleFields from "./inventoryControl/components/OrderPaymentScheduleFields.jsx";
 import { normalizeScheduleForApi } from "../../utils/orderPaymentSchedule.js";
@@ -173,6 +178,56 @@ const buildStockIssues = (cart, productList) => {
   return list;
 };
 
+/**
+ * Si un producto sin stock es destino de empaques enlazados con stock local,
+ * sugiere cuántas pacas abrir para cubrir el déficit.
+ */
+const buildOpenPackSuggestions = (issues, productList) => {
+  const suggestions = [];
+  for (const issue of issues) {
+    const packs = productList
+      .filter((p) => {
+        if (Number(p.genericProductId) !== Number(issue.productId)) return false;
+        if (p.isGenericIngredient) return false;
+        const upp = Number(p.unitsPerPack);
+        const stock = Number(p.stock || 0);
+        return Number.isFinite(upp) && upp >= 1 && stock >= 1;
+      })
+      .sort((a, b) => Number(b.stock || 0) - Number(a.stock || 0));
+    if (!packs.length) continue;
+
+    const pack = packs[0];
+    const unitsPerPack = Math.max(1, Math.floor(Number(pack.unitsPerPack)));
+    const packStock = Math.floor(Number(pack.stock || 0));
+    const need = Math.ceil(Number(issue.deficit) / unitsPerPack);
+    const packsToOpen = Math.min(Math.max(1, need), packStock);
+    if (packsToOpen < 1) continue;
+
+    suggestions.push({
+      issueProductId: issue.productId,
+      issueName: issue.name,
+      deficit: issue.deficit,
+      presentationProductId: Number(pack.id),
+      presentationName: pack.name || `Empaque #${pack.id}`,
+      unitsPerPack,
+      packStock,
+      packsToOpen,
+      unitsGained: packsToOpen * unitsPerPack,
+      unitAbbrev:
+        pack.InventoryUnit?.abbreviation ||
+        pack.unitAbbrev ||
+        "u",
+      targetUnitAbbrev:
+        productList.find((x) => Number(x.id) === Number(issue.productId))
+          ?.InventoryUnit?.abbreviation ||
+        productList.find((x) => Number(x.id) === Number(issue.productId))
+          ?.unitAbbrev ||
+        "u",
+    });
+  }
+  return suggestions;
+};
+
 const lineBreakdown = (row) => {
   const qty = Number(row.quantity || 0);
   const unitPrice = Number(row.price || 0);
@@ -231,6 +286,15 @@ export default function CajaPage() {
   const [stockAdjustQty, setStockAdjustQty] = useState({});
   const [adjustmentNote, setAdjustmentNote] = useState("");
   const [pendingCheckout, setPendingCheckout] = useState(null);
+  const [openPackDialogOpen, setOpenPackDialogOpen] = useState(false);
+  const [openPackSuggestions, setOpenPackSuggestions] = useState([]);
+  const [openPackQty, setOpenPackQty] = useState({});
+  const { startTour: startOpenPackTour } = usePageTour({
+    tourId: CAJA_OPEN_PACK_TOUR_ID,
+    getSteps: getCajaOpenPackTourSteps,
+    enabled: openPackDialogOpen,
+    autoDelayMs: 400,
+  });
   const [quickDownOpen, setQuickDownOpen] = useState(false);
   const [quickDownProductId, setQuickDownProductId] = useState("");
   const [quickDownQty, setQuickDownQty] = useState("");
@@ -1096,6 +1160,159 @@ export default function CajaPage() {
     setPendingCheckout(null);
   };
 
+  const closeOpenPackDialog = () => {
+    setOpenPackDialogOpen(false);
+    setOpenPackSuggestions([]);
+    setOpenPackQty({});
+    setPendingCheckout(null);
+    setStockIssues([]);
+  };
+
+  const openStockAdjustDialog = (issues, checkoutCtx = pendingCheckout) => {
+    setPendingCheckout(checkoutCtx);
+    setStockIssues(issues);
+    const init = {};
+    issues.forEach((i) => {
+      init[i.productId] = String(i.deficit);
+    });
+    setStockAdjustQty(init);
+    setAdjustmentNote("");
+    setStockDialogOpen(true);
+  };
+
+  const abortShortageWithHint = (issues) => {
+    const settingOn = Boolean(activeApp?.ordersAllowDeliverStockAdjust);
+    const hint =
+      settingOn && !isAdmin
+        ? "Solo Admin/Programador puede autocompletar stock en caja."
+        : "Activá «Autocompletar stock» en Configuración → Inventario (Admin).";
+    void toast?.({
+      message: `Stock insuficiente: ${issues
+        .map((i) => `${i.name} (hay ${i.systemStock}, pide ${i.requested})`)
+        .join("; ")}. ${hint}`,
+      variant: "warning",
+    });
+  };
+
+  const handleSkipOpenPack = () => {
+    const issues = stockIssues;
+    const ctx = pendingCheckout;
+    setOpenPackDialogOpen(false);
+    setOpenPackSuggestions([]);
+    setOpenPackQty({});
+    if (!ctx || !issues?.length) {
+      setPendingCheckout(null);
+      setStockIssues([]);
+      return;
+    }
+    if (allowAutoCompleteStock) {
+      openStockAdjustDialog(issues, ctx);
+      return;
+    }
+    setPendingCheckout(null);
+    setStockIssues([]);
+    abortShortageWithHint(issues);
+  };
+
+  const handleConfirmOpenPackAndCheckout = async () => {
+    if (!pendingCheckout || savingRef.current) return;
+    const stockStoreId = activeShift?.storeId || activeShift?.store?.id;
+    if (!stockStoreId) {
+      void toast?.({
+        message: "El turno no tiene local. Abre turno en una sucursal propia.",
+        variant: "warning",
+      });
+      return;
+    }
+    for (const row of openPackSuggestions) {
+      const raw = String(openPackQty[row.presentationProductId] ?? row.packsToOpen)
+        .trim()
+        .replace(",", ".");
+      const packs = Math.floor(Number(raw));
+      if (!Number.isFinite(packs) || packs < 1) {
+        void toast?.({
+          message: `Indicá cuántas unidades de «${row.presentationName}» abrir (mínimo 1).`,
+          variant: "warning",
+        });
+        return;
+      }
+      if (packs > row.packStock) {
+        void toast?.({
+          message: `«${row.presentationName}»: solo hay ${row.packStock} en este local.`,
+          variant: "warning",
+        });
+        return;
+      }
+    }
+    try {
+      savingRef.current = true;
+      setSaving(true);
+      for (const row of openPackSuggestions) {
+        const packs = Math.floor(
+          Number(
+            String(openPackQty[row.presentationProductId] ?? row.packsToOpen)
+              .trim()
+              .replace(",", "."),
+          ),
+        );
+        await openPresentationMovementRequest({
+          presentationProductId: Number(row.presentationProductId),
+          packsToOpen: packs,
+          storeId: Number(stockStoreId),
+          description: `Apertura desde caja para reponer «${row.issueName}»`,
+        });
+      }
+      const { products: fresh } = await loadData();
+      const still = buildStockIssues(cart, fresh);
+      const ctx = pendingCheckout;
+      setOpenPackDialogOpen(false);
+      setOpenPackSuggestions([]);
+      setOpenPackQty({});
+      if (still.length > 0) {
+        setStockIssues(still);
+        if (allowAutoCompleteStock) {
+          openStockAdjustDialog(still, ctx);
+          void toast?.({
+            message:
+              "Se abrió el empaque, pero aún falta stock. Completá el ajuste o bajá cantidades del carrito.",
+            variant: "warning",
+          });
+          return;
+        }
+        setPendingCheckout(null);
+        setStockIssues([]);
+        abortShortageWithHint(still);
+        return;
+      }
+      setPendingCheckout(null);
+      setStockIssues([]);
+      const receipt = await performSaleDelivery({
+        resolvedCustomerId: ctx.resolvedCustomerId,
+        notesText: ctx.notesSnapshot,
+        isInvoice: ctx.isInvoice,
+        useCustomerData: ctx.useCustomerData,
+      });
+      void toast?.({
+        message: "Empaque abierto y venta registrada.",
+        variant: "success",
+      });
+      setPrintReceipt(receipt);
+      setPrintOpen(true);
+      await loadData();
+    } catch (e) {
+      void toast?.({
+        message:
+          e?.response?.data?.message ||
+          e.message ||
+          "No se pudo abrir el empaque o cobrar.",
+        variant: "error",
+      });
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
   const handleConfirmStockAdjustAndCheckout = async () => {
     if (!pendingCheckout || savingRef.current) return;
     const stockStoreId = activeShift?.storeId || activeShift?.store?.id;
@@ -1277,34 +1494,33 @@ export default function CajaPage() {
 
     const issues = buildStockIssues(cart, products);
     if (issues.length > 0) {
-      if (!allowAutoCompleteStock) {
-        const settingOn = Boolean(activeApp?.ordersAllowDeliverStockAdjust);
-        const hint =
-          settingOn && !isAdmin
-            ? "Solo Admin/Programador puede autocompletar stock en caja."
-            : "Activá «Autocompletar stock» en Configuración → Inventario (Admin).";
-        void toast?.({
-          message: `Stock insuficiente: ${issues
-            .map((i) => `${i.name} (hay ${i.systemStock}, pide ${i.requested})`)
-            .join("; ")}. ${hint}`,
-          variant: "warning",
-        });
-        return;
-      }
-      setPendingCheckout({
+      const checkoutCtx = {
         resolvedCustomerId,
         isInvoice,
         useCustomerData,
         notesSnapshot: notes,
-      });
-      setStockIssues(issues);
-      const init = {};
-      issues.forEach((i) => {
-        init[i.productId] = String(i.deficit);
-      });
-      setStockAdjustQty(init);
-      setAdjustmentNote("");
-      setStockDialogOpen(true);
+      };
+      const suggestOpenPack = Boolean(activeApp?.suggestOpenPackOnPosShortage);
+      if (suggestOpenPack) {
+        const suggestions = buildOpenPackSuggestions(issues, products);
+        if (suggestions.length > 0) {
+          setPendingCheckout(checkoutCtx);
+          setStockIssues(issues);
+          setOpenPackSuggestions(suggestions);
+          const initQty = {};
+          suggestions.forEach((s) => {
+            initQty[s.presentationProductId] = String(s.packsToOpen);
+          });
+          setOpenPackQty(initQty);
+          setOpenPackDialogOpen(true);
+          return;
+        }
+      }
+      if (!allowAutoCompleteStock) {
+        abortShortageWithHint(issues);
+        return;
+      }
+      openStockAdjustDialog(issues, checkoutCtx);
       return;
     }
 
@@ -2153,6 +2369,105 @@ export default function CajaPage() {
         <DialogActions sx={{ px: 2, py: 1.5 }}>
           <Button size="small" onClick={() => setCreditScheduleOpen(false)} disabled={saving}>
             Listo
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={openPackDialogOpen}
+        onClose={() => !saving && handleSkipOpenPack()}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ "data-tour": "caja-open-pack-dialog" }}
+      >
+        <DialogTitle
+          sx={{
+            fontSize: "1rem",
+            py: 1.5,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+            pr: 1,
+          }}
+        >
+          <span>¿Abrir empaque para reponer stock?</span>
+          <TourHelpButton
+            onClick={startOpenPackTour}
+            title="Ver tutorial de abrir empaque"
+          />
+        </DialogTitle>
+        <DialogContent dividers sx={{ pt: 1 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+            Falta stock en el carrito, pero hay empaques enlazados en{" "}
+            <strong>{activeShift?.store?.name || "este local"}</strong>. Si confirmás, se abre el
+            empaque (baja la paca y suben las unidades del producto) y luego se cobra.
+          </Typography>
+          <Stack spacing={1.25} data-tour="caja-open-pack-list">
+            {openPackSuggestions.map((row, idx) => {
+              const qty = Number(
+                String(openPackQty[row.presentationProductId] ?? row.packsToOpen)
+                  .trim()
+                  .replace(",", ".") || 0,
+              );
+              const gained = Math.max(0, Math.floor(qty)) * row.unitsPerPack;
+              return (
+                <Paper
+                  key={row.presentationProductId}
+                  variant="outlined"
+                  sx={{ p: 1.25, borderRadius: 1.5 }}
+                  {...(idx === 0 ? { "data-tour": "caja-open-pack-qty" } : {})}
+                >
+                  <Typography variant="body2" fontWeight={700}>
+                    {row.presentationName}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Destino: «{row.issueName}» · faltan {row.deficit} {row.targetUnitAbbrev} · hay{" "}
+                    {row.packStock} empaque(s)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
+                    1 empaque = +{row.unitsPerPack} {row.targetUnitAbbrev}
+                  </Typography>
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={1}
+                    alignItems={{ sm: "center" }}
+                    sx={{ mt: 1 }}
+                  >
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Abrir"
+                      value={openPackQty[row.presentationProductId] ?? ""}
+                      onChange={(e) =>
+                        setOpenPackQty((prev) => ({
+                          ...prev,
+                          [row.presentationProductId]: e.target.value,
+                        }))
+                      }
+                      inputProps={{ min: 1, max: row.packStock, step: 1 }}
+                      sx={{ width: { xs: "100%", sm: 120 } }}
+                    />
+                    <Typography variant="caption" color="success.main" fontWeight={700}>
+                      → +{gained} {row.targetUnitAbbrev} a «{row.issueName}»
+                    </Typography>
+                  </Stack>
+                </Paper>
+              );
+            })}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5 }} data-tour="caja-open-pack-actions">
+          <Button onClick={handleSkipOpenPack} disabled={saving} size="small">
+            No abrir
+          </Button>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={() => void handleConfirmOpenPackAndCheckout()}
+            disabled={saving}
+          >
+            {saving ? "…" : "Abrir y cobrar"}
           </Button>
         </DialogActions>
       </Dialog>

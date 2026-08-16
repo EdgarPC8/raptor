@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
   Chip,
+  Collapse,
   Container,
   Dialog,
   DialogActions,
@@ -12,11 +13,14 @@ import {
   Grid,
   IconButton,
   InputAdornment,
-  List,
-  ListItemButton,
-  ListItemText,
   Paper,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Tooltip,
   Typography,
@@ -34,6 +38,8 @@ import SearchIcon from "@mui/icons-material/Search";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import ShoppingBagIcon from "@mui/icons-material/ShoppingBag";
 import CloseIcon from "@mui/icons-material/Close";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
   getAllProductsAll,
   getGenericIngredientsWorkbench,
@@ -42,7 +48,15 @@ import {
 } from "../../../api/inventoryControlRequest.js";
 import { useAuth } from "../../../context/AuthContext.jsx";
 import { runMutationReload } from "../../../utils/mutationToast.js";
+import SearchableSelect from "../../../components/SearchableSelect.jsx";
 import ProductForm from "./components/ProductForm.jsx";
+import TourHelpButton from "../../../components/TourHelpButton.jsx";
+import { usePageTour } from "../../../hooks/usePageTour.js";
+import { INSUMOS_TOUR_ID, getInsumosTourSteps } from "../../../tours/insumosTour.js";
+import {
+  INSUMOS_LINK_TOUR_ID,
+  getInsumosLinkTourSteps,
+} from "../../../tours/insumosLinkTour.js";
 
 function formatStock(row) {
   return `${row.stock} ${row.unitAbbrev}`;
@@ -85,6 +99,7 @@ export default function GenericIngredientsPage() {
   const [unlinked, setUnlinked] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [listFilter, setListFilter] = useState("");
+  const [expandedTargets, setExpandedTargets] = useState(() => new Set());
 
   const [openLink, setOpenLink] = useState(false);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
@@ -93,7 +108,9 @@ export default function GenericIngredientsPage() {
 
   const [linkNote, setLinkNote] = useState("");
   const [linkProductId, setLinkProductId] = useState("");
-  const [linkSearch, setLinkSearch] = useState("");
+  const [linkTargetId, setLinkTargetId] = useState("");
+  const [linkUnitsPerPack, setLinkUnitsPerPack] = useState("1");
+  const [allProducts, setAllProducts] = useState([]);
 
   const selected = useMemo(
     () => generics.find((g) => g.id === selectedId) ?? null,
@@ -112,20 +129,17 @@ export default function GenericIngredientsPage() {
     );
   }, [generics, listFilter]);
 
-  const linkCandidates = useMemo(() => {
-    const q = linkSearch.trim().toLowerCase();
-    const list = [...unlinked].sort((a, b) => {
-      const ra = Number(a.recipeLines || 0);
-      const rb = Number(b.recipeLines || 0);
-      if (rb !== ra) return rb - ra;
-      return String(a.name).localeCompare(String(b.name), "es");
-    });
-    if (!q) return list;
-    return list.filter((p) => {
-      const hay = `${p.name} ${p.categoryName || ""} ${p.unitAbbrev || ""} ${(p.inRecipes || []).join(" ")}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [unlinked, linkSearch]);
+  const presentationCandidates = useMemo(
+    () =>
+      allProducts
+        .filter(
+          (product) =>
+            product.type === "final" &&
+            Number(product.id) !== Number(linkTargetId),
+        )
+        .sort((a, b) => String(a.name).localeCompare(String(b.name), "es")),
+    [allProducts, linkTargetId],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,6 +147,8 @@ export default function GenericIngredientsPage() {
       const wb = await getGenericIngredientsWorkbench();
       setGenerics(wb.data?.generics ?? []);
       setUnlinked(wb.data?.unlinkedProducts ?? []);
+      const { data: productsData } = await getAllProductsAll();
+      setAllProducts(Array.isArray(productsData) ? productsData : []);
       setSelectedId((prev) => {
         const list = wb.data?.generics ?? [];
         if (prev && list.some((g) => g.id === prev)) return prev;
@@ -152,10 +168,21 @@ export default function GenericIngredientsPage() {
 
   const openLinkModal = (preselectId = "") => {
     setLinkProductId(preselectId ? String(preselectId) : "");
-    setLinkSearch("");
+    setLinkTargetId(selected ? String(selected.id) : "");
+    setLinkUnitsPerPack("1");
     setLinkNote("");
+    void loadAllProducts();
     setOpenLink(true);
   };
+
+  const loadAllProducts = useCallback(async () => {
+    try {
+      const { data } = await getAllProductsAll();
+      setAllProducts(Array.isArray(data) ? data : []);
+    } catch {
+      setAllProducts([]);
+    }
+  }, []);
 
   const openCreateProduct = () => {
     setEditingProduct(null);
@@ -201,24 +228,36 @@ export default function GenericIngredientsPage() {
   };
 
   const linkExisting = async () => {
-    if (!selected || !linkProductId) return;
+    if (!linkProductId || !linkTargetId) return;
     await runMutationReload(toast, {
       promise: linkPresentationRequest(linkProductId, {
-        genericProductId: selected.id,
+        targetProductId: Number(linkTargetId),
         purchasePresentation: linkNote.trim() || null,
+        unitsPerPack: Number(linkUnitsPerPack),
       }),
       reload: () => {
         load();
         setOpenLink(false);
         setLinkProductId("");
-        setLinkSearch("");
+        setLinkTargetId("");
+        setLinkUnitsPerPack("1");
         setLinkNote("");
       },
-      successMessage: "Producto final enlazado al genérico",
+      successMessage: "Presentación enlazada",
     });
   };
 
   const unlink = async (productId) => {
+    const product = generics
+      .flatMap((g) => g.presentations || [])
+      .find((p) => Number(p.id) === Number(productId));
+    if (
+      !window.confirm(
+        `Se quitará el destino${product?.name ? ` de «${product.name}»` : ""} y se borrarán sus unidades por paca. ¿Continuar?`,
+      )
+    ) {
+      return;
+    }
     await runMutationReload(toast, {
       promise: unlinkPresentationRequest(productId),
       reload: load,
@@ -227,25 +266,317 @@ export default function GenericIngredientsPage() {
   };
 
   const accent = theme.palette.primary.main;
-  const selectedLink = unlinked.find((p) => String(p.id) === String(linkProductId));
+  const selectedLink = allProducts.find((p) => String(p.id) === String(linkProductId));
+  const targetCandidates = useMemo(
+    () =>
+      allProducts.filter(
+        (p) =>
+          Number(p.id) !== Number(linkProductId) &&
+          (p.type === "final" || (p.isGenericIngredient && !p.genericProductId)),
+      ),
+    [allProducts, linkProductId],
+  );
+  const selectedTarget = targetCandidates.find(
+    (p) => String(p.id) === String(linkTargetId),
+  );
+  const allProductRows = useMemo(() => {
+    const q = listFilter.trim().toLowerCase();
+    return [...allProducts]
+      .filter((p) => {
+        if (!q) return true;
+        return `${p.name} ${p.type} ${p.sku || ""} ${p.barcode || ""}`
+          .toLowerCase()
+          .includes(q);
+      })
+      .sort((a, b) => {
+        const typeOrder = { final: 0, intermediate: 1, raw: 2 };
+        const diff = (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9);
+        return diff || String(a.name).localeCompare(String(b.name), "es");
+      });
+  }, [allProducts, listFilter]);
+  const productById = useMemo(
+    () => new Map(allProducts.map((p) => [Number(p.id), p])),
+    [allProducts],
+  );
+  const linksByTarget = useMemo(() => {
+    const map = new Map();
+    allProducts.forEach((product) => {
+      if (!product.genericProductId) return;
+      const targetId = Number(product.genericProductId);
+      if (!map.has(targetId)) map.set(targetId, []);
+      map.get(targetId).push(product);
+    });
+    return map;
+  }, [allProducts]);
+  const toggleTarget = (id) => {
+    setExpandedTargets((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const { startTour } = usePageTour({
+    tourId: INSUMOS_TOUR_ID,
+    getSteps: getInsumosTourSteps,
+    enabled: !loading,
+  });
+  const { startTour: startLinkTour } = usePageTour({
+    tourId: INSUMOS_LINK_TOUR_ID,
+    getSteps: getInsumosLinkTourSteps,
+    enabled: openLink,
+    autoDelayMs: 450,
+  });
 
   return (
     <Container maxWidth="xl" sx={{ py: 2 }}>
-      <Stack spacing={1} mb={2}>
+      <Stack spacing={1} mb={2} data-tour="insumos-header">
         <Stack direction="row" spacing={1} alignItems="center">
           <ScienceIcon color="primary" />
           <Typography variant="h5" sx={{ fontWeight: 800 }}>
             Insumos y presentaciones
           </Typography>
+          <TourHelpButton onClick={startTour} title="Ver tutorial de insumos y presentaciones" />
         </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 720 }}>
           <strong>Insumo genérico</strong> (tipo insumo) = Harina, lo usan las recetas.{" "}
           <strong>Empaque</strong> (tipo final) = Quintal de harina.{" "}
           <strong>Enlazar</strong> los une; en Movimientos → Abrir: baja el quintal y sube la harina.
+          Con el enlace activo y la opción en Configuración → Inventario, Caja puede sugerir abrir el empaque si falta stock.
         </Typography>
       </Stack>
 
-      <Grid container spacing={2}>
+      <Paper sx={{ borderRadius: 2, overflow: "hidden" }} data-tour="insumos-table">
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1}
+          sx={{ p: 1.5, borderBottom: 1, borderColor: "divider" }}
+        >
+          <TextField
+            size="small"
+            fullWidth
+            data-tour="insumos-search"
+            placeholder="Buscar producto, tipo, SKU o código…"
+            value={listFilter}
+            onChange={(e) => setListFilter(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <Button
+            variant="contained"
+            startIcon={<LinkIcon />}
+            onClick={() => openLinkModal()}
+            sx={{ whiteSpace: "nowrap" }}
+            data-tour="insumos-config-link"
+          >
+            Configurar enlace
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={openCreateProduct}
+            sx={{ whiteSpace: "nowrap" }}
+          >
+            Crear producto
+          </Button>
+        </Stack>
+        <TableContainer sx={{ maxHeight: "calc(100vh - 240px)" }}>
+          <Table stickyHeader size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ width: 44 }} />
+                <TableCell>Producto</TableCell>
+                <TableCell>Tipo</TableCell>
+                <TableCell align="right">Stock</TableCell>
+                <TableCell>Destino al abrir</TableCell>
+                <TableCell align="center">Enlaces</TableCell>
+                <TableCell align="right">Acciones</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading && (
+                <TableRow>
+                  <TableCell colSpan={7}><ListSkeleton count={5} itemHeight={44} /></TableCell>
+                </TableRow>
+              )}
+              {!loading && allProductRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4, color: "text.secondary" }}>
+                    No hay productos que coincidan con la búsqueda.
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading && allProductRows.map((product) => {
+                const links = linksByTarget.get(Number(product.id)) || [];
+                const target = product.genericProductId
+                  ? productById.get(Number(product.genericProductId))
+                  : null;
+                const expanded = expandedTargets.has(product.id);
+                const typeLabel = product.isGenericIngredient
+                  ? "Insumo genérico"
+                  : product.type === "intermediate"
+                    ? "Intermedio"
+                    : "Final";
+                return (
+                  <Fragment key={product.id}>
+                    <TableRow key={product.id} hover>
+                      <TableCell>
+                        {links.length > 0 ? (
+                          <IconButton size="small" onClick={() => toggleTarget(product.id)}>
+                            {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                          </IconButton>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={700}>{product.name}</Typography>
+                        {product.purchasePresentation && (
+                          <Typography variant="caption" color="text.secondary">
+                            {product.purchasePresentation}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={typeLabel}
+                          color={product.isGenericIngredient ? "secondary" : product.type === "final" ? "primary" : "default"}
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        {Number(product.stock || 0)} {product.InventoryUnit?.abbreviation || product.unitAbbrev || ""}
+                      </TableCell>
+                      <TableCell>
+                        {target ? (
+                          <Stack spacing={0.15}>
+                            <Stack direction="row" spacing={0.5} alignItems="center">
+                              <LinkIcon fontSize="inherit" color="action" />
+                              <Typography variant="caption" fontWeight={700}>
+                                {target.name}
+                              </Typography>
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                              1 abierta → +{product.unitsPerPack || "—"}{" "}
+                              {target.InventoryUnit?.abbreviation ||
+                                target.unitAbbrev ||
+                                "u"}{" "}
+                              en el destino
+                            </Typography>
+                          </Stack>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">Sin enlace</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell align="center">
+                        {links.length ? (
+                          <Chip size="small" label={links.length} color="info" />
+                        ) : "—"}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Editar producto">
+                          <IconButton size="small" onClick={() => openEditProduct(product.id)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {product.type === "final" && (
+                          <Tooltip title="Configurar destino de apertura">
+                            <IconButton size="small" color="primary" onClick={() => openLinkModal(product.id)}>
+                              <LinkIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                    {links.length > 0 && (
+                      <TableRow key={`${product.id}-links`}>
+                        <TableCell colSpan={7} sx={{ py: 0, borderBottom: expanded ? 1 : 0 }}>
+                          <Collapse in={expanded} timeout="auto" unmountOnExit>
+                            <Box sx={{ py: 1.5, px: 2, bgcolor: alpha(accent, 0.035) }}>
+                              <Typography variant="caption" fontWeight={800} color="text.secondary">
+                                PRESENTACIONES QUE SE ABREN HACIA «{product.name.toUpperCase()}»
+                              </Typography>
+                              <Stack spacing={0.75} mt={1}>
+                                {links.map((link) => (
+                                  <Stack
+                                    key={link.id}
+                                    direction={{ xs: "column", sm: "row" }}
+                                    alignItems={{ sm: "center" }}
+                                    spacing={1}
+                                    sx={{ p: 1, bgcolor: "background.paper", borderRadius: 1, border: 1, borderColor: "divider" }}
+                                  >
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                      <Typography variant="body2" fontWeight={700}>
+                                        {link.name}
+                                      </Typography>
+                                      <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        display="block"
+                                        sx={{ mt: 0.25 }}
+                                      >
+                                        Al abrir{" "}
+                                        <Box component="span" fontWeight={700}>
+                                          1
+                                        </Box>{" "}
+                                        de esta presentación: baja{" "}
+                                        <Box component="span" fontWeight={700}>
+                                          1
+                                        </Box>{" "}
+                                        {link.InventoryUnit?.abbreviation ||
+                                          link.unitAbbrev ||
+                                          "u"}{" "}
+                                        aquí y suma{" "}
+                                        <Box component="span" fontWeight={700} color="success.main">
+                                          +{link.unitsPerPack || "—"}{" "}
+                                          {product.InventoryUnit?.abbreviation ||
+                                            product.unitAbbrev ||
+                                            "u"}
+                                        </Box>{" "}
+                                        a «{product.name}».
+                                      </Typography>
+                                      {link.purchasePresentation ? (
+                                        <Typography
+                                          variant="caption"
+                                          color="text.disabled"
+                                          display="block"
+                                        >
+                                          Empaque: {link.purchasePresentation}
+                                        </Typography>
+                                      ) : null}
+                                    </Box>
+                                    <Tooltip title="Editar enlace">
+                                      <IconButton size="small" onClick={() => openLinkModal(link.id)}>
+                                        <EditIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Quitar enlace">
+                                      <IconButton size="small" color="warning" onClick={() => unlink(link.id)}>
+                                        <LinkOffIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </Stack>
+                                ))}
+                              </Stack>
+                            </Box>
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+
+      <Grid container spacing={2} sx={{ display: "none" }}>
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 1.5, borderRadius: 2, maxHeight: 620, overflow: "auto" }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1, px: 0.5 }}>
@@ -518,77 +849,57 @@ export default function GenericIngredientsPage() {
         maxWidth="sm"
         fullWidth
         scroll="paper"
+        PaperProps={{ "data-tour": "insumos-link-dialog" }}
       >
-        <DialogTitle>
-          Enlazar producto final a «{selected?.name}»
+        <DialogTitle
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+            pr: 1,
+          }}
+        >
+          <span>Configurar apertura de presentación</span>
+          <TourHelpButton
+            onClick={startLinkTour}
+            title="Ver tutorial del enlace"
+          />
         </DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Elige un producto <strong>tipo final</strong> ya creado (Quintal de harina, Quintal de
-            azúcar…). Sigue siendo final; solo se enlaza al genérico para poder abrirlo y pasar
-            stock a «{selected?.name}».
+            Elige una presentación final y su destino. El destino puede ser un insumo genérico o
+            un producto final (por ejemplo: paca de sal → sal de 2 kg).
           </Typography>
 
-          <TextField
-            size="small"
-            fullWidth
-            autoFocus
-            placeholder="Buscar producto final…"
-            value={linkSearch}
-            onChange={(e) => setLinkSearch(e.target.value)}
-            sx={{ mb: 1.5 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" color="action" />
-                </InputAdornment>
-              ),
-            }}
-          />
-
-          <Paper
-            variant="outlined"
-            sx={{
-              maxHeight: 320,
-              overflow: "auto",
-              borderRadius: 1.5,
-              mb: 2,
-            }}
-          >
-            {linkCandidates.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
-                {unlinked.length === 0
-                  ? "No hay productos finales sin enlazar. Créalos con «Crear producto» (tipo final) o en Productos."
-                  : "Ningún producto coincide con la búsqueda."}
-              </Typography>
-            ) : (
-              <List disablePadding dense>
-                {linkCandidates.map((p) => {
-                  const active = String(p.id) === String(linkProductId);
-                  return (
-                    <ListItemButton
-                      key={p.id}
-                      selected={active}
-                      onClick={() => setLinkProductId(String(p.id))}
-                      sx={{ alignItems: "flex-start", py: 1 }}
-                    >
-                      <ListItemText
-                        primary={
-                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                              {p.name}
-                            </Typography>
-                            <Chip size="small" label="Final" />
-                          </Stack>
-                        }
-                        secondary={`Stock ${formatStock(p)} · ${p.categoryName}`}
-                      />
-                    </ListItemButton>
-                  );
-                })}
-              </List>
-            )}
-          </Paper>
+          <Box sx={{ mb: 1.5 }} data-tour="insumos-link-presentation">
+            <SearchableSelect
+              label="Presentación a abrir"
+              placeholder="Buscar paca, caja, saco…"
+              items={presentationCandidates}
+              value={linkProductId}
+              productMeta
+              onChange={(val) => {
+                const nextId =
+                  val && typeof val === "object"
+                    ? String(val.id ?? "")
+                    : String(val ?? "");
+                setLinkProductId(nextId);
+              }}
+              getOptionValue={(opt) => opt?.id ?? ""}
+              getOptionLabel={(opt) => {
+                if (!opt) return "";
+                const unit =
+                  opt.InventoryUnit?.abbreviation || opt.unitAbbrev || "u";
+                return `${opt.name} · Final · ${unit}`;
+              }}
+              getSearchText={(opt) =>
+                `${opt?.name || ""} ${opt?.sku || ""} ${opt?.barcode || ""} ${
+                  opt?.purchasePresentation || ""
+                }`
+              }
+            />
+          </Box>
 
           {selectedLink && (
             <Box
@@ -608,11 +919,66 @@ export default function GenericIngredientsPage() {
                 {selectedLink.name}
               </Typography>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                Al abrir este empaque en Movimientos: −1 {selectedLink.unitAbbrev} aquí y +stock en
-                «{selected?.name}».
+                Configura cuántas unidades del destino entrega cada paca al abrirse.
               </Typography>
             </Box>
           )}
+
+          <Box sx={{ mb: 1.5 }} data-tour="insumos-link-target">
+            <SearchableSelect
+              label="Destino al abrir"
+              placeholder="Buscar insumo genérico o producto final…"
+              items={targetCandidates}
+              value={linkTargetId}
+              productMeta
+              onChange={(val) => {
+                const nextId =
+                  val && typeof val === "object"
+                    ? String(val.id ?? "")
+                    : String(val ?? "");
+                setLinkTargetId(nextId);
+              }}
+              getOptionValue={(opt) => opt?.id ?? ""}
+              getOptionLabel={(opt) => {
+                if (!opt) return "";
+                const kind = opt.isGenericIngredient
+                  ? "Insumo genérico"
+                  : "Producto final";
+                const unit =
+                  opt.InventoryUnit?.abbreviation || opt.unitAbbrev || "u";
+                return `${opt.name} · ${kind} · ${unit}`;
+              }}
+              getSearchText={(opt) =>
+                `${opt?.name || ""} ${opt?.sku || ""} ${opt?.barcode || ""} ${
+                  opt?.isGenericIngredient ? "insumo genérico" : "producto final"
+                }`
+              }
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+              Puede ser un insumo genérico o un producto final.
+            </Typography>
+          </Box>
+
+          <TextField
+            label="Unidades por paca"
+            fullWidth
+            required
+            type="number"
+            value={linkUnitsPerPack}
+            onChange={(e) => setLinkUnitsPerPack(e.target.value)}
+            inputProps={{ min: 1, step: 1 }}
+            data-tour="insumos-link-units"
+            helperText={
+              selectedTarget
+                ? `Al abrir 1 paca se suman ${linkUnitsPerPack || 0} ${
+                    selectedTarget.InventoryUnit?.abbreviation ||
+                    selectedTarget.unitAbbrev ||
+                    "unidades"
+                  } a «${selectedTarget.name}».`
+                : "Indica cuántas unidades recibe el destino por cada paca."
+            }
+            sx={{ mb: 1.5 }}
+          />
 
           <TextField
             label="Nota (opcional)"
@@ -628,7 +994,13 @@ export default function GenericIngredientsPage() {
             variant="contained"
             startIcon={<LinkIcon />}
             onClick={linkExisting}
-            disabled={!linkProductId}
+            data-tour="insumos-link-save"
+            disabled={
+              !linkProductId ||
+              !linkTargetId ||
+              !Number.isInteger(Number(linkUnitsPerPack)) ||
+              Number(linkUnitsPerPack) < 1
+            }
           >
             Enlazar
           </Button>

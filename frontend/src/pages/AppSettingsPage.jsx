@@ -193,9 +193,21 @@ export default function AppSettingsPage() {
 
   const pageReady = !loading && Boolean(form);
 
+  const getAppTourSteps = useCallback(
+    () =>
+      getConfigAppTourSteps({
+        goInventarioTab: () => {
+          const next = new URLSearchParams(searchParams);
+          next.set("tab", "inventario");
+          setSearchParams(next, { replace: true });
+        },
+      }),
+    [searchParams, setSearchParams],
+  );
+
   const { startTour: startAppTour } = usePageTour({
     tourId: CONFIG_APP_TOUR_ID,
-    getSteps: getConfigAppTourSteps,
+    getSteps: getAppTourSteps,
     enabled: pageReady && !isSriTab,
   });
   const { startTour: startSriTour } = usePageTour({
@@ -232,6 +244,7 @@ export default function AppSettingsPage() {
         moneyDisplayDecimals: Number(settings.moneyDisplayDecimals ?? 2),
         moneyRoundingMode: settings.moneyRoundingMode || "up",
         ordersAllowDeliverStockAdjust: Boolean(settings.ordersAllowDeliverStockAdjust),
+        suggestOpenPackOnPosShortage: Boolean(settings.suggestOpenPackOnPosShortage),
         receiptDetailSettings: normalizeReceiptDetailSettings(
           settings.receiptDetailSettings || DEFAULT_RECEIPT_DETAIL_SETTINGS,
         ),
@@ -899,6 +912,25 @@ export default function AppSettingsPage() {
                   />
                 }
               />
+              <Box data-tour="config-open-pack">
+                <SettingsRow
+                  label="Sugerir abrir empaque en caja"
+                  description="Si al cobrar falta stock de un producto y hay un empaque enlazado con stock en el local, pregunta si deseas abrirlo para reponer unidades. Requiere enlace en Insumos y presentaciones."
+                  control={
+                    <FormControlLabel
+                      sx={{ m: 0 }}
+                      control={
+                        <Switch
+                          size="small"
+                          checked={Boolean(form.suggestOpenPackOnPosShortage)}
+                          onChange={onToggle("suggestOpenPackOnPosShortage")}
+                        />
+                      }
+                      label={form.suggestOpenPackOnPosShortage ? "Activado" : "Desactivado"}
+                    />
+                  }
+                />
+              </Box>
               {multiStockFeatureStatus !== "hidden" ? (
                 <Box data-tour="config-multistock">
                   <SettingsRow

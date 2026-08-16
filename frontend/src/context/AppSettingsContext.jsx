@@ -109,6 +109,12 @@ function toActiveApp(settings, { offline = false } = {}) {
           settings?.ordersAllowDeliverStockAdjust ??
             resolved.ordersAllowDeliverStockAdjust,
         ),
+    suggestOpenPackOnPosShortage: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.suggestOpenPackOnPosShortage ??
+            resolved.suggestOpenPackOnPosShortage,
+        ),
     receiptDetailSettings: unconfigured
       ? { ...DEFAULT_RECEIPT_DETAIL_SETTINGS }
       : normalizeReceiptDetailSettings(
