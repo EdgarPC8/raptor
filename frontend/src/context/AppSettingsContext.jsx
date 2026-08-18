@@ -115,6 +115,30 @@ function toActiveApp(settings, { offline = false } = {}) {
           settings?.suggestOpenPackOnPosShortage ??
             resolved.suggestOpenPackOnPosShortage,
         ),
+    cajaAllowCreateProductFromSelect: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.cajaAllowCreateProductFromSelect ??
+            resolved.cajaAllowCreateProductFromSelect,
+        ),
+    cajaAllowCreateProductFromScan: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.cajaAllowCreateProductFromScan ??
+            resolved.cajaAllowCreateProductFromScan,
+        ),
+    cajaAllowEditProductFromCart: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.cajaAllowEditProductFromCart ??
+            resolved.cajaAllowEditProductFromCart,
+        ),
+    cajaSuggestUpdateProductPrice: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.cajaSuggestUpdateProductPrice ??
+            resolved.cajaSuggestUpdateProductPrice,
+        ),
     receiptDetailSettings: unconfigured
       ? { ...DEFAULT_RECEIPT_DETAIL_SETTINGS }
       : normalizeReceiptDetailSettings(

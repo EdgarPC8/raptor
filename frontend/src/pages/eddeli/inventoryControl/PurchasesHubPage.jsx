@@ -36,6 +36,7 @@ import SupplierOrderForm, {
   SUPPLIER_ORDER_DIALOG_PAPER_SX,
 } from "./components/SupplierOrderForm.jsx";
 import { exportPurchasesInvoicesExcel } from "../../../utils/exportInvoiceReportExcel.js";
+import { getPurchaseHubStatus, InvoiceHubStatusIcon } from "./components/invoiceHubStatus.jsx";
 
 const MONEY_COL = {
   align: "right",
@@ -254,6 +255,7 @@ function mapPurchaseRow(o) {
     cardLabel: money(pay.card),
     otherLabel: money(pay.other),
     retentionLabel: money(retention),
+    hubStatus: getPurchaseHubStatus(o),
   };
 }
 
@@ -516,16 +518,19 @@ export default function PurchasesHubPage() {
             id: "actions",
             label: "Acciones",
             stopRowClick: true,
-            minWidth: 120,
+            minWidth: 140,
             cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
             headerSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+            getSearchValue: (row) => row.hubStatus?.label || "",
             render: (row) => (
               <Stack
                 direction="row"
-                spacing={0}
+                spacing={0.25}
+                alignItems="center"
                 justifyContent="flex-end"
                 data-tour="compras-hub-row-actions"
               >
+                <InvoiceHubStatusIcon status={row.hubStatus} />
                 <Tooltip title="Ver detalle">
                   <IconButton size="small" color="primary" onClick={() => void openDetail(row)}>
                     <VisibilityIcon fontSize="small" />

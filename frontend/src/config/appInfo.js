@@ -40,6 +40,10 @@ export const RAPTOR_UNCONFIGURED_FALLBACK = {
   moneyRoundingMode: "up",
   ordersAllowDeliverStockAdjust: true,
   suggestOpenPackOnPosShortage: false,
+  cajaAllowCreateProductFromSelect: false,
+  cajaAllowCreateProductFromScan: false,
+  cajaAllowEditProductFromCart: false,
+  cajaSuggestUpdateProductPrice: false,
   receiptDetailSettings: {
     productNameCase: "as_stored",
     showLineNumber: false,
@@ -85,6 +89,10 @@ export const EDDELI_FALLBACK = {
   moneyRoundingMode: "up",
   ordersAllowDeliverStockAdjust: true,
   suggestOpenPackOnPosShortage: false,
+  cajaAllowCreateProductFromSelect: false,
+  cajaAllowCreateProductFromScan: false,
+  cajaAllowEditProductFromCart: false,
+  cajaSuggestUpdateProductPrice: false,
   receiptDetailSettings: {
     productNameCase: "as_stored",
     showLineNumber: false,

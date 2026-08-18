@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link as RouterLink } from "react-router-dom";
 import { APP_ROUTES } from "../../config/appRoutes.js";
 import {
-  Autocomplete,
   Box,
   Button,
   Chip,
@@ -36,6 +35,7 @@ import HistoryIcon from "@mui/icons-material/History";
 import AddIcon from "@mui/icons-material/Add";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import EditIcon from "@mui/icons-material/Edit";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useAppSettings } from "../../context/AppSettingsContext.jsx";
 import { formatDateTime } from "../../helpers/functions.js";
@@ -52,13 +52,17 @@ import ProgrammerMovementDateField, {
   movementDateForApi,
 } from "./inventoryControl/components/ProgrammerMovementDateField.jsx";
 import {
-  getAllProductsAll,
   getStoresRequest,
   createCashRegisterRequest,
 } from "../../api/inventoryControlRequest.js";
 import { fetchSriBillingSettings } from "../../api/sriBillingRequest.js";
 import OpenShiftStoreDialog from "../../components/OpenShiftStoreDialog.jsx";
+import SimpleDialog from "../../components/Dialogs/SimpleDialog.jsx";
 import TourHelpButton from "../../components/TourHelpButton.jsx";
+import SupplierOrderForm, {
+  SUPPLIER_ORDER_DIALOG_CONTENT_SX,
+  SUPPLIER_ORDER_DIALOG_PAPER_SX,
+} from "./inventoryControl/components/SupplierOrderForm.jsx";
 import { usePageTour } from "../../hooks/usePageTour.js";
 import { TURNO_TOUR_ID, getTurnoTourSteps } from "../../tours/turnoTour.js";
 import {
@@ -244,8 +248,7 @@ export default function TurnoPage() {
   const [closeNotes, setCloseNotes] = useState("");
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
   const [movementSaving, setMovementSaving] = useState(false);
-  const [products, setProducts] = useState([]);
-  const [productsLoading, setProductsLoading] = useState(false);
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [editShiftId, setEditShiftId] = useState(null);
   const [stores, setStores] = useState([]);
   const [sriSettings, setSriSettings] = useState(null);
@@ -393,15 +396,6 @@ export default function TurnoPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (movementForm.category !== "compra_mercancia" || products.length > 0) return;
-    setProductsLoading(true);
-    getAllProductsAll()
-      .then((res) => setProducts(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setProducts([]))
-      .finally(() => setProductsLoading(false));
-  }, [movementForm.category, products.length]);
-
   const movementCategories =
     movementForm.direction === "out" ? OUT_CATEGORIES : IN_CATEGORIES;
 
@@ -419,6 +413,10 @@ export default function TurnoPage() {
 
   const handleAddMovement = async () => {
     if (!activeShift?.id) return;
+    if (movementForm.category === "compra_mercancia") {
+      setPurchaseOpen(true);
+      return;
+    }
     const amt = Number(movementForm.amount);
     if (!amt || amt <= 0) {
       void toast?.({ message: "Ingresa un monto válido.", variant: "warning" });
@@ -427,17 +425,6 @@ export default function TurnoPage() {
     if (!String(movementForm.concept || "").trim()) {
       void toast?.({ message: "Indica un concepto.", variant: "warning" });
       return;
-    }
-    if (movementForm.category === "compra_mercancia") {
-      const hasProduct = Boolean(movementForm.product);
-      const hasQty = movementForm.quantity !== "" && Number(movementForm.quantity) > 0;
-      if (hasProduct !== hasQty) {
-        void toast?.({
-          message: "Para compra de mercancía indica producto y cantidad, o deja ambos vacíos.",
-          variant: "warning",
-        });
-        return;
-      }
     }
 
     try {
@@ -465,6 +452,38 @@ export default function TurnoPage() {
       });
     } finally {
       setMovementSaving(false);
+    }
+  };
+
+  const handlePurchaseSettled = async ({
+    orderId,
+    total,
+    paid,
+    payMethod,
+    supplierName,
+  }) => {
+    if (paid && payMethod === "efectivo" && activeShift?.id && Number(total) > 0) {
+      try {
+        await createShiftMovement(activeShift.id, {
+          direction: "out",
+          category: "compra_mercancia",
+          amount: Number(total),
+          concept: `Compra a ${supplierName || "proveedor"} · pedido #${orderId}`,
+          notes: `supplier_order:${orderId}`,
+          skipExpense: true,
+        });
+        void toast?.({
+          message: "Compra registrada y descontada de caja.",
+          variant: "success",
+        });
+      } catch (e) {
+        void toast?.({
+          message:
+            e?.response?.data?.message ||
+            "Pedido guardado, pero no se pudo descontar de caja.",
+          variant: "warning",
+        });
+      }
     }
   };
 
@@ -888,7 +907,7 @@ export default function TurnoPage() {
               size="small"
               value={movementForm.direction}
               onChange={handleMovementDirection}
-              disabled={movementSaving}
+              disabled={movementSaving || movementForm.category === "compra_mercancia"}
               sx={{ flexShrink: 0 }}
             >
               <ToggleButton value="out" sx={{ px: 1.5, fontSize: "0.75rem" }}>
@@ -904,14 +923,16 @@ export default function TurnoPage() {
               <Select
                 label="Categoría"
                 value={movementForm.category}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const category = e.target.value;
                   setMovementForm((p) => ({
                     ...p,
-                    category: e.target.value,
+                    category,
                     product: null,
                     quantity: "",
-                  }))
-                }
+                    ...(category === "compra_mercancia" ? { direction: "out" } : {}),
+                  }));
+                }}
                 disabled={movementSaving}
               >
                 {movementCategories.map((cat) => (
@@ -922,6 +943,18 @@ export default function TurnoPage() {
               </Select>
             </FormControl>
 
+            {movementForm.category === "compra_mercancia" ? (
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<ShoppingCartIcon />}
+                onClick={() => setPurchaseOpen(true)}
+                sx={{ flexShrink: 0, alignSelf: { xs: "stretch", md: "center" } }}
+              >
+                Pedido a proveedor
+              </Button>
+            ) : (
+              <>
             <TextField
               size="small"
               margin="dense"
@@ -954,9 +987,11 @@ export default function TurnoPage() {
             >
               {movementSaving ? "Guardando…" : "Registrar"}
             </Button>
+              </>
+            )}
           </Stack>
 
-          {isProgrammer && (
+          {isProgrammer && movementForm.category !== "compra_mercancia" && (
             <Box sx={{ mb: 1, maxWidth: 280 }}>
               <ProgrammerMovementDateField
                 isProgrammer
@@ -968,47 +1003,9 @@ export default function TurnoPage() {
           )}
 
           {movementForm.category === "compra_mercancia" && (
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 1 }}>
-              <Autocomplete
-                size="small"
-                options={products}
-                loading={productsLoading}
-                getOptionLabel={(opt) => opt?.name || ""}
-                value={movementForm.product}
-                onChange={(_, val) => setMovementForm((p) => ({ ...p, product: val }))}
-                disabled={movementSaving}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    margin="dense"
-                    label="Producto (opc.)"
-                    placeholder="Si compraste mercancía para inventario"
-                    sx={compactFieldSx}
-                  />
-                )}
-                sx={{ flex: 1, minWidth: 180 }}
-              />
-              <TextField
-                size="small"
-                margin="dense"
-                label="Cantidad"
-                type="number"
-                value={movementForm.quantity}
-                onChange={(e) => setMovementForm((p) => ({ ...p, quantity: e.target.value }))}
-                disabled={movementSaving}
-                inputProps={{ min: 0, step: 0.01 }}
-                sx={{ ...compactFieldSx, width: 110 }}
-              />
-              <TextField
-                size="small"
-                margin="dense"
-                label="Notas (opc.)"
-                value={movementForm.notes}
-                onChange={(e) => setMovementForm((p) => ({ ...p, notes: e.target.value }))}
-                disabled={movementSaving}
-                sx={{ ...compactFieldSx, flex: 1, minWidth: 120 }}
-              />
-            </Stack>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              Se abre el mismo pedido a proveedor. Si lo pagás en efectivo, sale de esta caja para que cuadre al cierre.
+            </Typography>
           )}
 
           <TableContainer data-tour="turno-movements-table" sx={{ maxHeight: 140, mb: 1 }}>
@@ -1287,6 +1284,27 @@ export default function TurnoPage() {
         onConfirm={() => void doOpenShift(pendingStoreId)}
         confirming={saving}
       />
+
+      <SimpleDialog
+        open={purchaseOpen}
+        onClose={() => setPurchaseOpen(false)}
+        tittle="Compra mercancía · caja del turno"
+        maxWidth="xl"
+        fullWidth
+        paperSx={SUPPLIER_ORDER_DIALOG_PAPER_SX}
+        contentSx={SUPPLIER_ORDER_DIALOG_CONTENT_SX}
+      >
+        <SupplierOrderForm
+          onClose={() => setPurchaseOpen(false)}
+          reload={load}
+          isEditing={false}
+          datos={null}
+          active={purchaseOpen}
+          fromShift
+          receiveStoreId={activeShift?.storeId || activeShift?.store?.id || null}
+          onSettled={handlePurchaseSettled}
+        />
+      </SimpleDialog>
 
       <Dialog
         open={addRegisterOpen}

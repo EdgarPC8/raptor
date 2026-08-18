@@ -14,6 +14,10 @@ import {
   Checkbox,
   Alert,
   InputAdornment,
+  Radio,
+  RadioGroup,
+  FormControl,
+  FormLabel,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import AddBoxIcon from "@mui/icons-material/AddBox";
@@ -34,6 +38,8 @@ import {
   getAllSuppliersRequest,
   getAllSupplierOrdersRequest,
   upsertSupplierProductCodesRequest,
+  markSupplierOrderReceivedRequest,
+  markSupplierOrderPaidRequest,
 } from "../../../../api/ordersRequest";
 import { getAllProductsAll } from "../../../../api/inventoryControlRequest";
 import { lookupSriPurchaseInvoiceByAccessKey } from "../../../../api/sriInvoicesRequest.js";
@@ -259,6 +265,9 @@ function SupplierOrderForm(
     prefillDate = null,
     lockSupplier = false,
     active = true,
+    fromShift = false,
+    receiveStoreId = null,
+    onSettled = null,
   },
   tourApiRef,
 ) {
@@ -295,6 +304,11 @@ function SupplierOrderForm(
   const [loadingSoldProducts, setLoadingSoldProducts] = useState(false);
   /** Cache de pedidos a proveedor para última compra y filtro por historial. */
   const [supplierOrdersCache, setSupplierOrdersCache] = useState([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmReceived, setConfirmReceived] = useState(true);
+  const [confirmPaid, setConfirmPaid] = useState(true);
+  const [confirmPayMethod, setConfirmPayMethod] = useState("efectivo");
+  const settleRef = useRef({ receive: false, pay: false, payMethod: "efectivo" });
   const tourGenRef = useRef(0);
   const lotsRef = useRef([]);
   const packsRef = useRef([]);
@@ -1171,10 +1185,14 @@ function SupplierOrderForm(
     };
 
     const voucherFile = pendingVoucherFile;
+    const settle = settleRef.current || { receive: false, pay: false, payMethod: "efectivo" };
+    const supplierName =
+      suppliers.find((s) => String(s.id) === String(selectedSupplier))?.name || "Proveedor";
 
     try {
+      let orderId = isEditing ? datos?.id : null;
       if (isEditing) {
-        await toast({
+        const result = await toast({
           promise: updateSupplierOrderRequest(datos.id, payload),
           onSuccess: async () => {
             if (voucherFile) {
@@ -1189,14 +1207,15 @@ function SupplierOrderForm(
             }
           },
         });
+        orderId = orderId || result?.data?.id;
       } else {
-        await toast({
+        const result = await toast({
           promise: createSupplierOrderRequest(payload),
-          onSuccess: async (result) => {
-            const orderId = result?.data?.id;
-            if (voucherFile && orderId) {
+          onSuccess: async (res) => {
+            const createdId = res?.data?.id;
+            if (voucherFile && createdId) {
               try {
-                await uploadSupplierOrderVoucher(voucherFile, orderId, invoiceNumberClean);
+                await uploadSupplierOrderVoucher(voucherFile, createdId, invoiceNumberClean);
               } catch {
                 toast({
                   message: "Pedido guardado, pero no se pudo subir el comprobante.",
@@ -1206,7 +1225,53 @@ function SupplierOrderForm(
             }
           },
         });
+        orderId = result?.data?.id || orderId;
       }
+
+      if (orderId && settle.receive && !datos?.receivedAt) {
+        try {
+          await markSupplierOrderReceivedRequest(orderId, {
+            ...(receiveStoreId ? { storeId: Number(receiveStoreId) } : {}),
+          });
+        } catch (err) {
+          toast({
+            message:
+              err?.response?.data?.message ||
+              "Pedido guardado, pero no se pudo marcar como recibido.",
+            variant: "warning",
+          });
+        }
+      }
+
+      if (orderId && settle.pay && !datos?.paidAt) {
+        try {
+          await markSupplierOrderPaidRequest(orderId, {
+            paymentMethod: settle.payMethod || "efectivo",
+          });
+        } catch (err) {
+          toast({
+            message:
+              err?.response?.data?.message ||
+              "Pedido guardado, pero no se pudo marcar como pagado.",
+            variant: "warning",
+          });
+        }
+      }
+
+      if (typeof onSettled === "function" && orderId) {
+        await onSettled({
+          orderId,
+          total: orderTotalNow,
+          received: Boolean(settle.receive),
+          paid: Boolean(settle.pay),
+          payMethod: settle.payMethod || "efectivo",
+          supplierName,
+          fromShift,
+        });
+      }
+
+      settleRef.current = { receive: false, pay: false, payMethod: "efectivo" };
+      setConfirmOpen(false);
       reset();
       setItems([]);
       setPacks([]);
@@ -1389,9 +1454,10 @@ function SupplierOrderForm(
       onSubmit={handleSubmit(submitOrder)}
     >
       <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", px: { xs: 0.5, sm: 1 }, pt: 0.5, pb: 1 }}>
-      <Alert severity="info" sx={{ mb: 1, py: 0.25 }}>
+      <Alert severity={fromShift ? "warning" : "info"} sx={{ mb: 1, py: 0.25 }}>
         <strong>Pedido a proveedor</strong>
         {isEditing ? ` · #${datos?.id ?? ""}` : " · nuevo"}
+        {fromShift ? " · sale de la caja del turno si pagás en efectivo" : ""}
       </Alert>
       <Grid container spacing={1.25}>
         <Grid item xs={12} md={5}>
@@ -1921,14 +1987,102 @@ function SupplierOrderForm(
           <Button
             data-tour="pedido-prov-save"
             type="submit"
+            variant={fromShift ? "outlined" : "contained"}
+            size="small"
+            sx={{ minWidth: 150, px: 2 }}
+            onClick={() => {
+              settleRef.current = { receive: false, pay: false, payMethod: "efectivo" };
+            }}
+          >
+            {isEditing ? "Guardar pedido" : "Guardar pedido"}
+          </Button>
+          <Button
+            type="button"
             variant="contained"
             size="small"
+            color={fromShift ? "primary" : "secondary"}
             sx={{ minWidth: 160, px: 2 }}
+            onClick={() => {
+              setConfirmReceived(true);
+              setConfirmPaid(true);
+              setConfirmPayMethod("efectivo");
+              setConfirmOpen(true);
+            }}
           >
-            {isEditing ? "Guardar pedido" : "Registrar pedido"}
+            Recibir y pagar
           </Button>
         </Box>
       </Box>
+
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ fontWeight: 700, fontSize: "1.05rem" }}>
+          ¿Confirmás recibido y pagado?
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            {fromShift
+              ? "Si pagás en efectivo, sale de la caja del turno para que cuadre al cierre."
+              : "Podés marcar solo lo que ya pasó. Lo demás queda pendiente."}
+          </Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={confirmReceived}
+                onChange={(e) => setConfirmReceived(e.target.checked)}
+              />
+            }
+            label="Recibido (entra al inventario)"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={confirmPaid}
+                onChange={(e) => setConfirmPaid(e.target.checked)}
+              />
+            }
+            label="Pagado"
+          />
+          {confirmPaid ? (
+            <FormControl sx={{ mt: 1.5, display: "block" }}>
+              <FormLabel sx={{ fontSize: "0.8rem" }}>Cómo se pagó</FormLabel>
+              <RadioGroup
+                row
+                value={confirmPayMethod}
+                onChange={(e) => setConfirmPayMethod(e.target.value)}
+              >
+                <FormControlLabel
+                  value="efectivo"
+                  control={<Radio size="small" />}
+                  label={fromShift ? "Efectivo (sale de caja)" : "Efectivo"}
+                />
+                <FormControlLabel
+                  value="transferencia"
+                  control={<Radio size="small" />}
+                  label="Transferencia"
+                />
+              </RadioGroup>
+            </FormControl>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            disabled={!confirmReceived && !confirmPaid}
+            onClick={() => {
+              settleRef.current = {
+                receive: confirmReceived,
+                pay: confirmPaid,
+                payMethod: confirmPayMethod,
+              };
+              setConfirmOpen(false);
+              handleSubmit(submitOrder)();
+            }}
+          >
+            Confirmar y guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={productDialogOpen}

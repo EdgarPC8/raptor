@@ -245,6 +245,10 @@ export default function AppSettingsPage() {
         moneyRoundingMode: settings.moneyRoundingMode || "up",
         ordersAllowDeliverStockAdjust: Boolean(settings.ordersAllowDeliverStockAdjust),
         suggestOpenPackOnPosShortage: Boolean(settings.suggestOpenPackOnPosShortage),
+        cajaAllowCreateProductFromSelect: Boolean(settings.cajaAllowCreateProductFromSelect),
+        cajaAllowCreateProductFromScan: Boolean(settings.cajaAllowCreateProductFromScan),
+        cajaAllowEditProductFromCart: Boolean(settings.cajaAllowEditProductFromCart),
+        cajaSuggestUpdateProductPrice: Boolean(settings.cajaSuggestUpdateProductPrice),
         receiptDetailSettings: normalizeReceiptDetailSettings(
           settings.receiptDetailSettings || DEFAULT_RECEIPT_DETAIL_SETTINGS,
         ),
@@ -927,41 +931,111 @@ export default function AppSettingsPage() {
                         />
                       }
                       label={form.suggestOpenPackOnPosShortage ? "Activado" : "Desactivado"}
+                  />
+                }
+              />
+            </Box>
+            <Box data-tour="config-caja-products">
+              <SettingsRow
+                label="Crear producto desde el buscador de caja"
+                description="Muestra un botón + al lado del select de producto. Abre el formulario completo de productos. Apagado por defecto."
+                control={
+                  <FormControlLabel
+                    sx={{ m: 0 }}
+                    control={
+                      <Switch
+                        size="small"
+                        checked={Boolean(form.cajaAllowCreateProductFromSelect)}
+                        onChange={onToggle("cajaAllowCreateProductFromSelect")}
+                      />
+                    }
+                    label={form.cajaAllowCreateProductFromSelect ? "Activado" : "Desactivado"}
+                  />
+                }
+              />
+              <SettingsRow
+                label="Crear producto si el escáner no lo encuentra"
+                description="Si pasás un código que no está en el catálogo, pregunta si querés crearlo con ese código (nombre y precio). Apagado por defecto."
+                control={
+                  <FormControlLabel
+                    sx={{ m: 0 }}
+                    control={
+                      <Switch
+                        size="small"
+                        checked={Boolean(form.cajaAllowCreateProductFromScan)}
+                        onChange={onToggle("cajaAllowCreateProductFromScan")}
+                      />
+                    }
+                    label={form.cajaAllowCreateProductFromScan ? "Activado" : "Desactivado"}
+                  />
+                }
+              />
+              <SettingsRow
+                label="Editar producto desde el carrito de caja"
+                description="En cada línea del carrito aparece un lápiz para editar el producto (útil si no tiene código de barras). Apagado por defecto."
+                control={
+                  <FormControlLabel
+                    sx={{ m: 0 }}
+                    control={
+                      <Switch
+                        size="small"
+                        checked={Boolean(form.cajaAllowEditProductFromCart)}
+                        onChange={onToggle("cajaAllowEditProductFromCart")}
+                      />
+                    }
+                    label={form.cajaAllowEditProductFromCart ? "Activado" : "Desactivado"}
+                  />
+                }
+              />
+              <SettingsRow
+                label="Sugerir actualizar precio al cobrar"
+                description="Si en el carrito cambiaste el precio y no coincide con el del catálogo, al cobrar pregunta si querés actualizar esos productos. Podés decir que sí o que no. Apagado por defecto."
+                control={
+                  <FormControlLabel
+                    sx={{ m: 0 }}
+                    control={
+                      <Switch
+                        size="small"
+                        checked={Boolean(form.cajaSuggestUpdateProductPrice)}
+                        onChange={onToggle("cajaSuggestUpdateProductPrice")}
+                      />
+                    }
+                    label={form.cajaSuggestUpdateProductPrice ? "Activado" : "Desactivado"}
+                  />
+                }
+              />
+            </Box>
+            {multiStockFeatureStatus !== "hidden" ? (
+              <Box data-tour="config-multistock">
+                <SettingsRow
+                  label="Multistock (stock por local)"
+                  description={
+                    !multiStockUnlocked
+                      ? FEATURE_STATUS_HINT[multiStockFeatureStatus] ||
+                        "Aún no disponible para tu instalación."
+                      : multiStockAlreadyOn
+                        ? multiStockCanToggleOff
+                          ? "Activo. Programador puede desactivar."
+                          : "Activo. No se puede desactivar."
+                        : "Modo clásico: stock en Productos. Activá solo con varios locales."
+                  }
+                  control={
+                    <FormControlLabel
+                      sx={{ m: 0 }}
+                      control={
+                        <Switch
+                          size="small"
+                          checked={Boolean(form.multiStockEnabled)}
+                          disabled={multiStockSwitchDisabled}
+                          onChange={onToggle("multiStockEnabled")}
+                        />
+                      }
+                      label={form.multiStockEnabled ? "Activado" : "Desactivado"}
                     />
                   }
                 />
               </Box>
-              {multiStockFeatureStatus !== "hidden" ? (
-                <Box data-tour="config-multistock">
-                  <SettingsRow
-                    label="Multistock (stock por local)"
-                    description={
-                      !multiStockUnlocked
-                        ? FEATURE_STATUS_HINT[multiStockFeatureStatus] ||
-                          "Aún no disponible para tu instalación."
-                        : multiStockAlreadyOn
-                          ? multiStockCanToggleOff
-                            ? "Activo. Programador puede desactivar."
-                            : "Activo. No se puede desactivar."
-                          : "Modo clásico: stock en Productos. Activá solo con varios locales."
-                    }
-                    control={
-                      <FormControlLabel
-                        sx={{ m: 0 }}
-                        control={
-                          <Switch
-                            size="small"
-                            checked={Boolean(form.multiStockEnabled)}
-                            disabled={multiStockSwitchDisabled}
-                            onChange={onToggle("multiStockEnabled")}
-                          />
-                        }
-                        label={form.multiStockEnabled ? "Activado" : "Desactivado"}
-                      />
-                    }
-                  />
-                </Box>
-              ) : null}
+            ) : null}
             </SettingsSection>
           )}
 

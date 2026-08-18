@@ -30,6 +30,7 @@ import {
   normalizeSaleReceipt,
   paymentMethodLabel,
 } from "../../../utils/saleReceiptUtils.js";
+import { getSaleHubStatus, InvoiceHubStatusIcon } from "./components/invoiceHubStatus.jsx";
 
 const money = (n) => Number(n || 0).toFixed(2);
 
@@ -183,6 +184,7 @@ export default function SalesHubPage() {
           cardLabel: money(pay.card),
           otherLabel: money(pay.other),
           retentionLabel: money(retention),
+          hubStatus: getSaleHubStatus(s),
         };
       })
       .sort((a, b) => String(b.dateIso).localeCompare(String(a.dateIso)));
@@ -368,16 +370,19 @@ export default function SalesHubPage() {
             id: "actions",
             label: "Acciones",
             stopRowClick: true,
-            minWidth: 88,
+            minWidth: 108,
             cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
             headerSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+            getSearchValue: (row) => row.hubStatus?.label || "",
             render: (row) => (
               <Stack
                 direction="row"
-                spacing={0}
+                spacing={0.25}
+                alignItems="center"
                 justifyContent="flex-end"
                 data-tour="ventas-hub-row-actions"
               >
+                <InvoiceHubStatusIcon status={row.hubStatus} />
                 <Tooltip title="Ver detalle">
                   <IconButton size="small" color="primary" onClick={() => setDetailRow(row)}>
                     <VisibilityIcon fontSize="small" />

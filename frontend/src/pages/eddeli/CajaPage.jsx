@@ -32,6 +32,9 @@ import {
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import CloseIcon from "@mui/icons-material/Close";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import CreditScoreIcon from "@mui/icons-material/CreditScore";
@@ -47,6 +50,7 @@ import {
   getTierGroups,
   getStoreStocksRequest,
   openPresentationMovementRequest,
+  updateProduct,
 } from "../../api/inventoryControlRequest.js";
 import { getAllCustomersRequest, posCheckoutRequest } from "../../api/ordersRequest.js";
 import { getActiveShift, setActiveCashRegister } from "../../api/shiftRequest.js";
@@ -56,6 +60,8 @@ import { sendAuthorizedInvoiceEmailWithRidePdf } from "../../utils/sendAuthorize
 import CajaCustomerFormDialog from "./CajaCustomerFormDialog.jsx";
 import CustomerPromoHint from "./marketing/CustomerPromoHint.jsx";
 import CajaQuickProductsDialog from "./CajaQuickProductsDialog.jsx";
+import CajaScanCreateProductDialog from "./CajaScanCreateProductDialog.jsx";
+import ProductForm from "./inventoryControl/components/ProductForm.jsx";
 import SearchableSelect from "../../components/SearchableSelect.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useAppSettings } from "../../context/AppSettingsContext.jsx";
@@ -105,6 +111,56 @@ import {
 import { stockColor, stockFmt } from "../../utils/productSelectDisplay.jsx";
 import OrderPaymentScheduleFields from "./inventoryControl/components/OrderPaymentScheduleFields.jsx";
 import { normalizeScheduleForApi } from "../../utils/orderPaymentSchedule.js";
+import { toStorageMoney } from "../../utils/moneyFormat.js";
+
+const applyCatalogProductToCart = (cart, product) => {
+  const id = Number(product?.id);
+  if (!Number.isFinite(id)) return cart;
+  const price = Number(product.price ?? 0);
+  return cart.map((row) => {
+    if (Number(row.productId) !== id) return row;
+    const qty = Number(row.quantity || 0);
+    const nextPrice = Number.isFinite(price) ? price : Number(row.price || 0);
+    return {
+      ...row,
+      name: product.name || row.name,
+      barcode: product.barcode || "",
+      price: nextPrice,
+      stock: Number(product.stock ?? row.stock ?? 0),
+      taxRate: Number(product.taxRate ?? row.taxRate ?? 15),
+      taxType: product.taxType || row.taxType || "gravado",
+      lineTotal: Number((nextPrice * qty).toFixed(2)),
+    };
+  });
+};
+
+const PRICE_EPS = 0.009;
+
+/** Productos cuyo precio en carrito no coincide con catálogo ni con tramo automático. */
+const buildPriceMismatches = (cart, productList, tierGroups) => {
+  const byId = new Map();
+  for (const row of cart || []) {
+    if (row?.mixGroupId) continue;
+    const productId = Number(row.productId);
+    if (!Number.isFinite(productId) || byId.has(productId)) continue;
+    const p = productList.find((x) => Number(x.id) === productId);
+    if (!p) continue;
+    const cartPrice = Number(row.price || 0);
+    const catalogPrice = Number(p.price || 0);
+    const expected = Number(
+      resolveEddeliLinePricing(p, row.quantity, tierGroups).unitPrice || 0,
+    );
+    if (Math.abs(cartPrice - expected) <= PRICE_EPS) continue;
+    if (Math.abs(cartPrice - catalogPrice) <= PRICE_EPS) continue;
+    byId.set(productId, {
+      productId,
+      name: row.name || p.name || `Producto #${productId}`,
+      catalogPrice,
+      cartPrice,
+    });
+  }
+  return [...byId.values()];
+};
 
 const to2 = (n) => Number(Number(n || 0).toFixed(2));
 
@@ -263,6 +319,10 @@ export default function CajaPage() {
   /** Config Inventario: Autocompletar stock (caja + pedidos). */
   const allowAutoCompleteStock =
     Boolean(activeApp?.ordersAllowDeliverStockAdjust) && isAdmin;
+  const allowCreateFromSelect = Boolean(activeApp?.cajaAllowCreateProductFromSelect);
+  const allowCreateFromScan = Boolean(activeApp?.cajaAllowCreateProductFromScan);
+  const allowEditFromCart = Boolean(activeApp?.cajaAllowEditProductFromCart);
+  const allowSuggestPriceUpdate = Boolean(activeApp?.cajaSuggestUpdateProductPrice);
   const draftUserId = user?.userId != null ? String(user.userId) : null;
   const [products, setProducts] = useState([]);
   const [tierGroups, setTierGroups] = useState([]);
@@ -301,6 +361,13 @@ export default function CajaPage() {
   const [quickDownQty, setQuickDownQty] = useState("");
   const [quickDownNote, setQuickDownNote] = useState("");
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [productDialogMode, setProductDialogMode] = useState("create");
+  const [productToEdit, setProductToEdit] = useState(null);
+  const [scanCreateOpen, setScanCreateOpen] = useState(false);
+  const [scanCreateBarcode, setScanCreateBarcode] = useState("");
+  const [priceDialogOpen, setPriceDialogOpen] = useState(false);
+  const [priceIssues, setPriceIssues] = useState([]);
   const [activeShift, setActiveShift] = useState(undefined);
   const [showOpenShiftBanner, setShowOpenShiftBanner] = useState(false);
   const [showCartStock, setShowCartStock] = useState(false);
@@ -827,6 +894,23 @@ export default function CajaPage() {
     }
   };
 
+  const handleProductFormSaved = async (saved) => {
+    const raw = saved?.id ? saved : saved?.data || saved;
+    const savedId = Number(raw?.id);
+    setProductDialogOpen(false);
+    const loaded = await loadData();
+    const list = loaded?.products || [];
+    const product =
+      (Number.isFinite(savedId) && list.find((p) => Number(p.id) === savedId)) || raw;
+    if (!product?.id) return;
+    if (productDialogMode === "create") {
+      addToCart(product);
+      setSelectedProductId("");
+      return;
+    }
+    setCart((prev) => applyCatalogProductToCart(prev, product));
+  };
+
   const handleProductSearchEnter = useCallback(
     (query) => {
       const trimmed = String(query || "").trim();
@@ -843,12 +927,17 @@ export default function CajaPage() {
         setSelectedProductId("");
         return;
       }
+      if (allowCreateFromScan) {
+        setScanCreateBarcode(trimmed);
+        setScanCreateOpen(true);
+        return;
+      }
       void toast?.({
         message: `No se encontró "${trimmed}" en productos.`,
         variant: "warning",
       });
     },
-    [products, toast],
+    [products, toast, allowCreateFromScan],
   );
 
   const scannerUiBlocked =
@@ -857,6 +946,9 @@ export default function CajaPage() {
     quickDownOpen ||
     addCustomerOpen ||
     quickProductsOpen ||
+    productDialogOpen ||
+    scanCreateOpen ||
+    priceDialogOpen ||
     Boolean(draftChoices);
 
   const handleBarcodeCode = useCallback(
@@ -867,7 +959,7 @@ export default function CajaPage() {
   );
 
   useBarcodeScanner({
-    enabled: !scannerUiBlocked && products.length > 0,
+    enabled: !scannerUiBlocked && (products.length > 0 || allowCreateFromScan),
     onScan: handleBarcodeCode,
     ignoreWhenTypingInInputs: true,
   });
@@ -1405,6 +1497,108 @@ export default function CajaPage() {
     }
   };
 
+  const runCheckoutSale = async (checkoutCtx) => {
+    const issues = buildStockIssues(cart, products);
+    if (issues.length > 0) {
+      const suggestOpenPack = Boolean(activeApp?.suggestOpenPackOnPosShortage);
+      if (suggestOpenPack) {
+        const suggestions = buildOpenPackSuggestions(issues, products);
+        if (suggestions.length > 0) {
+          setPendingCheckout(checkoutCtx);
+          setStockIssues(issues);
+          setOpenPackSuggestions(suggestions);
+          const initQty = {};
+          suggestions.forEach((s) => {
+            initQty[s.presentationProductId] = String(s.packsToOpen);
+          });
+          setOpenPackQty(initQty);
+          setOpenPackDialogOpen(true);
+          return;
+        }
+      }
+      if (!allowAutoCompleteStock) {
+        abortShortageWithHint(issues);
+        return;
+      }
+      openStockAdjustDialog(issues, checkoutCtx);
+      return;
+    }
+
+    try {
+      savingRef.current = true;
+      setSaving(true);
+      const receipt = await performSaleDelivery({
+        resolvedCustomerId: checkoutCtx.resolvedCustomerId,
+        notesText: checkoutCtx.notesSnapshot,
+        isInvoice: checkoutCtx.isInvoice,
+        useCustomerData: checkoutCtx.useCustomerData,
+      });
+      void toast?.({ message: "Venta registrada correctamente.", variant: "success" });
+      setPrintReceipt(receipt);
+      setPrintOpen(true);
+      setPendingCheckout(null);
+      await loadData();
+    } catch (error) {
+      void toast?.({
+        message: error?.response?.data?.message || error.message || "No se pudo registrar la venta.",
+        variant: "error",
+      });
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  const closePriceDialog = () => {
+    setPriceDialogOpen(false);
+    setPriceIssues([]);
+    setPendingCheckout(null);
+  };
+
+  const handleSkipPriceUpdateAndCheckout = async () => {
+    const ctx = pendingCheckout;
+    setPriceDialogOpen(false);
+    setPriceIssues([]);
+    if (!ctx) return;
+    await runCheckoutSale(ctx);
+  };
+
+  const handleConfirmPriceUpdateAndCheckout = async () => {
+    if (!pendingCheckout || savingRef.current) return;
+    const ctx = pendingCheckout;
+    try {
+      savingRef.current = true;
+      setSaving(true);
+      for (const row of priceIssues) {
+        const nextPrice = Number(row.cartPrice);
+        const fd = new FormData();
+        fd.append("price", String(toStorageMoney(nextPrice)));
+        fd.append("distributorPrice", String(toStorageMoney(nextPrice)));
+        await updateProduct(row.productId, fd);
+      }
+      void toast?.({
+        message:
+          priceIssues.length === 1
+            ? "Precio del producto actualizado."
+            : `Se actualizaron ${priceIssues.length} precios de producto.`,
+        variant: "success",
+      });
+      setPriceDialogOpen(false);
+      setPriceIssues([]);
+      await loadData();
+      savingRef.current = false;
+      setSaving(false);
+      await runCheckoutSale(ctx);
+    } catch (e) {
+      void toast?.({
+        message: e?.response?.data?.message || "No se pudieron actualizar los precios.",
+        variant: "error",
+      });
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
   const onCheckout = async () => {
     if (savingRef.current) return;
     if (!activeShift) {
@@ -1493,60 +1687,24 @@ export default function CajaPage() {
       }
     }
 
-    const issues = buildStockIssues(cart, products);
-    if (issues.length > 0) {
-      const checkoutCtx = {
-        resolvedCustomerId,
-        isInvoice,
-        useCustomerData,
-        notesSnapshot: notes,
-      };
-      const suggestOpenPack = Boolean(activeApp?.suggestOpenPackOnPosShortage);
-      if (suggestOpenPack) {
-        const suggestions = buildOpenPackSuggestions(issues, products);
-        if (suggestions.length > 0) {
-          setPendingCheckout(checkoutCtx);
-          setStockIssues(issues);
-          setOpenPackSuggestions(suggestions);
-          const initQty = {};
-          suggestions.forEach((s) => {
-            initQty[s.presentationProductId] = String(s.packsToOpen);
-          });
-          setOpenPackQty(initQty);
-          setOpenPackDialogOpen(true);
-          return;
-        }
-      }
-      if (!allowAutoCompleteStock) {
-        abortShortageWithHint(issues);
+    const checkoutCtx = {
+      resolvedCustomerId,
+      isInvoice,
+      useCustomerData,
+      notesSnapshot: notes,
+    };
+
+    if (allowSuggestPriceUpdate) {
+      const mismatches = buildPriceMismatches(cart, products, effectiveTierGroups);
+      if (mismatches.length > 0) {
+        setPendingCheckout(checkoutCtx);
+        setPriceIssues(mismatches);
+        setPriceDialogOpen(true);
         return;
       }
-      openStockAdjustDialog(issues, checkoutCtx);
-      return;
     }
 
-    try {
-      savingRef.current = true;
-      setSaving(true);
-      const receipt = await performSaleDelivery({
-        resolvedCustomerId,
-        notesText: notes,
-        isInvoice,
-        useCustomerData,
-      });
-      void toast?.({ message: "Venta registrada correctamente.", variant: "success" });
-      setPrintReceipt(receipt);
-      setPrintOpen(true);
-      await loadData();
-    } catch (error) {
-      void toast?.({
-        message: error?.response?.data?.message || error.message || "No se pudo registrar la venta.",
-        variant: "error",
-      });
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
+    await runCheckoutSale(checkoutCtx);
   };
 
   return (
@@ -1736,23 +1894,43 @@ export default function CajaPage() {
             </Stack>
 
             <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 1 }}>
-              <Box sx={{ flex: 1, minWidth: 0 }} data-tour="caja-product-search">
-                <SearchableSelect
-                  fullWidth
-                  label="Producto"
-                  placeholder="Buscar, clic o Enter para agregar al carrito"
-                  items={productsByStockDesc}
-                  value={selectedProductId}
-                  onChange={handleProductPick}
-                  clearInputOnSelect
-                  getOptionLabel={formatProductSearchLabel}
-                  getOptionValue={(item) => String(item.id)}
-                  getSearchText={(item) =>
-                    [item.name, item.barcode, item.sku].filter(Boolean).join(" ")
-                  }
-                  renderOption={renderCajaProductOption}
-                  onEnterWithInput={handleProductSearchEnter}
-                />
+              <Box
+                sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 1 }}
+                data-tour="caja-product-search"
+              >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <SearchableSelect
+                    fullWidth
+                    label="Producto"
+                    placeholder="Buscar, clic o Enter para agregar al carrito"
+                    items={productsByStockDesc}
+                    value={selectedProductId}
+                    onChange={handleProductPick}
+                    clearInputOnSelect
+                    getOptionLabel={formatProductSearchLabel}
+                    getOptionValue={(item) => String(item.id)}
+                    getSearchText={(item) =>
+                      [item.name, item.barcode, item.sku].filter(Boolean).join(" ")
+                    }
+                    renderOption={renderCajaProductOption}
+                    onEnterWithInput={handleProductSearchEnter}
+                  />
+                </Box>
+                {allowCreateFromSelect ? (
+                  <Tooltip title="Crear producto nuevo">
+                    <IconButton
+                      color="primary"
+                      onClick={() => {
+                        setProductToEdit(null);
+                        setProductDialogMode("create");
+                        setProductDialogOpen(true);
+                      }}
+                      sx={{ border: 1, borderColor: "primary.main", flexShrink: 0 }}
+                    >
+                      <AddBoxIcon />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
               </Box>
               <Button
                 variant="outlined"
@@ -1880,6 +2058,37 @@ export default function CajaPage() {
                             ${lineBreakdown(row).total.toFixed(2)}
                           </TableCell>
                           <TableCell align="center">
+                            {allowEditFromCart ? (
+                              <Tooltip
+                                title={
+                                  row.barcode
+                                    ? "Editar producto"
+                                    : "Editar producto (sin código de barras)"
+                                }
+                              >
+                                <IconButton
+                                  size="small"
+                                  color={row.barcode ? "primary" : "warning"}
+                                  onClick={() => {
+                                    const p = products.find(
+                                      (x) => Number(x.id) === Number(row.productId),
+                                    );
+                                    if (!p) {
+                                      void toast?.({
+                                        message: "No se encontró el producto en el catálogo.",
+                                        variant: "warning",
+                                      });
+                                      return;
+                                    }
+                                    setProductToEdit(p);
+                                    setProductDialogMode("edit");
+                                    setProductDialogOpen(true);
+                                  }}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            ) : null}
                             <IconButton
                               size="small"
                               color="error"
@@ -1980,6 +2189,37 @@ export default function CajaPage() {
                                 ${lineBreakdown(row).total.toFixed(2)}
                               </TableCell>
                               <TableCell align="center">
+                                {allowEditFromCart ? (
+                                  <Tooltip
+                                    title={
+                                      row.barcode
+                                        ? "Editar producto"
+                                        : "Editar producto (sin código de barras)"
+                                    }
+                                  >
+                                    <IconButton
+                                      size="small"
+                                      color={row.barcode ? "primary" : "warning"}
+                                      onClick={() => {
+                                        const p = products.find(
+                                          (x) => Number(x.id) === Number(row.productId),
+                                        );
+                                        if (!p) {
+                                          void toast?.({
+                                            message: "No se encontró el producto en el catálogo.",
+                                            variant: "warning",
+                                          });
+                                          return;
+                                        }
+                                        setProductToEdit(p);
+                                        setProductDialogMode("edit");
+                                        setProductDialogOpen(true);
+                                      }}
+                                    >
+                                      <EditIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                ) : null}
                                 <IconButton
                                   size="small"
                                   color="error"
@@ -2476,6 +2716,69 @@ export default function CajaPage() {
         </DialogActions>
       </Dialog>
 
+      <Dialog
+        open={priceDialogOpen}
+        onClose={() => !saving && closePriceDialog()}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontSize: "1rem", py: 1.5 }}>
+          Precio distinto al catálogo
+        </DialogTitle>
+        <DialogContent dividers sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            En el carrito hay precios que no coinciden con el producto guardado. ¿Querés
+            actualizar el catálogo con el precio de esta venta?
+          </Typography>
+          <TableContainer sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Producto</TableCell>
+                  <TableCell align="right">Catálogo</TableCell>
+                  <TableCell align="right">Carrito</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {priceIssues.map((row) => (
+                  <TableRow key={row.productId}>
+                    <TableCell>{row.name}</TableCell>
+                    <TableCell align="right">${to2(row.catalogPrice).toFixed(2)}</TableCell>
+                    <TableCell align="right">
+                      <Typography component="span" fontWeight={700} color="warning.main">
+                        ${to2(row.cartPrice).toFixed(2)}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5, flexWrap: "wrap", gap: 1 }}>
+          <Button onClick={closePriceDialog} disabled={saving} size="small">
+            Volver
+          </Button>
+          <Box sx={{ flex: 1 }} />
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={saving}
+            onClick={() => void handleSkipPriceUpdateAndCheckout()}
+          >
+            No, solo cobrar
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            disabled={saving}
+            onClick={() => void handleConfirmPriceUpdateAndCheckout()}
+          >
+            {saving ? "…" : "Sí, actualizar y cobrar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={stockDialogOpen} onClose={closeStockDialog} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontSize: "1rem", py: 1.5 }}>
           Autocompletar stock · caja
@@ -2595,6 +2898,83 @@ export default function CajaPage() {
           </Button>
           <Button size="small" variant="contained" disabled={saving} onClick={() => void applyQuickDownStock()}>
             {saving ? "…" : "Guardar salida"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <CajaScanCreateProductDialog
+        open={scanCreateOpen}
+        barcode={scanCreateBarcode}
+        onClose={() => {
+          setScanCreateOpen(false);
+          setScanCreateBarcode("");
+        }}
+        toast={toast}
+        onCreated={async (created) => {
+          const savedId = Number(created?.id);
+          const loaded = await loadData();
+          const list = loaded?.products || [];
+          const product =
+            (Number.isFinite(savedId) && list.find((p) => Number(p.id) === savedId)) ||
+            created;
+          if (product?.id) addToCart(product);
+        }}
+      />
+
+      <Dialog
+        open={productDialogOpen}
+        onClose={() => setProductDialogOpen(false)}
+        fullWidth
+        maxWidth="lg"
+        scroll="paper"
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 2,
+            pt: 1,
+          }}
+        >
+          <DialogTitle sx={{ p: 0, fontWeight: 700, fontSize: "1.05rem" }}>
+            {productDialogMode === "edit" ? "Editar producto" : "Crear producto"}
+          </DialogTitle>
+          <IconButton
+            aria-label="Cerrar"
+            onClick={() => setProductDialogOpen(false)}
+            size="small"
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        <DialogContent dividers>
+          <ProductForm
+            key={
+              productDialogOpen
+                ? productDialogMode === "edit"
+                  ? `edit-caja-${productToEdit?.id || "x"}`
+                  : "new-caja-product"
+                : "closed"
+            }
+            isEditing={productDialogMode === "edit"}
+            datos={productDialogMode === "edit" ? productToEdit || {} : {}}
+            onClose={() => setProductDialogOpen(false)}
+            reload={handleProductFormSaved}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1, borderTop: 1, borderColor: "divider" }}>
+          <Button type="button" onClick={() => setProductDialogOpen(false)} color="inherit">
+            Cancelar
+          </Button>
+          <Box sx={{ flex: 1 }} />
+          <Button
+            type="submit"
+            form="eddeli-product-form"
+            variant="contained"
+            sx={{ minWidth: 160 }}
+          >
+            {productDialogMode === "edit" ? "Guardar cambios" : "Guardar producto"}
           </Button>
         </DialogActions>
       </Dialog>
