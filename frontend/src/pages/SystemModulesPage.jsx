@@ -20,7 +20,6 @@ import PeopleIcon from "@mui/icons-material/People";
 import HomeIcon from "@mui/icons-material/Home";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
 import StorefrontIcon from "@mui/icons-material/Storefront";
-import BrushIcon from "@mui/icons-material/Brush";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import GroupsIcon from "@mui/icons-material/Groups";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
@@ -56,8 +55,7 @@ const GROUP_ICON = {
   documentos: DescriptionIcon,
   logistica: LocalShippingIcon,
   comunidad: GroupsIcon,
-  publicidad: CampaignIcon,
-  diseno: BrushIcon,
+  marketing: CampaignIcon,
   admin: AdminPanelSettingsIcon,
   sistema: SettingsApplicationsIcon,
   desarrollador: CodeIcon,

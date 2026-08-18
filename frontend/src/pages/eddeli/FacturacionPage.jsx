@@ -9,21 +9,37 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 import PrintIcon from "@mui/icons-material/Print";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import { Link as RouterLink } from "react-router-dom";
 import { APP_ROUTES } from "../../config/appRoutes.js";
 import TablePro from "../../components/Tables/TablePro.jsx";
+import SearchableSelect from "../../components/SearchableSelect.jsx";
+import TourHelpButton from "../../components/TourHelpButton.jsx";
 import PrintFormatDialog from "../../components/saleReceipt/PrintFormatDialog.jsx";
+import InvoiceHubDetailDialog from "./inventoryControl/components/InvoiceHubDetailDialog.jsx";
 import { getPosSalesRequest } from "../../api/ordersRequest.js";
 import { fetchSriBillingSettings } from "../../api/sriBillingRequest.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { usePageTour } from "../../hooks/usePageTour.js";
+import {
+  COMPROBANTES_POS_TOUR_ID,
+  getComprobantesPosTourSteps,
+} from "../../tours/comprobantesPosTour.js";
 import {
   documentTypeLabel,
   formatReceiptDate,
@@ -32,16 +48,42 @@ import {
 } from "../../utils/saleReceiptUtils.js";
 
 const EMPTY_FILTERS = {
-  search: "",
   dateFrom: "",
   dateTo: "",
   status: "",
   environment: "",
   seller: "",
   paymentState: "",
-  sortBy: "id",
-  sortDir: "desc",
-  pageSize: 15,
+  productId: "",
+};
+
+const MONEY_COL = {
+  align: "right",
+  minWidth: 52,
+  cellSx: { px: 0.2, width: "1px", whiteSpace: "nowrap" },
+  headerSx: { px: 0.2, width: "1px", whiteSpace: "nowrap" },
+};
+
+const TEXT_COL = (px) => ({
+  width: px,
+  maxWidth: px,
+  cellSx: {
+    width: px,
+    maxWidth: px,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  headerSx: { width: px, maxWidth: px },
+});
+
+const SPACER_COL = {
+  id: "_spacer",
+  label: "",
+  sortable: false,
+  cellSx: { width: "100%", p: 0 },
+  headerSx: { width: "100%", p: 0 },
+  render: () => null,
 };
 
 function normalizeEnvironment(env, label) {
@@ -78,11 +120,70 @@ function paymentStateOf(sale) {
   return "pendiente";
 }
 
+function saleItems(sale) {
+  const raw = sale?.items || sale?.ERP_order_items || [];
+  return (Array.isArray(raw) ? raw : []).map((it, idx) => {
+    const qty = Number(it.quantity || 0);
+    const price = Number(it.price ?? it.unitPrice ?? 0);
+    return {
+      productId: it.productId ?? it.id ?? null,
+      name: it.name || it.productName || it.ERP_inventory_product?.name || `Ítem ${idx + 1}`,
+      qty,
+      price,
+      line: Number(it.lineTotal ?? qty * price),
+    };
+  });
+}
+
+function SaleItemsPanel({ row }) {
+  const items = saleItems(row);
+  if (!items.length) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        Sin productos en este comprobante.
+      </Typography>
+    );
+  }
+  return (
+    <Box>
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block" }}>
+        Productos del comprobante
+      </Typography>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Producto</TableCell>
+            <TableCell align="right">Cant.</TableCell>
+            <TableCell align="right">P. unit.</TableCell>
+            <TableCell align="right">Total</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {items.map((it, i) => (
+            <TableRow key={`${it.name}-${i}`}>
+              <TableCell>
+                <Typography variant="body2" fontWeight={600}>
+                  {it.name}
+                </Typography>
+              </TableCell>
+              <TableCell align="right">{it.qty}</TableCell>
+              <TableCell align="right">${money(it.price)}</TableCell>
+              <TableCell align="right">${money(it.line)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
+  );
+}
+
 export default function FacturacionPage() {
   const { toast } = useAuth();
   const [sales, setSales] = useState([]);
   const [printOpen, setPrintOpen] = useState(false);
   const [printReceipt, setPrintReceipt] = useState(null);
+  const [detailRow, setDetailRow] = useState(null);
+  const [expandedRowId, setExpandedRowId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sriSettings, setSriSettings] = useState(null);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -121,6 +222,29 @@ export default function FacturacionPage() {
     return [...set].sort();
   }, [sales]);
 
+  /** Productos únicos presentes en las ventas (para el select buscador). */
+  const productOptions = useMemo(() => {
+    const map = new Map();
+    for (const s of sales) {
+      for (const it of saleItems(s)) {
+        const key =
+          it.productId != null
+            ? `id:${it.productId}`
+            : `name:${String(it.name || "").toLowerCase()}`;
+        if (!map.has(key)) {
+          map.set(key, {
+            id: key,
+            productId: it.productId,
+            name: it.name,
+          });
+        }
+      }
+    }
+    return [...map.values()].sort((a, b) =>
+      String(a.name).localeCompare(String(b.name), "es"),
+    );
+  }, [sales]);
+
   const sriStatusOptions = useMemo(() => {
     const set = new Set();
     for (const s of sales) {
@@ -139,6 +263,9 @@ export default function FacturacionPage() {
           ...s,
           dateIso: saleDateIso(s),
           dateLabel: formatReceiptDate(s.date || s.paidAt),
+          emissionDate: (sri.authorizedAt || s.date || s.paidAt)
+            ? formatReceiptDate(sri.authorizedAt || s.date || s.paidAt)
+            : "—",
           emissionDateLabel: (sri.authorizedAt || s.date || s.paidAt)
             ? formatReceiptDate(sri.authorizedAt || s.date || s.paidAt)
             : "—",
@@ -149,16 +276,39 @@ export default function FacturacionPage() {
           sellerLabel: s.sellerName || "—",
           estabPtoEmi: sri.estabPtoEmi || "—",
           sequentialLabel: sri.sequentialLabel || "—",
+          numero: sri.sequentialLabel || String(s.id || "—"),
           environment: normalizeEnvironment(sri.environment, sri.environmentLabel),
           environmentLabel: sri.environmentLabel || "—",
           sriStatusLabel: sri.statusLabel || "Sin SRI",
           paymentState,
           paymentStateLabel: paymentState === "pagado" ? "Pagado" : "Pendiente",
           paymentLabel: paymentMethodLabel(s.paymentMethod),
+          paymentMethodLabel: paymentMethodLabel(s.paymentMethod),
           subtotalLabel: money(s.subtotal),
           iceLabel: money(s.ice),
           ivaLabel: money(s.iva),
           totalLabel: money(s.total),
+          ...(() => {
+            const t = Number(s.total || 0);
+            const m = String(s.paymentMethod || "")
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "");
+            const out = { cash: 0, checkBank: 0, card: 0, other: 0 };
+            if (m.includes("efectivo")) out.cash = t;
+            else if (
+              m.includes("transfer") ||
+              m.includes("deposito") ||
+              m.includes("cheque") ||
+              m.includes("banco")
+            ) {
+              out.checkBank = t;
+            } else if (m.includes("tarjeta")) out.card = t;
+            else out.other = t;
+            return out;
+          })(),
+          discount: Number(s.discount || s.discountAmount || 0),
+          retention: Number(s.retention || s.withholdingAmount || 0),
           hasAccessKey: Boolean(sri.accessKey || sri.authorizationNumber),
           docLabel: documentTypeLabel(s.documentType),
         };
@@ -167,85 +317,31 @@ export default function FacturacionPage() {
   );
 
   const filteredRows = useMemo(() => {
-    const q = String(filters.search || "")
-      .trim()
-      .toLowerCase();
-    let list = mappedSales.filter((row) => {
+    const productKey = String(filters.productId || "").trim();
+    return mappedSales.filter((row) => {
       if (filters.dateFrom && row.dateIso && row.dateIso < filters.dateFrom) return false;
       if (filters.dateTo && row.dateIso && row.dateIso > filters.dateTo) return false;
       if (filters.status && row.sriStatusLabel !== filters.status) return false;
       if (filters.environment && row.environment !== filters.environment) return false;
       if (filters.seller && row.sellerLabel !== filters.seller) return false;
       if (filters.paymentState && row.paymentState !== filters.paymentState) return false;
-      if (q) {
-        const hay = [
-          row.id,
-          row.customerLabel,
-          row.sellerLabel,
-          row.estabPtoEmi,
-          row.sequentialLabel,
-          row.environmentLabel,
-          row.sriStatusLabel,
-          row.paymentStateLabel,
-          row.docLabel,
-          row.totalLabel,
-          row.sri?.accessKey,
-        ]
-          .map((v) => String(v || "").toLowerCase())
-          .join(" ");
-        if (!hay.includes(q)) return false;
+      if (productKey) {
+        const items = saleItems(row);
+        const hit = items.some((it) => {
+          const key =
+            it.productId != null
+              ? `id:${it.productId}`
+              : `name:${String(it.name || "").toLowerCase()}`;
+          return key === productKey;
+        });
+        if (!hit) return false;
       }
       return true;
     });
-
-    const dir = filters.sortDir === "asc" ? 1 : -1;
-    const key = filters.sortBy || "id";
-    list = [...list].sort((a, b) => {
-      let av;
-      let bv;
-      switch (key) {
-        case "date":
-          av = a.dateIso || "";
-          bv = b.dateIso || "";
-          break;
-        case "customer":
-          av = String(a.customerLabel || "").toLowerCase();
-          bv = String(b.customerLabel || "").toLowerCase();
-          break;
-        case "total":
-          av = Number(a.total || 0);
-          bv = Number(b.total || 0);
-          break;
-        case "sequential":
-          av = Number(a.sri?.sequential || 0);
-          bv = Number(b.sri?.sequential || 0);
-          break;
-        case "seller":
-          av = String(a.sellerLabel || "").toLowerCase();
-          bv = String(b.sellerLabel || "").toLowerCase();
-          break;
-        default:
-          av = Number(a.id || 0);
-          bv = Number(b.id || 0);
-      }
-      if (av < bv) return -1 * dir;
-      if (av > bv) return 1 * dir;
-      return 0;
-    });
-
-    return list;
   }, [mappedSales, filters]);
 
   const pageTotals = useMemo(() => {
-    const pageSize = Number(filters.pageSize) || 15;
-    const pageRows = filteredRows.slice(0, pageSize);
     return {
-      page: {
-        subtotal: pageRows.reduce((a, r) => a + Number(r.subtotal || 0), 0),
-        ice: pageRows.reduce((a, r) => a + Number(r.ice || 0), 0),
-        iva: pageRows.reduce((a, r) => a + Number(r.iva || 0), 0),
-        total: pageRows.reduce((a, r) => a + Number(r.total || 0), 0),
-      },
       all: {
         subtotal: filteredRows.reduce((a, r) => a + Number(r.subtotal || 0), 0),
         ice: filteredRows.reduce((a, r) => a + Number(r.ice || 0), 0),
@@ -253,18 +349,31 @@ export default function FacturacionPage() {
         total: filteredRows.reduce((a, r) => a + Number(r.total || 0), 0),
       },
     };
-  }, [filteredRows, filters.pageSize]);
+  }, [filteredRows]);
 
   const setFilterField = (field) => (e) => {
     setFilters((prev) => ({ ...prev, [field]: e.target.value }));
   };
 
-  const resetFilters = () => setFilters(EMPTY_FILTERS);
+  const resetFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    setExpandedRowId(null);
+  };
 
   const openPrint = (sale) => {
     setPrintReceipt(normalizeSaleReceipt(sale));
     setPrintOpen(true);
   };
+
+  const toggleExpand = (row) => {
+    setExpandedRowId((prev) => (prev === row.id ? null : row.id));
+  };
+
+  const { startTour } = usePageTour({
+    tourId: COMPROBANTES_POS_TOUR_ID,
+    getSteps: getComprobantesPosTourSteps,
+    enabled: !loading,
+  });
 
   return (
     <Box sx={{ p: { xs: 1.5, md: 3 } }}>
@@ -275,10 +384,12 @@ export default function FacturacionPage() {
         flexWrap="wrap"
         useFlexGap
         sx={{ mb: 1 }}
+        data-tour="pos-header"
       >
         <Typography variant="h5" fontWeight={700}>
           Comprobantes POS
         </Typography>
+        <TourHelpButton onClick={startTour} title="Ver tutorial de comprobantes POS" />
         {sriSettings?.readyForInvoicing ? (
           <Chip
             size="small"
@@ -318,21 +429,15 @@ export default function FacturacionPage() {
         </Typography>
       </Paper>
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+      <Paper
+        variant="outlined"
+        sx={{ p: 2, mb: 2, borderRadius: 2 }}
+        data-tour="pos-filters"
+      >
         <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1.5 }}>
           Filtros de búsqueda
         </Typography>
-        <Grid container spacing={1.5}>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Búsqueda"
-              placeholder="Ingrese su búsqueda"
-              value={filters.search}
-              onChange={setFilterField("search")}
-            />
-          </Grid>
+        <Grid container spacing={1.5} alignItems="center">
           <Grid item xs={6} md={2}>
             <TextField
               fullWidth
@@ -403,7 +508,6 @@ export default function FacturacionPage() {
               ))}
             </TextField>
           </Grid>
-
           <Grid item xs={6} md={2}>
             <TextField
               select
@@ -418,50 +522,19 @@ export default function FacturacionPage() {
               <MenuItem value="pendiente">Pendiente</MenuItem>
             </TextField>
           </Grid>
-          <Grid item xs={6} md={2}>
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Ordenar por"
-              value={filters.sortBy}
-              onChange={setFilterField("sortBy")}
-            >
-              <MenuItem value="id">Defecto (#)</MenuItem>
-              <MenuItem value="date">Fecha</MenuItem>
-              <MenuItem value="sequential">Secuencial</MenuItem>
-              <MenuItem value="customer">Cliente</MenuItem>
-              <MenuItem value="seller">Vendedor</MenuItem>
-              <MenuItem value="total">Total</MenuItem>
-            </TextField>
-          </Grid>
-          <Grid item xs={6} md={2}>
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Orden"
-              value={filters.sortDir}
-              onChange={setFilterField("sortDir")}
-            >
-              <MenuItem value="desc">Descendente</MenuItem>
-              <MenuItem value="asc">Ascendente</MenuItem>
-            </TextField>
-          </Grid>
-          <Grid item xs={6} md={2}>
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Ver"
-              value={filters.pageSize}
-              onChange={setFilterField("pageSize")}
-            >
-              <MenuItem value={15}>15</MenuItem>
-              <MenuItem value={25}>25</MenuItem>
-              <MenuItem value={50}>50</MenuItem>
-              <MenuItem value={100}>100</MenuItem>
-            </TextField>
+          <Grid item xs={12} md={4} data-tour="pos-product-filter">
+            <SearchableSelect
+              label="Producto"
+              placeholder="Buscar producto en ventas…"
+              items={productOptions}
+              value={filters.productId}
+              onChange={(v) =>
+                setFilters((prev) => ({ ...prev, productId: v == null ? "" : String(v) }))
+              }
+              getOptionLabel={(item) => item?.name || ""}
+              getOptionValue={(item) => item?.id}
+              emptyOptionLabel="Todos los productos"
+            />
           </Grid>
           <Grid item xs={12} md={2}>
             <Button
@@ -479,18 +552,24 @@ export default function FacturacionPage() {
           color="text.secondary"
           sx={{ display: "block", mt: 1 }}
         >
-          Mostrando {filteredRows.length} de {mappedSales.length} comprobantes
+          Mostrando {filteredRows.length} de {mappedSales.length} comprobantes · buscá en la
+          tabla, ordená por columna o filtrá por producto
         </Typography>
       </Paper>
 
       <TablePro
-        key={`pos-sales-${filters.pageSize}-${filters.sortBy}-${filters.sortDir}`}
         title="Ventas de caja"
         rows={filteredRows}
+        dense
+        tableMaxHeight="calc(100vh - 340px)"
         columns={[
           {
             id: "keyIcon",
             label: "",
+            sortable: false,
+            minWidth: 36,
+            cellSx: { width: "1px", px: 0.25 },
+            headerSx: { width: "1px", px: 0.25 },
             render: (row) =>
               row.hasAccessKey ? (
                 <Tooltip title={row.sri?.accessKey || "Clave acceso SRI"}>
@@ -500,56 +579,133 @@ export default function FacturacionPage() {
                 "—"
               ),
           },
-          { id: "emissionDateLabel", label: "Fecha emisión" },
-          { id: "estabPtoEmi", label: "Estab-PtoEmi" },
-          { id: "sequentialLabel", label: "Secuencial" },
-          { id: "customerLabel", label: "Cliente" },
-          { id: "environmentLabel", label: "Ambiente" },
-          { id: "sellerLabel", label: "Vendedor" },
-          { id: "subtotalLabel", label: "Subtotal", align: "right" },
-          { id: "iceLabel", label: "ICE", align: "right" },
-          { id: "ivaLabel", label: "IVA", align: "right" },
-          { id: "totalLabel", label: "Total", align: "right" },
-          { id: "sriStatusLabel", label: "Estado" },
-          { id: "paymentStateLabel", label: "Pago" },
+          {
+            id: "emissionDateLabel",
+            label: "Fecha",
+            minWidth: 88,
+            getSortValue: (r) => r.dateIso || r.emissionDateLabel || "",
+          },
+          { id: "estabPtoEmi", label: "Estab", minWidth: 72 },
+          {
+            id: "sequentialLabel",
+            label: "Núm.",
+            minWidth: 72,
+            getSortValue: (r) => Number(r.sri?.sequential || 0),
+          },
+          { id: "customerLabel", label: "Cliente", ...TEXT_COL(120) },
+          { id: "environmentLabel", label: "Amb.", minWidth: 72, ...TEXT_COL(80) },
+          { id: "sellerLabel", label: "Vendedor", ...TEXT_COL(100) },
+          {
+            id: "subtotalLabel",
+            label: "Subtotal",
+            ...MONEY_COL,
+            getSortValue: (r) => Number(r.subtotal || 0),
+          },
+          {
+            id: "iceLabel",
+            label: "ICE",
+            ...MONEY_COL,
+            getSortValue: (r) => Number(r.ice || 0),
+          },
+          {
+            id: "ivaLabel",
+            label: "IVA",
+            ...MONEY_COL,
+            getSortValue: (r) => Number(r.iva || 0),
+          },
+          {
+            id: "totalLabel",
+            label: "Total",
+            ...MONEY_COL,
+            getSortValue: (r) => Number(r.total || 0),
+          },
+          { id: "sriStatusLabel", label: "Estado", minWidth: 80, ...TEXT_COL(90) },
+          { id: "paymentStateLabel", label: "Pago", minWidth: 72 },
           {
             id: "print",
             label: "Acciones",
-            render: (row) => (
-              <Tooltip title="Imprimir comprobante">
-                <IconButton
-                  size="small"
-                  color="primary"
-                  onClick={() => openPrint(row)}
+            sortable: false,
+            stopRowClick: true,
+            minWidth: 120,
+            cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+            headerSx: { width: "1px", px: 0.25 },
+            render: (row) => {
+              const open = expandedRowId === row.id;
+              return (
+                <Stack
+                  direction="row"
+                  spacing={0}
+                  justifyContent="flex-end"
+                  data-tour="pos-row-actions"
                 >
-                  <PrintIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            ),
+                  <Tooltip title="Ver detalle / reporte">
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={() => setDetailRow(row)}
+                    >
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={open ? "Ocultar productos" : "Ver productos"}>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={() => toggleExpand(row)}
+                    >
+                      {open ? (
+                        <KeyboardArrowUpIcon fontSize="small" />
+                      ) : (
+                        <KeyboardArrowDownIcon fontSize="small" />
+                      )}
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Imprimir comprobante">
+                    <IconButton size="small" color="primary" onClick={() => openPrint(row)}>
+                      <PrintIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+              );
+            },
           },
+          SPACER_COL,
         ]}
-        showSearch={false}
+        showSearch
         showPagination
         showIndex={false}
-        defaultRowsPerPage={Number(filters.pageSize) || 15}
+        defaultRowsPerPage={25}
         rowsPerPageOptions={[15, 25, 50, 100]}
         loading={loading}
+        expandedRowId={expandedRowId}
+        renderExpanded={(row) => <SaleItemsPanel row={row} />}
+        dataTour="pos-table"
+        dataTourSearch="pos-search"
       />
 
-      <Paper variant="outlined" sx={{ mt: 1.5, p: 1.5, borderRadius: 2 }}>
-        <Stack spacing={0.5}>
-          <Typography variant="body2">
-            <strong>Total de la página:</strong> Subtotal {money(pageTotals.page.subtotal)} ·
-            ICE {money(pageTotals.page.ice)} · IVA {money(pageTotals.page.iva)} · Total{" "}
-            {money(pageTotals.page.total)}
-          </Typography>
-          <Typography variant="body2">
-            <strong>Total general (filtro):</strong> Subtotal {money(pageTotals.all.subtotal)} ·
-            ICE {money(pageTotals.all.ice)} · IVA {money(pageTotals.all.iva)} · Total{" "}
-            {money(pageTotals.all.total)}
-          </Typography>
-        </Stack>
+      <Paper
+        variant="outlined"
+        sx={{ mt: 1.5, p: 1.5, borderRadius: 2 }}
+        data-tour="pos-totals"
+      >
+        <Typography variant="body2">
+          <strong>Total general (filtro):</strong> Subtotal {money(pageTotals.all.subtotal)} ·
+          ICE {money(pageTotals.all.ice)} · IVA {money(pageTotals.all.iva)} · Total{" "}
+          {money(pageTotals.all.total)}
+        </Typography>
       </Paper>
+
+      <InvoiceHubDetailDialog
+        open={Boolean(detailRow)}
+        onClose={() => setDetailRow(null)}
+        row={detailRow}
+        rows={mappedSales}
+        partyKind="customer"
+        onPrint={(row) => {
+          setDetailRow(null);
+          openPrint(row);
+        }}
+      />
 
       <PrintFormatDialog
         open={printOpen}

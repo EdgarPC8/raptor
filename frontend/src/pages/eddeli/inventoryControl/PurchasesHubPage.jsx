@@ -1,26 +1,126 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
   Grid,
-  MenuItem,
+  IconButton,
   Paper,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import AddIcon from "@mui/icons-material/Add";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import PrintIcon from "@mui/icons-material/Print";
+import EditIcon from "@mui/icons-material/Edit";
 import TablePro from "../../../components/Tables/TablePro.jsx";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog.jsx";
+import TourHelpButton from "../../../components/TourHelpButton.jsx";
+import InvoiceHubDetailDialog from "./components/InvoiceHubDetailDialog.jsx";
 import { getAllSupplierOrdersRequest } from "../../../api/ordersRequest.js";
 import { useAuth } from "../../../context/AuthContext.jsx";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
+import { usePageTour } from "../../../hooks/usePageTour.js";
+import { COMPRAS_HUB_TOUR_ID, getComprasHubTourSteps } from "../../../tours/comprasHubTour.js";
+import {
+  PEDIDO_PROVEEDOR_FORM_TOUR_ID,
+  getPedidoProveedorFormTourSteps,
+} from "../../../tours/pedidoProveedorFormTour.js";
 import SupplierOrderForm, {
   SUPPLIER_ORDER_DIALOG_CONTENT_SX,
   SUPPLIER_ORDER_DIALOG_PAPER_SX,
 } from "./components/SupplierOrderForm.jsx";
 import { exportPurchasesInvoicesExcel } from "../../../utils/exportInvoiceReportExcel.js";
+
+const MONEY_COL = {
+  align: "right",
+  minWidth: 52,
+  cellSx: { px: 0.2, width: "1px", whiteSpace: "nowrap" },
+  headerSx: { px: 0.2, width: "1px", whiteSpace: "nowrap" },
+};
+
+/** Columna de texto de ancho fijo: recorta con puntos suspensivos. */
+const TEXT_COL = (px) => ({
+  width: px,
+  maxWidth: px,
+  cellSx: {
+    width: px,
+    maxWidth: px,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  headerSx: { width: px, maxWidth: px },
+});
+
+/** Absorbe el ancho sobrante para que no se estiren las demás columnas. */
+const SPACER_COL = {
+  id: "_spacer",
+  label: "",
+  sortable: false,
+  cellSx: { width: "100%", p: 0 },
+  headerSx: { width: "100%", p: 0 },
+  render: () => null,
+};
+
+function printPurchaseReport(row) {
+  if (!row) return;
+  const moneyFmt = (n) => Number(n || 0).toFixed(2);
+  const items = row.ERP_supplier_order_items || row.items || [];
+  const supplier = row.ERP_supplier || row.supplier || {};
+  const itemRows = (Array.isArray(items) ? items : [])
+    .map((it) => {
+      const qty = Number(it.quantity || 0);
+      const price = Number(it.unitPrice ?? it.price ?? 0);
+      const name =
+        it.name ||
+        it.productName ||
+        it.ERP_inventory_product?.name ||
+        "Ítem";
+      return `<tr><td>${name}</td><td style="text-align:right">${qty}</td><td style="text-align:right">$${moneyFmt(price)}</td><td style="text-align:right">$${moneyFmt(qty * price)}</td></tr>`;
+    })
+    .join("");
+  const html = `<!doctype html><html><head><title>Compra ${row.numero || row.id}</title>
+    <style>
+      body{font-family:Arial,sans-serif;padding:24px;color:#111}
+      h1{font-size:18px;margin:0 0 8px}
+      .muted{color:#666;font-size:12px;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
+      th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}
+      th{background:#f5f5f5}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;font-size:13px}
+      .label{color:#666}
+    </style></head><body>
+    <h1>Compra / factura proveedor</h1>
+    <div class="muted">${row.emissionDate || "—"} · Nº ${row.invoiceNumber || row.numero || row.id}</div>
+    <div class="grid">
+      <div><span class="label">Proveedor:</span> <strong>${row.supplierLabel || supplier.name || "—"}</strong></div>
+      <div><span class="label">RUC/Cédula:</span> ${supplier.ruc || supplier.cedula || "—"}</div>
+      <div><span class="label">Teléfono:</span> ${supplier.phone || "—"}</div>
+      <div><span class="label">Email:</span> ${supplier.email || "—"}</div>
+      <div><span class="label">Subtotal:</span> $${moneyFmt(row.subtotal)}</div>
+      <div><span class="label">IVA:</span> $${moneyFmt(row.iva)}</div>
+      <div><span class="label">Descuento:</span> $${moneyFmt(row.discount)}</div>
+      <div><span class="label">Total:</span> <strong>$${moneyFmt(row.total)}</strong></div>
+      <div><span class="label">Efectivo:</span> $${moneyFmt(row.cash)}</div>
+      <div><span class="label">Chq/Bco:</span> $${moneyFmt(row.checkBank)}</div>
+      <div><span class="label">Tarjeta:</span> $${moneyFmt(row.card)}</div>
+      <div><span class="label">Otros:</span> $${moneyFmt(row.other)}</div>
+    </div>
+    <table><thead><tr><th>Producto</th><th>Cant.</th><th>P. unit.</th><th>Total</th></tr></thead>
+    <tbody>${itemRows || '<tr><td colspan="4">Sin ítems</td></tr>'}</tbody></table>
+    <script>window.onload=function(){window.print();}</script>
+    </body></html>`;
+  const w = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
+  if (!w) return;
+  w.document.write(html);
+  w.document.close();
+}
 
 const money = (n) => Number(n || 0).toFixed(2);
 
@@ -97,19 +197,82 @@ function splitSupplierInvoiceNumber(raw) {
   };
 }
 
+/** Normaliza un pedido a proveedor para la tabla y el modal de detalle. */
+function mapPurchaseRow(o) {
+  const dateIso = orderDateIso(o);
+  const total = Number(o.totalAmount ?? o.total ?? 0);
+  const supplierName = String(
+    o.ERP_supplier?.name || o.supplier?.name || o.supplierName || "—",
+  ).toUpperCase();
+  const items = o.ERP_supplier_order_items || o.items || [];
+  let subtotal = 0;
+  let iva = 0;
+  for (const it of items) {
+    const line = Number(it.quantity || 0) * Number(it.unitPrice || it.price || 0);
+    const rate = Number(it.taxRate || it.ivaRate || 0);
+    if (rate > 0) {
+      subtotal += line;
+      iva += line * (rate / 100);
+    } else {
+      subtotal += line;
+    }
+  }
+  if (!items.length) {
+    subtotal = total;
+    iva = 0;
+  } else {
+    subtotal = Number(subtotal.toFixed(2));
+    iva = Number(iva.toFixed(2));
+  }
+  const discount = Number(o.discount || o.discountAmount || 0);
+  const retention = Number(o.retention || o.withholdingAmount || 0);
+  const pay = paymentBucketsFromList(o.payments, o.paidAmount || total, o.paidAt);
+  const inv = splitSupplierInvoiceNumber(o.invoiceNumber);
+  return {
+    ...o,
+    dateIso,
+    emissionDate: dateIso || "—",
+    invoiceNumber: inv.invoiceNumber || o.invoiceNumber || "",
+    estabPtoEmi: inv.estabPtoEmi,
+    numero: inv.numero,
+    supplierLabel: supplierName,
+    subtotal: Number(subtotal.toFixed(2)),
+    discount,
+    iva: Number(iva.toFixed(2)),
+    total: Number(total.toFixed(2)),
+    cash: pay.cash,
+    checkBank: pay.checkBank,
+    card: pay.card,
+    other: pay.other,
+    retention,
+    subtotalLabel: money(subtotal),
+    discountLabel: money(discount),
+    ivaLabel: money(iva),
+    totalLabel: money(total),
+    cashLabel: money(pay.cash),
+    checkBankLabel: money(pay.checkBank),
+    cardLabel: money(pay.card),
+    otherLabel: money(pay.other),
+    retentionLabel: money(retention),
+  };
+}
+
 /** Compras: registrar factura proveedor + reporte diario. */
 export default function PurchasesHubPage() {
   const { toast } = useAuth();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [orderToEdit, setOrderToEdit] = useState(null);
+  const [detailRow, setDetailRow] = useState(null);
+  /** Historial completo (sin rango de fechas) para la pestaña general del proveedor. */
+  const [historyRows, setHistoryRows] = useState(null);
+  const supplierFormTourRef = useRef(null);
   const [filters, setFilters] = useState({
     dateFrom: monthStartIso(),
     dateTo: todayIso(),
-    supplier: "",
-    invoiceSearch: "",
   });
 
   const load = async (from, to) => {
@@ -145,6 +308,18 @@ export default function PurchasesHubPage() {
     setFormOpen(true);
   };
 
+  /** Abre el detalle y trae (una sola vez) todas las compras para el historial. */
+  const openDetail = async (row) => {
+    setDetailRow(row);
+    if (historyRows) return;
+    try {
+      const { data } = await getAllSupplierOrdersRequest({});
+      setHistoryRows((Array.isArray(data) ? data : []).map((o) => mapPurchaseRow(o)));
+    } catch {
+      setHistoryRows([]);
+    }
+  };
+
   const closeForm = () => {
     setFormOpen(false);
     setIsEditing(false);
@@ -160,105 +335,11 @@ export default function PurchasesHubPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.dateFrom, filters.dateTo]);
 
-  const supplierOptions = useMemo(() => {
-    const set = new Set();
-    for (const o of orders) {
-      const name = String(o.supplier?.name || o.supplierName || "").trim();
-      if (name) set.add(name);
-    }
-    return [...set].sort();
-  }, [orders]);
-
   const rows = useMemo(() => {
-    const q = String(filters.invoiceSearch || "")
-      .trim()
-      .toLowerCase();
-    const qDigits = q.replace(/\D/g, "");
     return orders
-      .map((o) => {
-        const dateIso = orderDateIso(o);
-        const total = Number(o.totalAmount ?? o.total ?? 0);
-        const supplierName = String(
-          o.ERP_supplier?.name || o.supplier?.name || o.supplierName || "—",
-        ).toUpperCase();
-        const items = o.ERP_supplier_order_items || o.items || [];
-        let subtotal = 0;
-        let iva = 0;
-        for (const it of items) {
-          const line = Number(it.quantity || 0) * Number(it.unitPrice || it.price || 0);
-          const rate = Number(it.taxRate || it.ivaRate || 0);
-          if (rate > 0) {
-            subtotal += line;
-            iva += line * (rate / 100);
-          } else {
-            subtotal += line;
-          }
-        }
-        if (!items.length) {
-          subtotal = total;
-          iva = 0;
-        } else {
-          subtotal = Number(subtotal.toFixed(2));
-          iva = Number(iva.toFixed(2));
-        }
-        const discount = Number(o.discount || o.discountAmount || 0);
-        const retention = Number(o.retention || o.withholdingAmount || 0);
-        const pay = paymentBucketsFromList(
-          o.payments,
-          o.paidAmount || total,
-          o.paidAt,
-        );
-        const inv = splitSupplierInvoiceNumber(o.invoiceNumber);
-        return {
-          ...o,
-          dateIso,
-          emissionDate: dateIso || "—",
-          invoiceNumber: inv.invoiceNumber || o.invoiceNumber || "",
-          estabPtoEmi: inv.estabPtoEmi,
-          numero: inv.numero,
-          supplierLabel: supplierName,
-          subtotal: Number(subtotal.toFixed(2)),
-          discount,
-          iva: Number(iva.toFixed(2)),
-          total: Number(total.toFixed(2)),
-          cash: pay.cash,
-          checkBank: pay.checkBank,
-          card: pay.card,
-          other: pay.other,
-          retention,
-          subtotalLabel: money(subtotal),
-          discountLabel: money(discount),
-          ivaLabel: money(iva),
-          totalLabel: money(total),
-          cashLabel: money(pay.cash),
-          checkBankLabel: money(pay.checkBank),
-          cardLabel: money(pay.card),
-          otherLabel: money(pay.other),
-          retentionLabel: money(retention),
-        };
-      })
-      .filter((row) => {
-        if (filters.supplier && row.supplierLabel !== filters.supplier.toUpperCase()) {
-          return false;
-        }
-        if (q) {
-          const hay = [
-            row.invoiceNumber,
-            row.estabPtoEmi,
-            row.numero,
-            row.supplierLabel,
-          ]
-            .map((v) => String(v || "").toLowerCase())
-            .join(" ");
-          const hayDigits = hay.replace(/\D/g, "");
-          const textMatch = hay.includes(q);
-          const digitsMatch = qDigits && hayDigits.includes(qDigits);
-          if (!textMatch && !digitsMatch) return false;
-        }
-        return true;
-      })
+      .map((o) => mapPurchaseRow(o))
       .sort((a, b) => String(b.dateIso).localeCompare(String(a.dateIso)));
-  }, [orders, filters.supplier, filters.invoiceSearch]);
+  }, [orders]);
 
   const totals = useMemo(() => {
     const sum = (key) => rows.reduce((a, r) => a + Number(r[key] || 0), 0);
@@ -297,6 +378,20 @@ export default function PurchasesHubPage() {
     }
   };
 
+  const { startTour } = usePageTour({
+    tourId: COMPRAS_HUB_TOUR_ID,
+    getSteps: getComprasHubTourSteps,
+    enabled: !loading,
+  });
+
+  const { startTour: startProveedorFormTour } = usePageTour({
+    tourId: PEDIDO_PROVEEDOR_FORM_TOUR_ID,
+    getSteps: getPedidoProveedorFormTourSteps,
+    enabled: formOpen && !isEditing,
+    autoDelayMs: 450,
+    onDestroyed: () => supplierFormTourRef.current?.resetDemo?.(),
+  });
+
   return (
     <Box sx={{ p: { xs: 1.5, md: 3 } }}>
       <Stack
@@ -305,11 +400,15 @@ export default function PurchasesHubPage() {
         alignItems={{ xs: "stretch", sm: "flex-start" }}
         justifyContent="space-between"
         sx={{ mb: 2 }}
+        data-tour="compras-hub-header"
       >
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h5" fontWeight={800} sx={{ mb: 0.5 }}>
-            Compras
-          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+            <Typography variant="h5" fontWeight={800}>
+              Compras
+            </Typography>
+            <TourHelpButton onClick={startTour} title="Ver tutorial de compras" />
+          </Stack>
           <Typography variant="body2" color="text.secondary">
             Registrá la factura del proveedor (XML o manual), cargá productos y revisá el
             reporte por día.
@@ -320,8 +419,17 @@ export default function PurchasesHubPage() {
           spacing={1}
           flexWrap="wrap"
           useFlexGap
+          data-tour="compras-hub-actions-bar"
           sx={{ alignSelf: { xs: "stretch", sm: "center" } }}
         >
+          <Button
+            variant="outlined"
+            startIcon={<AssignmentIcon />}
+            onClick={() => navigate(APP_ROUTES.sales.orders)}
+            sx={{ whiteSpace: "nowrap" }}
+          >
+            Ver pedidos
+          </Button>
           <Button
             variant="contained"
             color="success"
@@ -337,23 +445,15 @@ export default function PurchasesHubPage() {
         </Stack>
       </Stack>
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+      <Paper
+        variant="outlined"
+        sx={{ p: 2, mb: 2, borderRadius: 2 }}
+        data-tour="compras-hub-filters"
+      >
         <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1.5 }}>
           Filtros de búsqueda
         </Typography>
         <Grid container spacing={1.5} alignItems="center">
-          <Grid item xs={12} md={3}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Nº factura"
-              placeholder="001-001-000000123"
-              value={filters.invoiceSearch}
-              onChange={(e) =>
-                setFilters((p) => ({ ...p, invoiceSearch: e.target.value }))
-              }
-            />
-          </Grid>
           <Grid item xs={6} md={2}>
             <TextField
               fullWidth
@@ -376,24 +476,7 @@ export default function PurchasesHubPage() {
               onChange={(e) => setFilters((p) => ({ ...p, dateTo: e.target.value }))}
             />
           </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Proveedor"
-              value={filters.supplier}
-              onChange={(e) => setFilters((p) => ({ ...p, supplier: e.target.value }))}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {supplierOptions.map((name) => (
-                <MenuItem key={name} value={name}>
-                  {name}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={2}>
+          <Grid item xs={12} md={8}>
             <Button
               variant="outlined"
               startIcon={<RestartAltIcon />}
@@ -401,8 +484,6 @@ export default function PurchasesHubPage() {
                 setFilters({
                   dateFrom: monthStartIso(),
                   dateTo: todayIso(),
-                  supplier: "",
-                  invoiceSearch: "",
                 })
               }
             >
@@ -415,34 +496,71 @@ export default function PurchasesHubPage() {
       <TablePro
         title="Compras x día"
         rows={rows}
+        dense
+        tableMaxHeight="calc(100vh - 320px)"
         columns={[
-          { id: "emissionDate", label: "Fecha emisión" },
-          { id: "estabPtoEmi", label: "Estab-PtoEmi" },
-          { id: "numero", label: "Nº factura" },
-          { id: "supplierLabel", label: "Proveedor" },
-          { id: "subtotalLabel", label: "Subtotal", align: "right" },
-          { id: "discountLabel", label: "Descuento", align: "right" },
-          { id: "ivaLabel", label: "IVA", align: "right" },
-          { id: "totalLabel", label: "Total", align: "right" },
-          { id: "cashLabel", label: "Efectivo", align: "right" },
-          { id: "checkBankLabel", label: "Cheque/Banco", align: "right" },
-          { id: "cardLabel", label: "Tarjeta", align: "right" },
-          { id: "otherLabel", label: "Otros", align: "right" },
-          { id: "retentionLabel", label: "Retención", align: "right" },
+          { id: "emissionDate", label: "Fecha", minWidth: 88 },
+          { id: "estabPtoEmi", label: "Estab", minWidth: 72 },
+          { id: "numero", label: "Nº factura", minWidth: 96 },
+          { id: "supplierLabel", label: "Proveedor", ...TEXT_COL(140) },
+          { id: "subtotalLabel", label: "Subtotal", ...MONEY_COL },
+          { id: "discountLabel", label: "Desc.", ...MONEY_COL },
+          { id: "ivaLabel", label: "IVA", ...MONEY_COL },
+          { id: "totalLabel", label: "Total", ...MONEY_COL },
+          { id: "cashLabel", label: "Efectivo", ...MONEY_COL },
+          { id: "checkBankLabel", label: "Chq/Bco", ...MONEY_COL },
+          { id: "cardLabel", label: "Tarjeta", ...MONEY_COL },
+          { id: "otherLabel", label: "Otros", ...MONEY_COL },
+          { id: "retentionLabel", label: "Ret.", ...MONEY_COL },
+          {
+            id: "actions",
+            label: "Acciones",
+            stopRowClick: true,
+            minWidth: 120,
+            cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+            headerSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+            render: (row) => (
+              <Stack
+                direction="row"
+                spacing={0}
+                justifyContent="flex-end"
+                data-tour="compras-hub-row-actions"
+              >
+                <Tooltip title="Ver detalle">
+                  <IconButton size="small" color="primary" onClick={() => void openDetail(row)}>
+                    <VisibilityIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Imprimir">
+                  <IconButton size="small" color="primary" onClick={() => printPurchaseReport(row)}>
+                    <PrintIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Editar">
+                  <IconButton size="small" color="primary" onClick={() => openEditPurchase(row)}>
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            ),
+          },
+          SPACER_COL,
         ]}
-        showSearch={false}
+        showSearch
         showPagination
         showIndex={false}
         defaultRowsPerPage={25}
         rowsPerPageOptions={[15, 25, 50, 100]}
         loading={loading}
-        onRowClick={openEditPurchase}
+        dataTour="compras-hub-table"
+        dataTourSearch="compras-hub-search"
       />
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
-        Clic en una fila para editar el pedido / productos.
-      </Typography>
 
-      <Paper variant="outlined" sx={{ mt: 1.5, p: 1.5, borderRadius: 2 }}>
+      <Paper
+        variant="outlined"
+        sx={{ mt: 1.5, p: 1.5, borderRadius: 2 }}
+        data-tour="compras-hub-totals"
+      >
         <Typography variant="body2" sx={{ mb: 0.5 }}>
           <strong>Totales:</strong> Subtotal {money(totals.subtotal)} · Descuento{" "}
           {money(totals.discount)} · IVA {money(totals.iva)} · Total {money(totals.total)}
@@ -453,6 +571,18 @@ export default function PurchasesHubPage() {
         </Typography>
       </Paper>
 
+      <InvoiceHubDetailDialog
+        open={Boolean(detailRow)}
+        onClose={() => setDetailRow(null)}
+        row={detailRow}
+        rows={historyRows || rows}
+        partyKind="supplier"
+        onPrint={(row) => {
+          setDetailRow(null);
+          printPurchaseReport(row);
+        }}
+      />
+
       <SimpleDialog
         open={formOpen}
         onClose={closeForm}
@@ -461,8 +591,17 @@ export default function PurchasesHubPage() {
         fullWidth
         paperSx={SUPPLIER_ORDER_DIALOG_PAPER_SX}
         contentSx={SUPPLIER_ORDER_DIALOG_CONTENT_SX}
+        titleExtra={
+          !isEditing ? (
+            <TourHelpButton
+              onClick={startProveedorFormTour}
+              title="Ver tutorial de este formulario"
+            />
+          ) : null
+        }
       >
         <SupplierOrderForm
+          ref={supplierFormTourRef}
           onClose={closeForm}
           reload={refresh}
           isEditing={isEditing}

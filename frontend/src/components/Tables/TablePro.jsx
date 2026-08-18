@@ -2,7 +2,7 @@
  * Tabla MUI con búsqueda, paginación y acciones.
  * Al cargar: CircularProgress (las tablas no usan skeleton).
  */
-import React, { useState } from "react";
+import React, { useState, Fragment } from "react";
 import {
   Table,
   TableBody,
@@ -17,6 +17,7 @@ import {
   Box,
   TableSortLabel,
   CircularProgress,
+  Collapse,
   alpha,
   useTheme,
 } from "@mui/material";
@@ -32,10 +33,20 @@ const TablePro = ({
   showIndex = false,
   indexHeader = "#",
   tableMaxHeight = "calc(100vh - 220px)",
+  /** Compacta tipografía y padding; útil en reportes con muchas columnas. */
+  dense = false,
   onRowClick,
   selectedRowId = null,
   getRowId = (row) => row.id,
   loading = false,
+  /** Id de la fila expandida (controlado). */
+  expandedRowId = null,
+  /** Contenido debajo de la fila expandida. */
+  renderExpanded = null,
+  /** data-tour en el Paper raíz (tutoriales). */
+  dataTour = undefined,
+  /** data-tour en el buscador. */
+  dataTourSearch = undefined,
 }) => {
   const theme = useTheme();
   const accent = theme.palette.primary.main;
@@ -109,7 +120,10 @@ const TablePro = ({
     : filteredRows;
 
   return (
-    <Paper sx={{ width: "100%", p: 1, overflow: "hidden", position: "relative" }}>
+    <Paper
+      sx={{ width: "100%", p: 1, overflow: "hidden", position: "relative" }}
+      {...(dataTour ? { "data-tour": dataTour } : {})}
+    >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
         {title && (
           <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
@@ -125,35 +139,95 @@ const TablePro = ({
             value={searchText}
             onChange={handleSearchChange}
             disabled={loading}
+            {...(dataTourSearch ? { "data-tour": dataTourSearch } : {})}
           />
         )}
 
-        <TableContainer sx={{ maxHeight: tableMaxHeight, minHeight: loading ? 220 : undefined }}>
-          <Table stickyHeader>
+        <TableContainer
+          sx={{
+            maxHeight: tableMaxHeight,
+            minHeight: loading ? 220 : undefined,
+            overflowX: "auto",
+            width: "100%",
+          }}
+        >
+          <Table
+            stickyHeader
+            size="small"
+            sx={{
+              width: "100%",
+              minWidth: dense ? 640 : undefined,
+              tableLayout: "auto",
+              "& .MuiTableCell-root": {
+                fontSize: dense ? "0.72rem" : undefined,
+                px: dense ? 0.5 : undefined,
+                py: dense ? 0.3 : 0.5,
+                whiteSpace: "nowrap",
+                lineHeight: dense ? 1.2 : undefined,
+              },
+              "& .MuiTableCell-head": {
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+                lineHeight: 1.15,
+                verticalAlign: "bottom",
+              },
+              "& .MuiTableCell-alignRight": {
+                fontVariantNumeric: "tabular-nums",
+                letterSpacing: dense ? "-0.01em" : undefined,
+              },
+            }}
+          >
             <TableHead>
               <TableRow>
                 {showIndex && (
-                  <TableCell sx={{ width: 56, bgcolor: "background.paper" }}>
+                  <TableCell sx={{ width: dense ? 36 : 56, bgcolor: "background.paper" }}>
                     {indexHeader}
                   </TableCell>
                 )}
                 {columns.map((column) => (
                   <TableCell
                     key={column.id}
+                    align={column.align || "left"}
                     sortDirection={
                       orderBy === column.id ? orderDirection : false
                     }
-                    onClick={loading ? undefined : () => handleSort(column.id)}
+                    onClick={
+                      loading || column.sortable === false
+                        ? undefined
+                        : () => handleSort(column.id)
+                    }
                     sx={{
-                      cursor: loading ? "default" : "pointer",
+                      cursor:
+                        loading || column.sortable === false
+                          ? "default"
+                          : "pointer",
                       userSelect: "none",
                       bgcolor: "background.paper",
+                      width: column.width,
+                      minWidth: column.minWidth,
+                      maxWidth: column.maxWidth,
+                      ...(column.sticky === "right"
+                        ? {
+                            position: "sticky",
+                            right: 0,
+                            zIndex: 3,
+                            boxShadow: (t) =>
+                              `inset 1px 0 0 ${t.palette.divider}`,
+                          }
+                        : null),
+                      ...column.headerSx,
                     }}
                   >
                     <TableSortLabel
-                      active={orderBy === column.id}
+                      active={orderBy === column.id && column.sortable !== false}
                       direction={orderBy === column.id ? orderDirection : "asc"}
-                      disabled={loading}
+                      disabled={loading || column.sortable === false}
+                      hideSortIcon={column.sortable === false}
+                      sx={{
+                        "& .MuiTableSortLabel-icon": {
+                          fontSize: dense ? "0.9rem" : undefined,
+                        },
+                      }}
                     >
                       {column.label}
                     </TableSortLabel>
@@ -170,45 +244,94 @@ const TablePro = ({
                     selectedRowId != null &&
                     rowId != null &&
                     rowId === selectedRowId;
+                  const expanded =
+                    typeof renderExpanded === "function" &&
+                    expandedRowId != null &&
+                    rowId === expandedRowId;
                   return (
-                    <TableRow
-                      hover
-                      key={row.id ?? `row-${idx}`}
-                      selected={selected}
-                      onClick={onRowClick ? () => onRowClick(row) : undefined}
-                      sx={{
-                        cursor: onRowClick ? "pointer" : undefined,
-                        bgcolor: selected ? alpha(accent, 0.08) : undefined,
-                        "&.Mui-selected": {
-                          bgcolor: alpha(accent, 0.1),
-                        },
-                        "&.Mui-selected:hover": {
-                          bgcolor: alpha(accent, 0.14),
-                        },
-                      }}
-                    >
-                      {showIndex && (
-                        <TableCell sx={{ py: 0.5 }}>
-                          {showPagination
-                            ? page * rowsPerPage + idx + 1
-                            : idx + 1}
-                        </TableCell>
-                      )}
+                    <Fragment key={row.id ?? `row-${idx}`}>
+                      <TableRow
+                        hover
+                        selected={selected}
+                        onClick={onRowClick ? () => onRowClick(row) : undefined}
+                        sx={{
+                          cursor: onRowClick ? "pointer" : undefined,
+                          bgcolor: selected ? alpha(accent, 0.08) : undefined,
+                          "&.Mui-selected": {
+                            bgcolor: alpha(accent, 0.1),
+                          },
+                          "&.Mui-selected:hover": {
+                            bgcolor: alpha(accent, 0.14),
+                          },
+                        }}
+                      >
+                        {showIndex && (
+                          <TableCell>
+                            {showPagination
+                              ? page * rowsPerPage + idx + 1
+                              : idx + 1}
+                          </TableCell>
+                        )}
 
-                      {columns.map((column) => (
-                        <TableCell
-                          key={column.id}
-                          sx={{ py: 0.5 }}
-                          onClick={
-                            column.stopRowClick
-                              ? (e) => e.stopPropagation()
-                              : undefined
-                          }
-                        >
-                          {column.render ? column.render(row) : row[column.id]}
-                        </TableCell>
-                      ))}
-                    </TableRow>
+                        {columns.map((column) => (
+                          <TableCell
+                            key={column.id}
+                            align={column.align || "left"}
+                            title={
+                              column.render
+                                ? undefined
+                                : String(row[column.id] ?? "")
+                            }
+                            sx={{
+                              width: column.width,
+                              minWidth: column.minWidth,
+                              maxWidth: column.maxWidth,
+                              ...(column.maxWidth
+                                ? {
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                  }
+                                : null),
+                              ...(column.sticky === "right"
+                                ? {
+                                    position: "sticky",
+                                    right: 0,
+                                    zIndex: 2,
+                                    bgcolor: "background.paper",
+                                    boxShadow: (t) =>
+                                      `inset 1px 0 0 ${t.palette.divider}`,
+                                  }
+                                : null),
+                              ...column.cellSx,
+                            }}
+                            onClick={
+                              column.stopRowClick
+                                ? (e) => e.stopPropagation()
+                                : undefined
+                            }
+                          >
+                            {column.render ? column.render(row) : row[column.id]}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                      {typeof renderExpanded === "function" && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={colCount}
+                            sx={{
+                              py: 0,
+                              borderBottom: expanded ? undefined : 0,
+                              bgcolor: (t) =>
+                                alpha(t.palette.primary.main, 0.04),
+                            }}
+                          >
+                            <Collapse in={expanded} timeout="auto" unmountOnExit>
+                              <Box sx={{ py: 1.25, px: 1 }}>{renderExpanded(row)}</Box>
+                            </Collapse>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
                   );
                 })}
 

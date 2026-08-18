@@ -54,6 +54,7 @@ import { fetchSriBillingSettings } from "../../api/sriBillingRequest.js";
 import { emitSriInvoice } from "../../api/sriInvoicesRequest.js";
 import { sendAuthorizedInvoiceEmailWithRidePdf } from "../../utils/sendAuthorizedInvoiceEmail.js";
 import CajaCustomerFormDialog from "./CajaCustomerFormDialog.jsx";
+import CustomerPromoHint from "./marketing/CustomerPromoHint.jsx";
 import CajaQuickProductsDialog from "./CajaQuickProductsDialog.jsx";
 import SearchableSelect from "../../components/SearchableSelect.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -2093,37 +2094,40 @@ export default function CajaPage() {
                   : "Si no marcas la casilla, se usa Consumidor Final automáticamente."}
               </Typography>
               {useCustomerData || documentType === "factura" ? (
-                <Stack direction="row" spacing={0.5} alignItems="flex-start">
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <SearchableSelect
-                      fullWidth
-                      label="Cliente"
-                      value={customerId}
-                      onChange={setCustomerId}
-                      items={customers}
-                      getOptionLabel={(customer) => {
-                        const name = buildCustomerDisplayName(customer);
-                        const cedula = String(customer?.cedula || "").trim();
-                        if (cedula) return `${name} · ${cedula}`;
-                        const phone = String(customer?.phone || "").trim();
-                        if (phone) return `${name} · ${phone}`;
-                        return name;
-                      }}
-                      getOptionValue={(customer) => String(customer.id)}
-                    />
-                  </Box>
-                  <Tooltip title="Agregar cliente nuevo">
-                    <IconButton
-                      color="primary"
-                      size="small"
-                      sx={{ mt: 0.25 }}
-                      onClick={() => setAddCustomerOpen(true)}
-                      aria-label="Agregar cliente"
-                    >
-                      <PersonAddIcon />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
+                <>
+                  <Stack direction="row" spacing={0.5} alignItems="flex-start">
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <SearchableSelect
+                        fullWidth
+                        label="Cliente"
+                        value={customerId}
+                        onChange={setCustomerId}
+                        items={customers}
+                        getOptionLabel={(customer) => {
+                          const name = buildCustomerDisplayName(customer);
+                          const cedula = String(customer?.cedula || "").trim();
+                          if (cedula) return `${name} · ${cedula}`;
+                          const phone = String(customer?.phone || "").trim();
+                          if (phone) return `${name} · ${phone}`;
+                          return name;
+                        }}
+                        getOptionValue={(customer) => String(customer.id)}
+                      />
+                    </Box>
+                    <Tooltip title="Agregar cliente nuevo">
+                      <IconButton
+                        color="primary"
+                        size="small"
+                        sx={{ mt: 0.25 }}
+                        onClick={() => setAddCustomerOpen(true)}
+                        aria-label="Agregar cliente"
+                      >
+                        <PersonAddIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                  <CustomerPromoHint customerId={customerId} />
+                </>
               ) : null}
               <TextField
                 select

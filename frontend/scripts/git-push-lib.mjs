@@ -48,6 +48,28 @@ function assertGitRepo(dir, label) {
   }
 }
 
+const BLOCKED_BACKUP_JSON =
+  /(^|\/)\.env($|\.)|backup.*\.json$|\.backup\.json$|backup-eddeli-servidor\.json$|backup-tienda\.json$|backup-gestor-.*\.json$/i;
+
+function isBlockedStagingPath(name) {
+  if (/backup\.json\.example$/i.test(name)) return false;
+  return BLOCKED_BACKUP_JSON.test(name);
+}
+
+function assertNoBlockedStaging(repoDir, label) {
+  const staged = runOut("git diff --cached --name-only", repoDir);
+  const blocked = staged
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter(isBlockedStagingPath);
+  if (blocked.length) {
+    throw new Error(
+      `[${label}] Hay archivos sensibles en staging (.env o backups JSON): ${blocked.join(", ")}`,
+    );
+  }
+}
+
 export function commitAndPush(repoDir, label, message, logTag) {
   const tag = logTag || label;
   assertGitRepo(repoDir, label);
@@ -57,6 +79,7 @@ export function commitAndPush(repoDir, label, message, logTag) {
     console.log(`\n[${tag}] Cambios en ${label}:`);
     console.log(porcelain);
     run("git add -A", repoDir);
+    assertNoBlockedStaging(repoDir, label);
     const staged = runOut("git diff --cached --name-only", repoDir);
     if (!staged) {
       console.log(`[${tag}] Nada que commitear en ${label} (solo ignorados).`);

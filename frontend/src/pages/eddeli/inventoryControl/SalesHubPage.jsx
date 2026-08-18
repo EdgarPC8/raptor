@@ -1,22 +1,68 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
   Grid,
-  MenuItem,
+  IconButton,
   Paper,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import PrintIcon from "@mui/icons-material/Print";
 import TablePro from "../../../components/Tables/TablePro.jsx";
+import TourHelpButton from "../../../components/TourHelpButton.jsx";
+import PrintFormatDialog from "../../../components/saleReceipt/PrintFormatDialog.jsx";
+import InvoiceHubDetailDialog from "./components/InvoiceHubDetailDialog.jsx";
 import { getPosSalesRequest } from "../../../api/ordersRequest.js";
 import { useAuth } from "../../../context/AuthContext.jsx";
+import { APP_ROUTES } from "../../../config/appRoutes.js";
+import { usePageTour } from "../../../hooks/usePageTour.js";
+import { VENTAS_HUB_TOUR_ID, getVentasHubTourSteps } from "../../../tours/ventasHubTour.js";
 import { exportSalesInvoicesExcel } from "../../../utils/exportInvoiceReportExcel.js";
+import {
+  normalizeSaleReceipt,
+  paymentMethodLabel,
+} from "../../../utils/saleReceiptUtils.js";
 
 const money = (n) => Number(n || 0).toFixed(2);
+
+const MONEY_COL = {
+  align: "right",
+  minWidth: 52,
+  cellSx: { px: 0.2, width: "1px", whiteSpace: "nowrap" },
+  headerSx: { px: 0.2, width: "1px", whiteSpace: "nowrap" },
+};
+
+/** Columna de texto de ancho fijo: recorta con puntos suspensivos. */
+const TEXT_COL = (px) => ({
+  width: px,
+  maxWidth: px,
+  cellSx: {
+    width: px,
+    maxWidth: px,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  headerSx: { width: px, maxWidth: px },
+});
+
+/** Absorbe el ancho sobrante para que no se estiren las demás columnas. */
+const SPACER_COL = {
+  id: "_spacer",
+  label: "",
+  sortable: false,
+  cellSx: { width: "100%", p: 0 },
+  headerSx: { width: "100%", p: 0 },
+  render: () => null,
+};
 
 function todayIso() {
   const d = new Date();
@@ -60,13 +106,16 @@ function paymentBuckets(method, total) {
 /** Reporte de ventas (estilo facturación diaria). */
 export default function SalesHubPage() {
   const { toast } = useAuth();
+  const navigate = useNavigate();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     dateFrom: monthStartIso(),
     dateTo: todayIso(),
-    seller: "",
   });
+  const [detailRow, setDetailRow] = useState(null);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printReceipt, setPrintReceipt] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,16 +141,8 @@ export default function SalesHubPage() {
     };
   }, [toast]);
 
-  const sellerOptions = useMemo(() => {
-    const set = new Set();
-    for (const s of sales) {
-      const name = String(s.sellerName || "").trim();
-      if (name && name !== "—") set.add(name);
-    }
-    return [...set].sort();
-  }, [sales]);
-
-  const rows = useMemo(() => {
+  /** Todas las ventas mapeadas (sin filtro de fecha): base del historial del cliente. */
+  const allRows = useMemo(() => {
     return sales
       .map((s) => {
         const dateIso = saleDateIso(s);
@@ -123,6 +164,7 @@ export default function SalesHubPage() {
             s.documentType === "consumidor_final"
               ? "CONSUMIDOR FINAL"
               : String(s.customer?.name || "—").toUpperCase(),
+          paymentMethodLabel: paymentMethodLabel(s.paymentMethod) || s.paymentMethod || "—",
           subtotal,
           discount,
           iva,
@@ -143,14 +185,18 @@ export default function SalesHubPage() {
           retentionLabel: money(retention),
         };
       })
-      .filter((row) => {
+      .sort((a, b) => String(b.dateIso).localeCompare(String(a.dateIso)));
+  }, [sales]);
+
+  const rows = useMemo(
+    () =>
+      allRows.filter((row) => {
         if (filters.dateFrom && row.dateIso && row.dateIso < filters.dateFrom) return false;
         if (filters.dateTo && row.dateIso && row.dateIso > filters.dateTo) return false;
-        if (filters.seller && row.sellerLabel !== filters.seller) return false;
         return true;
-      })
-      .sort((a, b) => String(b.dateIso).localeCompare(String(a.dateIso)));
-  }, [sales, filters]);
+      }),
+    [allRows, filters],
+  );
 
   const totals = useMemo(() => {
     const sum = (key) => rows.reduce((a, r) => a + Number(r[key] || 0), 0);
@@ -166,6 +212,17 @@ export default function SalesHubPage() {
       retention: sum("retention"),
     };
   }, [rows]);
+
+  const openPrint = (row) => {
+    setPrintReceipt(normalizeSaleReceipt(row));
+    setPrintOpen(true);
+  };
+
+  const { startTour } = usePageTour({
+    tourId: VENTAS_HUB_TOUR_ID,
+    getSteps: getVentasHubTourSteps,
+    enabled: !loading,
+  });
 
   const exportExcel = () => {
     if (!rows.length) {
@@ -197,28 +254,53 @@ export default function SalesHubPage() {
         alignItems={{ xs: "stretch", sm: "flex-start" }}
         justifyContent="space-between"
         sx={{ mb: 2 }}
+        data-tour="ventas-hub-header"
       >
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h5" fontWeight={800} sx={{ mb: 0.5 }}>
-            Reporte de ventas
-          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+            <Typography variant="h5" fontWeight={800}>
+              Reporte de ventas
+            </Typography>
+            <TourHelpButton onClick={startTour} title="Ver tutorial de ventas" />
+          </Stack>
           <Typography variant="body2" color="text.secondary">
             Facturación / ventas de caja por día (estilo facturación diaria).
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          color="success"
-          startIcon={<FileDownloadIcon />}
-          onClick={exportExcel}
-          disabled={loading || !rows.length}
-          sx={{ alignSelf: { xs: "stretch", sm: "center" }, whiteSpace: "nowrap" }}
+        <Stack
+          direction="row"
+          spacing={1}
+          flexWrap="wrap"
+          useFlexGap
+          data-tour="ventas-hub-actions-bar"
+          sx={{ alignSelf: { xs: "stretch", sm: "center" } }}
         >
-          Exportar Excel
-        </Button>
+          <Button
+            variant="outlined"
+            startIcon={<AssignmentIcon />}
+            onClick={() => navigate(APP_ROUTES.sales.orders)}
+            sx={{ whiteSpace: "nowrap" }}
+          >
+            Ver pedidos
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<FileDownloadIcon />}
+            onClick={exportExcel}
+            disabled={loading || !rows.length}
+            sx={{ whiteSpace: "nowrap" }}
+          >
+            Exportar Excel
+          </Button>
+        </Stack>
       </Stack>
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+      <Paper
+        variant="outlined"
+        sx={{ p: 2, mb: 2, borderRadius: 2 }}
+        data-tour="ventas-hub-filters"
+      >
         <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1.5 }}>
           Filtros de búsqueda
         </Typography>
@@ -245,24 +327,7 @@ export default function SalesHubPage() {
               onChange={(e) => setFilters((p) => ({ ...p, dateTo: e.target.value }))}
             />
           </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Vendedor"
-              value={filters.seller}
-              onChange={(e) => setFilters((p) => ({ ...p, seller: e.target.value }))}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {sellerOptions.map((name) => (
-                <MenuItem key={name} value={name}>
-                  {name}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={5}>
+          <Grid item xs={12} md={8}>
             <Button
               variant="outlined"
               startIcon={<RestartAltIcon />}
@@ -270,7 +335,6 @@ export default function SalesHubPage() {
                 setFilters({
                   dateFrom: monthStartIso(),
                   dateTo: todayIso(),
-                  seller: "",
                 })
               }
             >
@@ -283,31 +347,67 @@ export default function SalesHubPage() {
       <TablePro
         title="Facturación x día"
         rows={rows}
+        dense
+        tableMaxHeight="calc(100vh - 300px)"
         columns={[
-          { id: "emissionDate", label: "Fecha emisión" },
-          { id: "estabPtoEmi", label: "Estab-PtoEmi" },
-          { id: "numero", label: "Número" },
-          { id: "sellerLabel", label: "Vendedor" },
-          { id: "customerLabel", label: "Nombre cliente" },
-          { id: "subtotalLabel", label: "Subtotal", align: "right" },
-          { id: "discountLabel", label: "Descuento", align: "right" },
-          { id: "ivaLabel", label: "IVA", align: "right" },
-          { id: "totalLabel", label: "Total", align: "right" },
-          { id: "cashLabel", label: "Efectivo", align: "right" },
-          { id: "checkBankLabel", label: "Cheque/Banco", align: "right" },
-          { id: "cardLabel", label: "Tarjeta", align: "right" },
-          { id: "otherLabel", label: "Otros", align: "right" },
-          { id: "retentionLabel", label: "Retención", align: "right" },
+          { id: "emissionDate", label: "Fecha", minWidth: 88 },
+          { id: "estabPtoEmi", label: "Estab", minWidth: 72 },
+          { id: "numero", label: "Número", minWidth: 84 },
+          { id: "sellerLabel", label: "Vendedor", ...TEXT_COL(110) },
+          { id: "customerLabel", label: "Cliente", ...TEXT_COL(120) },
+          { id: "subtotalLabel", label: "Subtotal", ...MONEY_COL },
+          { id: "discountLabel", label: "Desc.", ...MONEY_COL },
+          { id: "ivaLabel", label: "IVA", ...MONEY_COL },
+          { id: "totalLabel", label: "Total", ...MONEY_COL },
+          { id: "cashLabel", label: "Efectivo", ...MONEY_COL },
+          { id: "checkBankLabel", label: "Chq/Bco", ...MONEY_COL },
+          { id: "cardLabel", label: "Tarjeta", ...MONEY_COL },
+          { id: "otherLabel", label: "Otros", ...MONEY_COL },
+          { id: "retentionLabel", label: "Ret.", ...MONEY_COL },
+          {
+            id: "actions",
+            label: "Acciones",
+            stopRowClick: true,
+            minWidth: 88,
+            cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+            headerSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+            render: (row) => (
+              <Stack
+                direction="row"
+                spacing={0}
+                justifyContent="flex-end"
+                data-tour="ventas-hub-row-actions"
+              >
+                <Tooltip title="Ver detalle">
+                  <IconButton size="small" color="primary" onClick={() => setDetailRow(row)}>
+                    <VisibilityIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Imprimir">
+                  <IconButton size="small" color="primary" onClick={() => openPrint(row)}>
+                    <PrintIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            ),
+          },
+          SPACER_COL,
         ]}
-        showSearch={false}
+        showSearch
         showPagination
         showIndex={false}
         defaultRowsPerPage={25}
         rowsPerPageOptions={[15, 25, 50, 100]}
         loading={loading}
+        dataTour="ventas-hub-table"
+        dataTourSearch="ventas-hub-search"
       />
 
-      <Paper variant="outlined" sx={{ mt: 1.5, p: 1.5, borderRadius: 2 }}>
+      <Paper
+        variant="outlined"
+        sx={{ mt: 1.5, p: 1.5, borderRadius: 2 }}
+        data-tour="ventas-hub-totals"
+      >
         <Typography variant="body2" sx={{ mb: 0.5 }}>
           <strong>Totales:</strong> Subtotal {money(totals.subtotal)} · Descuento{" "}
           {money(totals.discount)} · IVA {money(totals.iva)} · Total {money(totals.total)}
@@ -317,6 +417,24 @@ export default function SalesHubPage() {
           {money(totals.card)} · Otros {money(totals.other)} · Retención {money(totals.retention)}
         </Typography>
       </Paper>
+
+      <InvoiceHubDetailDialog
+        open={Boolean(detailRow)}
+        onClose={() => setDetailRow(null)}
+        row={detailRow}
+        rows={allRows}
+        partyKind="customer"
+        onPrint={(row) => {
+          setDetailRow(null);
+          openPrint(row);
+        }}
+      />
+
+      <PrintFormatDialog
+        open={printOpen}
+        onClose={() => setPrintOpen(false)}
+        receipt={printReceipt}
+      />
     </Box>
   );
 }

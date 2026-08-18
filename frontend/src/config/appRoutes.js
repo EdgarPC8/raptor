@@ -77,6 +77,10 @@ export const APP_ROUTES = {
     preview: "/diseno-promocional/vista",
     templates: "/diseno-promocional/plantillas",
   },
+  marketing: {
+    promotions: "/marketing/promociones",
+    news: "/marketing/noticias",
+  },
   admin: {
     users: "/administracion/usuarios",
     accounts: "/administracion/cuentas",

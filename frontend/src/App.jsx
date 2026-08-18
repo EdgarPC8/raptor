@@ -147,6 +147,12 @@ const PublicidadTvDevicePlayerPage = lazy(
 const PublicidadDevicesPage = lazy(
   () => import("./pages/eddeli/publicidad/PublicidadDevicesPage.jsx"),
 );
+const PromocionesPage = lazy(
+  () => import("./pages/eddeli/marketing/PromocionesPage.jsx"),
+);
+const NoticiasPage = lazy(
+  () => import("./pages/eddeli/marketing/NoticiasPage.jsx"),
+);
 const AppSettingsPage = lazy(() => import("./pages/AppSettingsPage.jsx"));
 const SystemModulesPage = lazy(() => import("./pages/SystemModulesPage.jsx"));
 const SystemPlansPage = lazy(() => import("./pages/SystemPlansPage.jsx"));
@@ -449,6 +455,8 @@ export default function App() {
               path={`${APP_ROUTES.advertising.player}/:campaignId?`}
               element={<PublicidadPlayerPage />}
             />
+            <Route path={APP_ROUTES.marketing.promotions} element={<PromocionesPage />} />
+            <Route path={APP_ROUTES.marketing.news} element={<NoticiasPage />} />
 
             <Route path={APP_ROUTES.inventory.products} element={<ProductsPage />} />
             <Route path={APP_ROUTES.inventory.categories} element={<CategoryPage />} />

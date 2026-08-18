@@ -796,15 +796,45 @@ export const APP_MODULE_GROUPS = [
     ],
   },
   {
-    id: "publicidad",
-    label: "Publicidad",
-    summary: "Señalización digital en pantallas TV. En mantenimiento: no se usa en producción y requiere mejora.",
-    status: "maintenance",
+    id: "marketing",
+    label: "Marketing",
+    summary:
+      "Promociones por grupo de clientes, señalización en pantallas y editor de piezas. Publicidad y diseño siguen en mantenimiento; Promociones está en uso. Noticias (novedades para inicio y vitrina) llegará pronto.",
+    status: "active",
     sections: [
+      {
+        name: "Promociones",
+        path: APP_ROUTES.marketing.promotions,
+        roles: ["Programador", "Administrador"],
+        description:
+          "Grupos de clientes con un beneficio pegado (ej. 8 panes × $1). Un cliente solo puede estar en un grupo.",
+        functions: [
+          { name: "Crear grupo", description: "Nombre del grupo (VIP, Nuevos, Estándar…)." },
+          { name: "Pegar beneficio", description: "Producto, cantidad y precio promocional." },
+          { name: "Añadir clientes", description: "El cliente entra al grupo y deja el anterior si tenía otro." },
+          { name: "Activar / pausar", description: "El grupo inactivo no aplica en caja." },
+          { name: "Ver en caja", description: "Al elegir el cliente se muestra el beneficio del grupo." },
+        ],
+      },
+      {
+        name: "Noticias",
+        path: APP_ROUTES.marketing.news,
+        roles: ["Programador", "Administrador"],
+        status: "planned",
+        description:
+          "Próximamente: novedades y avisos del negocio (promos, feriados, lanzamientos). Se verán en el equipo y, si la vista pública está activa, también en el inicio (HomeLogout).",
+        functions: [
+          { name: "Tablero de novedades", description: "Lo que el equipo y visitantes ven hoy." },
+          { name: "Redactar aviso", description: "Título, texto, imagen y vigencia." },
+          { name: "Mostrar en inicio", description: "Si Config → Vista pública tiene catálogo activo." },
+          { name: "Archivo", description: "Historial de avisos pasados." },
+        ],
+      },
       {
         name: "Campañas",
         path: APP_ROUTES.advertising.campaigns,
         roles: ["Programador", "Administrador"],
+        status: "maintenance",
         description: "Listado y edición de campañas publicitarias.",
         functions: [
           { name: "Listado de campañas", description: "Estado, piezas en playlist y dispositivos asignados." },
@@ -817,6 +847,7 @@ export const APP_MODULE_GROUPS = [
         name: "Dispositivos TV",
         path: APP_ROUTES.advertising.devices,
         roles: ["Programador", "Administrador"],
+        status: "maintenance",
         description: "Registro de pantallas o boxes conectados.",
         functions: [
           { name: "Aprobación de dispositivos", description: "Estados pendiente, aprobado, rechazado o deshabilitado." },
@@ -829,6 +860,7 @@ export const APP_MODULE_GROUPS = [
         name: "Reproductor",
         path: APP_ROUTES.advertising.player,
         roles: ["Programador", "Administrador"],
+        status: "maintenance",
         description: "Vista previa y control del reproductor de campañas.",
         functions: [
           { name: "Reproducción fullscreen", description: "Play/pausa, anterior/siguiente y barra de progreso." },
@@ -837,19 +869,11 @@ export const APP_MODULE_GROUPS = [
           { name: "Música de fondo", description: "Según configuración de campaña." },
         ],
       },
-    ],
-  },
-  {
-    id: "diseno",
-    label: "Diseño promocional",
-    summary:
-      "Editor gráfico del sistema. En mantenimiento: no se usa en producción y requiere mejora.",
-    status: "maintenance",
-    sections: [
       {
         name: "Editor de diseño",
         path: APP_ROUTES.promoDesign.editor,
         roles: ["Programador", "Administrador"],
+        status: "maintenance",
         description: "Compositor visual para piezas promocionales. Es el único editor activo; rutas legacy (/publicity_edit, /editorDefault) redirigen aquí.",
         functions: [
           { name: "Canvas de diseño", description: "Área central con capas editables." },
@@ -864,6 +888,7 @@ export const APP_MODULE_GROUPS = [
         name: "Vista con productos",
         path: APP_ROUTES.promoDesign.preview,
         roles: ["Programador", "Administrador"],
+        status: "maintenance",
         description: "Previsualización de diseños con datos de productos.",
         functions: [
           { name: "Estudio de producto", description: "Selector de productos con auto-selección del primero." },
@@ -875,6 +900,7 @@ export const APP_MODULE_GROUPS = [
         name: "Plantillas",
         path: APP_ROUTES.promoDesign.templates,
         roles: ["Programador", "Administrador"],
+        status: "maintenance",
         description: "Plantillas reutilizables del editor.",
         functions: [
           { name: "Listado de plantillas", description: "Búsqueda por nombre, app y formato." },
@@ -996,7 +1022,7 @@ export const APP_MODULE_GROUPS = [
           { name: "Plan Prueba", description: "Muchas funciones con límites de uso/tiempo; no es gratis permanente." },
           { name: "Plan Básico", description: "Operación de mostrador: caja, turno, tareas y POS." },
           { name: "Plan Medio", description: "Inventario, ventas, finanzas y producción." },
-          { name: "Plan Pro", description: "SRI, catálogo web, publicidad TV y diseño." },
+          { name: "Plan Pro", description: "SRI, catálogo web y Marketing (promociones, TV y diseño)." },
           { name: "Plan Socios", description: "Multi-local, más usuarios y prioridad para redes/aliados." },
           { name: "Plan Empresarial", description: "A medida: límites altos, integraciones y soporte dedicado." },
           { name: "Comparar planes", description: "Tarjetas lado a lado con beneficios y CTA." },

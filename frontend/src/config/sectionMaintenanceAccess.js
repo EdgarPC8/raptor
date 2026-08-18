@@ -33,6 +33,12 @@ function normalizePath(path) {
 
 /** Alias legacy que deben bloquearse con el módulo en mantenimiento. */
 const MAINTENANCE_PATH_ALIASES = {
+  marketing: [
+    { path: "/editor", name: "Editor de diseño" },
+    { path: "/templates", name: "Plantillas" },
+    { path: "/publicity_edit", name: "Editor de diseño" },
+    { path: "/editorDefault", name: "Editor de diseño" },
+  ],
   diseno: [
     { path: "/editor", name: "Editor de diseño" },
     { path: "/templates", name: "Plantillas" },

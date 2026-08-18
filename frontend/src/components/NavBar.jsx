@@ -84,6 +84,8 @@ import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import TvIcon from "@mui/icons-material/Tv";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
+import LocalOfferIcon from "@mui/icons-material/LocalOffer";
+import NewspaperIcon from "@mui/icons-material/Newspaper";
 
 import { useAuth } from "../context/AuthContext.jsx";
 import { useSubscriptions } from "../hooks/useSubscriptions.js";
@@ -382,9 +384,21 @@ const MENU_GROUPS = [
     ],
   },
   {
-    id: "publicidad",
-    label: "Publicidad",
+    id: "marketing",
+    label: "Marketing",
     items: [
+      {
+        name: "Promociones",
+        link: APP_ROUTES.marketing.promotions,
+        icon: <LocalOfferIcon />,
+        roles: ["Programador", "Administrador"],
+      },
+      {
+        name: "Noticias",
+        link: APP_ROUTES.marketing.news,
+        icon: <NewspaperIcon />,
+        roles: ["Programador", "Administrador"],
+      },
       {
         name: "Campañas",
         link: APP_ROUTES.advertising.campaigns,
@@ -403,12 +417,6 @@ const MENU_GROUPS = [
         icon: <PlayCircleOutlineIcon />,
         roles: ["Programador", "Administrador"],
       },
-    ],
-  },
-  {
-    id: "diseno-promocional",
-    label: "Diseño promocional",
-    items: [
       {
         name: "Editor de diseño",
         link: APP_ROUTES.promoDesign.editor,
