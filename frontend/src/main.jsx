@@ -8,6 +8,7 @@ import { SnackbarProvider } from "notistack";
 import { Toaster } from "react-hot-toast";
 import { ThemeModeProvider } from "./theme/ThemeModeProvider.jsx";
 import { AppSettingsProvider } from "./context/AppSettingsContext.jsx";
+import NotificationSnack from "./components/NotificationSnack.jsx";
 import App from "./App.jsx";
 import "./styles/print.css";
 
@@ -18,16 +19,17 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <AppSettingsProvider>
       <ThemeModeProvider>
-        <SnackbarProvider
-          maxSnack={3}
-          autoHideDuration={3000}
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        >
-          <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "") || undefined}>
+        <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "") || undefined}>
+          <SnackbarProvider
+            maxSnack={4}
+            autoHideDuration={3000}
+            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+            Components={{ appNotification: NotificationSnack }}
+          >
             <App />
             <Toaster position="bottom-right" />
-          </BrowserRouter>
-        </SnackbarProvider>
+          </SnackbarProvider>
+        </BrowserRouter>
       </ThemeModeProvider>
     </AppSettingsProvider>
   </React.StrictMode>,

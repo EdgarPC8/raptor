@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Box, Paper, Tabs, Tab, Typography } from "@mui/material";
 import NotificationList from "../components/NotificationList.jsx";
 import NotificationProgramsPage from "./NotificationProgramsPage.jsx";
+import NotificationToastSettings from "../components/NotificationToastSettings.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const CAN_PROGRAM = new Set(["Programador", "Administrador"]);
@@ -19,6 +20,8 @@ export default function NotificationsPage() {
       <Typography variant="h5" fontWeight={700} gutterBottom>
         Notificaciones
       </Typography>
+
+      {canProgram && <NotificationToastSettings />}
 
       {canProgram && (
         <Tabs

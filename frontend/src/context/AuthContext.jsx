@@ -178,9 +178,20 @@ export function AuthProvider({ children }) {
     onError,
     successMessage,
     errorMessage,
+    autoHideDuration,
+    title,
+    description,
+    category,
+    link,
   } = {}) => {
-    if (message && !promise) {
-      enqueueSnackbar(message, { variant, autoHideDuration: 3000 });
+    if ((message || title) && !promise) {
+      enqueueSnackbar(message || title || "", {
+        variant,
+        autoHideDuration: autoHideDuration ?? 3000,
+        ...(variant === "appNotification"
+          ? { title, description, category, link }
+          : {}),
+      });
       return;
     }
     if (!promise) return;

@@ -96,6 +96,10 @@ import SimpleDialog from "./Dialogs/SimpleDialog.jsx";
 import { PageSkeleton } from "./ContentSkeleton.jsx";
 import { getUnreadCount } from "../api/notificationsRequest.js";
 import { useNotificationSocket } from "../hooks/useNotificationSocket.js";
+import {
+  notificationToastCategory,
+  NOTIFICATION_TOAST_FLAG,
+} from "../utils/notificationToast.js";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
 import { APP_ID } from "../config/appInfo.js";
 import { APP_ROUTES } from "../config/appRoutes.js";
@@ -571,7 +575,7 @@ export default function NavBar() {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, isLoading, isGuest, user, logout, profileImageUser } =
+  const { isAuthenticated, isLoading, isGuest, user, logout, profileImageUser, toast } =
     useAuth();
   const { activeApp } = useAppSettings();
   const { subscription } = useSubscriptions();
@@ -726,12 +730,31 @@ export default function NavBar() {
     setNotifAnchor(null);
   }, [location.pathname]);
 
+  const onNewNotification = useCallback(
+    (notif) => {
+      fetchUnreadCount();
+      const cat = notificationToastCategory(notif);
+      if (!cat) return;
+      const flag = NOTIFICATION_TOAST_FLAG[cat];
+      if (!flag || !activeApp?.[flag]) return;
+      const title = String(notif?.title || "").trim() || "Nueva notificación";
+      const body = String(notif?.message || "").trim();
+      toast?.({
+        variant: "appNotification",
+        title,
+        description: body,
+        category: cat,
+        link: notif?.link || null,
+        autoHideDuration: 7000,
+      });
+    },
+    [fetchUnreadCount, activeApp, toast],
+  );
+
   useNotificationSocket(
     isGuest ? null : user?.userId,
     isGuest ? null : user?.accountId,
-    () => {
-      fetchUnreadCount();
-    },
+    onNewNotification,
   );
   const homePath = showUserActions
     ? APP_ID === "store"

@@ -40,6 +40,7 @@ import { updateAppSettings } from "../api/appSettingsRequest.js";
 import { uploadImageRequest, deleteImageRequest } from "../api/imgRequest.js";
 import { buildImageUrl } from "../api/axios.js";
 import AppTimeClockPanel from "../components/AppTimeClockPanel.jsx";
+import NotificationToastSettings from "../components/NotificationToastSettings.jsx";
 import SriBillingSettingsPanel from "../components/SriBillingSettingsPanel.jsx";
 import ReceiptDetailPreviewDialog from "../components/settings/ReceiptDetailPreviewDialog.jsx";
 import ThemePaletteEditor from "../components/settings/ThemePaletteEditor.jsx";
@@ -249,6 +250,12 @@ export default function AppSettingsPage() {
         cajaAllowCreateProductFromScan: Boolean(settings.cajaAllowCreateProductFromScan),
         cajaAllowEditProductFromCart: Boolean(settings.cajaAllowEditProductFromCart),
         cajaSuggestUpdateProductPrice: Boolean(settings.cajaSuggestUpdateProductPrice),
+        notificationsToastGreeting: Boolean(settings.notificationsToastGreeting),
+        notificationsToastStock: Boolean(settings.notificationsToastStock),
+        notificationsToastCredit: Boolean(settings.notificationsToastCredit),
+        notificationsToastExpiry: Boolean(settings.notificationsToastExpiry),
+        notificationsCreditEnabled: settings.notificationsCreditEnabled !== false,
+        notificationsExpiryEnabled: Boolean(settings.notificationsExpiryEnabled),
         receiptDetailSettings: normalizeReceiptDetailSettings(
           settings.receiptDetailSettings || DEFAULT_RECEIPT_DETAIL_SETTINGS,
         ),
@@ -787,6 +794,13 @@ export default function AppSettingsPage() {
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.5, bgcolor: "action.hover" }}>
                   <AppTimeClockPanel timezone={form.timezone} />
                 </Paper>
+              </SettingsSection>
+
+              <SettingsSection
+                title="Notificaciones"
+                hint="Bandeja y toasts abajo a la derecha, por tipo de aviso."
+              >
+                <NotificationToastSettings />
               </SettingsSection>
 
               <SettingsSection title="Operación" hint="Carpetas, caja y cliente mostrador.">

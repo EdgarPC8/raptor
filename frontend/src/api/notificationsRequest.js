@@ -44,3 +44,8 @@ export const createNotification = (data) =>
     : axios.post("/notifications", data, {
         headers: { Authorization: jwt() },
       });
+
+export const demoNotificationToasts = () =>
+  isGuestDataMode()
+    ? guestDenied()
+    : axios.post("/notifications/demo-toasts", {}, { ...authHeaders(), timeout: 20000 });

@@ -139,6 +139,37 @@ function toActiveApp(settings, { offline = false } = {}) {
           settings?.cajaSuggestUpdateProductPrice ??
             resolved.cajaSuggestUpdateProductPrice,
         ),
+    notificationsToastGreeting: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.notificationsToastGreeting ??
+            resolved.notificationsToastGreeting,
+        ),
+    notificationsToastStock: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.notificationsToastStock ?? resolved.notificationsToastStock,
+        ),
+    notificationsToastCredit: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.notificationsToastCredit ?? resolved.notificationsToastCredit,
+        ),
+    notificationsToastExpiry: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.notificationsToastExpiry ?? resolved.notificationsToastExpiry,
+        ),
+    notificationsCreditEnabled: SHELL_ONLY
+      ? true
+      : settings?.notificationsCreditEnabled !== false &&
+        resolved.notificationsCreditEnabled !== false,
+    notificationsExpiryEnabled: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.notificationsExpiryEnabled ??
+            resolved.notificationsExpiryEnabled,
+        ),
     receiptDetailSettings: unconfigured
       ? { ...DEFAULT_RECEIPT_DETAIL_SETTINGS }
       : normalizeReceiptDetailSettings(
