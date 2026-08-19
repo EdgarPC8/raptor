@@ -76,6 +76,16 @@ export const markItemAsPaidRequest = async (itemId) =>
   await axios.put(`/orders/order-items/${itemId}/mark-paid`, {}, {
     headers: { Authorization: jwt() },
   });
+
+export const unmarkItemAsPaidRequest = async (itemId) =>
+  await axios.put(`/orders/order-items/${itemId}/unmark-paid`, {}, {
+    headers: { Authorization: jwt() },
+  });
+
+export const unmarkOrderAsPaidRequest = async (orderId) =>
+  await axios.put(`/orders/${orderId}/unmark-paid`, {}, {
+    headers: { Authorization: jwt() },
+  });
   export const updateOrderItemRequest = async (itemId, data) =>
   await axios.put(`/orders/order-items/${itemId}`, data, {
     headers: { Authorization: jwt() },
@@ -220,6 +230,11 @@ export const markSupplierOrderReceivedRequest = async (id, data = {}) =>
 
 export const markSupplierOrderPaidRequest = async (id, data = {}) =>
   await axios.put(`/orders/supplier-orders/${id}/paid`, data, {
+    headers: { Authorization: jwt() },
+  });
+
+export const unmarkSupplierOrderPaidRequest = async (id) =>
+  await axios.put(`/orders/supplier-orders/${id}/unmark-paid`, {}, {
     headers: { Authorization: jwt() },
   });
 

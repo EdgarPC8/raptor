@@ -109,6 +109,12 @@ function toActiveApp(settings, { offline = false } = {}) {
           settings?.ordersAllowDeliverStockAdjust ??
             resolved.ordersAllowDeliverStockAdjust,
         ),
+    financeAllowAdminCorrections: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.financeAllowAdminCorrections ??
+            resolved.financeAllowAdminCorrections !== false,
+        ),
     suggestOpenPackOnPosShortage: SHELL_ONLY
       ? false
       : Boolean(

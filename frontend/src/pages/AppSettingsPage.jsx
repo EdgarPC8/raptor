@@ -245,6 +245,7 @@ export default function AppSettingsPage() {
         moneyDisplayDecimals: Number(settings.moneyDisplayDecimals ?? 2),
         moneyRoundingMode: settings.moneyRoundingMode || "up",
         ordersAllowDeliverStockAdjust: Boolean(settings.ordersAllowDeliverStockAdjust),
+        financeAllowAdminCorrections: settings.financeAllowAdminCorrections !== false,
         suggestOpenPackOnPosShortage: Boolean(settings.suggestOpenPackOnPosShortage),
         cajaAllowCreateProductFromSelect: Boolean(settings.cajaAllowCreateProductFromSelect),
         cajaAllowCreateProductFromScan: Boolean(settings.cajaAllowCreateProductFromScan),
@@ -910,6 +911,23 @@ export default function AppSettingsPage() {
                       />
                     }
                     label={form.showProductCostInSelect ? "Activado" : "Desactivado"}
+                  />
+                }
+              />
+              <SettingsRow
+                label="Correcciones financieras (Admin)"
+                description="Permite a Administrador anular cobros/pagos y eliminar pedidos borrando ingresos/gastos vinculados en Finanzas. Programador siempre puede."
+                control={
+                  <FormControlLabel
+                    sx={{ m: 0 }}
+                    control={
+                      <Switch
+                        size="small"
+                        checked={form.financeAllowAdminCorrections !== false}
+                        onChange={onToggle("financeAllowAdminCorrections")}
+                      />
+                    }
+                    label={form.financeAllowAdminCorrections !== false ? "Activado" : "Desactivado"}
                   />
                 }
               />

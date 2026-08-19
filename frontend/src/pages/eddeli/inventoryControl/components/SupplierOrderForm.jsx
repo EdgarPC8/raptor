@@ -1231,6 +1231,7 @@ function SupplierOrderForm(
       if (orderId && settle.receive && !datos?.receivedAt) {
         try {
           await markSupplierOrderReceivedRequest(orderId, {
+            receivedAt: payload.date,
             ...(receiveStoreId ? { storeId: Number(receiveStoreId) } : {}),
           });
         } catch (err) {
@@ -1247,6 +1248,7 @@ function SupplierOrderForm(
         try {
           await markSupplierOrderPaidRequest(orderId, {
             paymentMethod: settle.payMethod || "efectivo",
+            paidAt: payload.date,
           });
         } catch (err) {
           toast({

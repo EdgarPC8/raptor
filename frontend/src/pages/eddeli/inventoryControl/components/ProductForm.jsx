@@ -491,7 +491,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
       if (datos.categoryId) setValue("categoryId", datos.categoryId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isEditing, datos?.id, datos?.name]);
 
   useBarcodeScanner({
     enabled: usbScanMode,

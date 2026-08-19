@@ -37,6 +37,7 @@ import { getSupplierProductCodesRequest } from "../../../../api/ordersRequest.js
 import {
   createProduct,
   getUnits,
+  updateProduct,
 } from "../../../../api/inventoryControlRequest.js";
 import {
   buildSupplierCodeMap,
@@ -105,6 +106,49 @@ function buildCreateFormData(seed, unitId) {
   fd.append("packageTiers", "[]");
   fd.append("customFileName", seed.name || "producto");
   return fd;
+}
+
+/** FormData para actualizar producto existente (p. ej. renombrar desde XML). */
+function buildProductUpdateFormData(product, overrides = {}) {
+  const merged = { ...product, ...overrides };
+  const fd = new FormData();
+  fd.append("subfolder", mediaStoragePath("products"));
+  fd.append("name", String(merged.name || "").trim());
+  fd.append("type", merged.type || "raw");
+  fd.append("unitId", String(merged.unitId || ""));
+  if (merged.desc) fd.append("desc", String(merged.desc));
+  if (merged.categoryId) fd.append("categoryId", String(merged.categoryId));
+  fd.append("price", String(Number(merged.price) || 0));
+  fd.append("supplierPrice", String(Number(merged.supplierPrice) || 0));
+  fd.append("distributorPrice", String(Number(merged.distributorPrice) || 0));
+  fd.append("netWeight", String(Number(merged.netWeight) || 0));
+  fd.append("minStock", String(Number(merged.minStock) || 0));
+  fd.append("stock", String(Number(merged.stock) || 0));
+  fd.append("standardWeightGrams", String(Number(merged.standardWeightGrams) || 0));
+  fd.append("taxRate", String(Number(merged.taxRate) || 0));
+  fd.append(
+    "wholesaleRules",
+    JSON.stringify(
+      Array.isArray(merged.wholesaleRules) ? merged.wholesaleRules : [],
+    ),
+  );
+  fd.append(
+    "packageTiers",
+    JSON.stringify(Array.isArray(merged.packageTiers) ? merged.packageTiers : []),
+  );
+  fd.append("customFileName", merged.name || "producto");
+  const barcode = String(merged.barcode || "").trim();
+  fd.append("barcode", barcode);
+  return fd;
+}
+
+function unwrapSavedProduct(saved) {
+  if (!saved) return null;
+  if (saved.product?.id) return saved.product;
+  if (saved.id) return saved;
+  if (saved.data?.product?.id) return saved.data.product;
+  if (saved.data?.id) return saved.data;
+  return null;
 }
 
 /** Compara proveedor del sistema vs datos del XML → campos a enriquecer/actualizar. */
@@ -221,6 +265,8 @@ export default function SupplierInvoiceXmlImportDialog({
   const [productFormMode, setProductFormMode] = useState("create"); // create | edit
   const [editProductDatos, setEditProductDatos] = useState(null);
   const [renamePrompt, setRenamePrompt] = useState(null); // { row, product, xmlName }
+  const [renamingProduct, setRenamingProduct] = useState(false);
+  const [renameError, setRenameError] = useState("");
   const [bulkError, setBulkError] = useState("");
   const [supplierFormOpen, setSupplierFormOpen] = useState(false);
   const [supplierFormSeed, setSupplierFormSeed] = useState(null);
@@ -471,8 +517,49 @@ export default function SupplierInvoiceXmlImportDialog({
     setRenamePrompt(null);
   };
 
+  const syncRowWithProduct = useCallback((rowKey, product) => {
+    if (!product?.id) return;
+    setRows((prev) =>
+      prev.map((r) =>
+        r.key === rowKey || Number(r.productId) === Number(product.id)
+          ? {
+              ...r,
+              productId: String(product.id),
+              matchedName: product.name || r.matchedName || "",
+              include: true,
+              matchSource: r.matchSource === "none" ? "manual" : r.matchSource,
+            }
+          : r,
+      ),
+    );
+  }, []);
+
+  const applyXmlNameToProduct = async () => {
+    if (!renamePrompt) return;
+    const { row, product, xmlName } = renamePrompt;
+    const nextName = String(xmlName || "").trim().slice(0, 150);
+    if (!nextName || !product?.id) return;
+
+    setRenamingProduct(true);
+    setRenameError("");
+    try {
+      const fd = buildProductUpdateFormData(product, { name: nextName });
+      const { data } = await updateProduct(product.id, fd);
+      const updated = unwrapSavedProduct(data) || { ...product, name: nextName };
+      await handleProductCreated(updated);
+      syncRowWithProduct(row.key, updated);
+      setRenamePrompt(null);
+    } catch (err) {
+      setRenameError(
+        err?.response?.data?.message || err?.message || "No se pudo actualizar el nombre",
+      );
+    } finally {
+      setRenamingProduct(false);
+    }
+  };
+
   const handleCreateOneSaved = async (saved) => {
-    const product = saved?.data || saved;
+    const product = unwrapSavedProduct(saved);
     const rowKey = createOneRowKey;
     const wasEdit = productFormMode === "edit";
     const supplierCode = createOneSeed?.supplierCode || "";
@@ -480,19 +567,7 @@ export default function SupplierInvoiceXmlImportDialog({
     if (!product?.id) return;
     await handleProductCreated(product);
     if (wasEdit) {
-      setRows((prev) =>
-        prev.map((r) =>
-          r.key === rowKey || Number(r.productId) === Number(product.id)
-            ? {
-                ...r,
-                productId: String(product.id),
-                matchedName: product.name || r.matchedName || "",
-                include: true,
-                matchSource: r.matchSource === "none" ? "manual" : r.matchSource,
-              }
-            : r,
-        ),
-      );
+      syncRowWithProduct(rowKey, product);
     } else {
       assignProductToRow(rowKey, product);
       assignProductToMatchingMissing(product, supplierCode);
@@ -899,16 +974,19 @@ export default function SupplierInvoiceXmlImportDialog({
                               disabled={creatingAll}
                               onChange={(val) =>
                                 setRows((prev) =>
-                                  prev.map((r) =>
-                                    r.key === row.key
-                                      ? {
-                                          ...r,
-                                          productId: val ? String(val) : "",
-                                          include: val ? true : r.include,
-                                          matchSource: val ? "manual" : "none",
-                                        }
-                                      : r,
-                                  ),
+                                  prev.map((r) => {
+                                    if (r.key !== row.key) return r;
+                                    const picked = (products || []).find(
+                                      (p) => String(p.id) === String(val),
+                                    );
+                                    return {
+                                      ...r,
+                                      productId: val ? String(val) : "",
+                                      matchedName: picked?.name || "",
+                                      include: val ? true : r.include,
+                                      matchSource: val ? "manual" : "none",
+                                    };
+                                  }),
                                 )
                               }
                               placeholder="Buscar producto…"
@@ -1012,14 +1090,20 @@ export default function SupplierInvoiceXmlImportDialog({
           <Typography variant="body1" fontWeight={700} color="primary.main">
             {renamePrompt?.xmlName || "—"}
           </Typography>
+          {renameError ? (
+            <Alert severity="error" sx={{ mt: 1.5, py: 0.5 }}>
+              {renameError}
+            </Alert>
+          ) : null}
         </DialogContent>
         <DialogActions sx={{ px: 2, py: 1.25, gap: 1, flexWrap: "wrap" }}>
-          <Button color="inherit" onClick={() => setRenamePrompt(null)}>
+          <Button color="inherit" onClick={() => setRenamePrompt(null)} disabled={renamingProduct}>
             Cancelar
           </Button>
           <Box sx={{ flex: 1 }} />
           <Button
             variant="outlined"
+            disabled={renamingProduct}
             onClick={() => {
               if (!renamePrompt) return;
               startEditLinked(renamePrompt.row, renamePrompt.product, {
@@ -1031,12 +1115,9 @@ export default function SupplierInvoiceXmlImportDialog({
           </Button>
           <Button
             variant="contained"
-            onClick={() => {
-              if (!renamePrompt) return;
-              startEditLinked(renamePrompt.row, renamePrompt.product, {
-                useXmlName: true,
-              });
-            }}
+            disabled={renamingProduct}
+            onClick={() => void applyXmlNameToProduct()}
+            startIcon={renamingProduct ? <CircularProgress size={16} color="inherit" /> : null}
           >
             Sí, usar nombre del XML
           </Button>
@@ -1087,7 +1168,7 @@ export default function SupplierInvoiceXmlImportDialog({
             <ProductForm
               key={
                 productFormMode === "edit"
-                  ? `xml-edit-${editProductDatos?.id || "x"}`
+                  ? `xml-edit-${editProductDatos?.id || "x"}-${editProductDatos?.name || ""}`
                   : `xml-create-${createOneRowKey || "x"}`
               }
               isEditing={productFormMode === "edit"}

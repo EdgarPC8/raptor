@@ -31,12 +31,13 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import TodayIcon from '@mui/icons-material/Today';
 import TuneIcon from '@mui/icons-material/Tune';
 import SearchIcon from '@mui/icons-material/Search';
-import ClearIcon from '@mui/icons-material/Clear';
+import UndoIcon from '@mui/icons-material/Undo';
 
 import {
   markItemAsDeliveredRequest,
   updateOrderItemRequest,
   deleteOrder,
+  unmarkOrderAsPaidRequest,
   addOrderItemToOrderRequest,
 } from '../../../../api/ordersRequest';
 import {
@@ -494,6 +495,9 @@ export default forwardRef(function OrderCalendarView({
   };
 
   const canManageOrders = ['Administrador', 'Programador'].includes(user?.loginRol);
+  const canFinanceCorrections =
+    user?.loginRol === 'Programador' ||
+    (canManageOrders && activeApp?.financeAllowAdminCorrections !== false);
   /** Ajuste de stock con movimiento `ajuste`: solo Programador y Administrador */
   const canAdjustStock = canManageOrders;
   /** Config: Autocompletar stock (caja + entrega de pedidos). Solo Admin/Programador. */
@@ -1003,6 +1007,13 @@ export default forwardRef(function OrderCalendarView({
     });
   };
 
+  const handleUnmarkOrderPaid = async (order) => {
+    if (!order?.id || !canFinanceCorrections) return;
+    await runMutation(unmarkOrderAsPaidRequest(order.id), async () => {
+      await onReload?.();
+    });
+  };
+
   const handleAddOrderLine = async (orderId) => {
     const d = addLineDraft[orderId] || {};
     const productId = Number(d.productId);
@@ -1175,7 +1186,8 @@ export default forwardRef(function OrderCalendarView({
         onClickAccept={confirmDeleteOrder}
       >
         ¿Está seguro de eliminar la orden
-        {orderToDelete ? ` #${orderToDelete.id}` : ''}? Esta acción no se puede deshacer.
+        {orderToDelete ? ` #${orderToDelete.id}` : ''}? También se eliminarán ingresos o abonos
+        vinculados en Finanzas. Esta acción no se puede deshacer.
       </SimpleDialog>
 
       <Stack
@@ -1842,6 +1854,22 @@ export default forwardRef(function OrderCalendarView({
                                   aria-label="Editar pedido"
                                 >
                                   <EditNoteIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {canFinanceCorrections && !hasUnpaid && (
+                              <Tooltip title="Anular cobro (elimina ingreso en Finanzas)">
+                                <IconButton
+                                  size="small"
+                                  color="warning"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleUnmarkOrderPaid(orderWithItems);
+                                  }}
+                                  onFocus={(e) => e.stopPropagation()}
+                                  aria-label="Anular cobro"
+                                >
+                                  <UndoIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
                             )}

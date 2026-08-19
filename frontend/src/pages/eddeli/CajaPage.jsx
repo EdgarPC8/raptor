@@ -852,7 +852,7 @@ export default function CajaPage() {
         taxRate: Number(product.taxRate ?? 15),
       };
       const rest = prev.filter((row) => cartRowKey(row) !== key);
-      return [...rest, line];
+      return [line, ...rest];
     });
   };
 
@@ -860,12 +860,12 @@ export default function CajaPage() {
     const mixGroupId = newMixGroupId();
     const mixGroupLabel = label || getTierGroupLabel(tierGroup);
     setCart((prev) => {
-      const next = [...prev];
+      const newLines = [];
       for (const { product, quantity } of lines) {
         const id = Number(product.id);
         const qty = Math.max(1, Math.floor(Number(quantity) || 1));
         const pricing = resolveEddeliLinePricing(product, qty, effectiveTierGroups);
-        next.push({
+        newLines.push({
           productId: id,
           name: product.name,
           quantity: qty,
@@ -881,7 +881,7 @@ export default function CajaPage() {
           tierGroupId: tierGroup?.id,
         });
       }
-      return next;
+      return [...newLines, ...prev];
     });
   };
 

@@ -28,12 +28,14 @@ import PaymentsIcon from "@mui/icons-material/Payments";
 import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
 import EditCalendarIcon from "@mui/icons-material/EditCalendar";
 import EditIcon from "@mui/icons-material/Edit";
+import UndoIcon from "@mui/icons-material/Undo";
 import CloseIcon from "@mui/icons-material/Close";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import {
   deleteSupplierOrderRequest,
   markSupplierOrderReceivedRequest,
   paySupplierOrderRequest,
+  unmarkSupplierOrderPaidRequest,
   updateSupplierOrderRequest,
 } from "../../../../api/ordersRequest";
 import SimpleDialog from "../../../../components/Dialogs/SimpleDialog";
@@ -154,6 +156,9 @@ export default function SupplierOrderAccordion({
   const { activeApp } = useAppSettings();
   const multiStockEnabled = activeApp?.multiStockEnabled !== false;
   const isProgramador = user?.loginRol === "Programador";
+  const canFinanceCorrections =
+    isProgramador ||
+    (canManage && activeApp?.financeAllowAdminCorrections !== false);
   const [openDelete, setOpenDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dateDialogOpen, setDateDialogOpen] = useState(false);
@@ -397,6 +402,19 @@ export default function SupplierOrderAccordion({
     }
   };
 
+  const handleUnmarkPaid = async () => {
+    if (!canFinanceCorrections || !order?.paidAt) return;
+    setBusy(true);
+    try {
+      await toast({ promise: unmarkSupplierOrderPaidRequest(order.id) });
+      await onReload?.();
+    } catch {
+      /* toast */
+    } finally {
+      setBusy(false);
+    }
+  };
+
 
   return (
     <>
@@ -407,6 +425,7 @@ export default function SupplierOrderAccordion({
         onClickAccept={confirmDelete}
       >
         ¿Eliminar el pedido #{order.id} a {order.ERP_supplier?.name || "proveedor"}?
+        También se eliminarán gastos y abonos vinculados en Finanzas.
       </SimpleDialog>
 
       <Dialog
@@ -697,6 +716,25 @@ export default function SupplierOrderAccordion({
                   </span>
                 </Tooltip>
               )}
+              {canFinanceCorrections && (order.paidAt || paid > 0.009) && (
+                <Tooltip title="Anular pago (elimina gasto en Finanzas)">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="warning"
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleUnmarkPaid();
+                      }}
+                      onFocus={(e) => e.stopPropagation()}
+                      aria-label="Anular pago"
+                    >
+                      <UndoIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )}
               {canOpenEditModal && (
                 <Tooltip title="Editar pedido a proveedor">
                   <IconButton
@@ -727,8 +765,8 @@ export default function SupplierOrderAccordion({
                   </IconButton>
                 </Tooltip>
               )}
-              {canManage && !order.receivedAt && (
-                <Tooltip title="Eliminar">
+              {canFinanceCorrections && (
+                <Tooltip title="Eliminar pedido">
                   <IconButton
                     size="small"
                     onClick={(e) => {
