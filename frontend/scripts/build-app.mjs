@@ -24,6 +24,8 @@ import {
   resolveApiMode,
 } from "./resolve-api-mode.mjs";
 
+const PRODUCTION_ORIGIN = "https://aplicaciones.marianosamaniego.edu.ec";
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const mode = process.argv[2];
 
@@ -50,6 +52,7 @@ function commandBuildOverrides(appMode) {
   return {
     VITE_SUBSCRIPTIONS_ENABLED: "true",
     VITE_API_MODE: "production",
+    VITE_API_ORIGIN: PRODUCTION_ORIGIN,
   };
 }
 
