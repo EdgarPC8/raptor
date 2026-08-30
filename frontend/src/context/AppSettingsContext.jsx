@@ -145,6 +145,12 @@ function toActiveApp(settings, { offline = false } = {}) {
           settings?.cajaSuggestUpdateProductPrice ??
             resolved.cajaSuggestUpdateProductPrice,
         ),
+    cajaAllowPercentDiscount: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.cajaAllowPercentDiscount ??
+            resolved.cajaAllowPercentDiscount,
+        ),
     notificationsToastGreeting: SHELL_ONLY
       ? false
       : Boolean(

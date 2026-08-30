@@ -1,0 +1,163 @@
+{
+  "canvas": {
+    "width": 496,
+    "height": 701
+  },
+  "format": "custom",
+  "meta": {
+    "name": "Etiqueta unitaria EdDeli (molde)",
+    "templateKind": "mixto",
+    "requiresProduct": true,
+    "backgroundMode": "color"
+  },
+  "groups": [
+    {
+      "id": "group_etiqueta",
+      "x": 0,
+      "y": 0,
+      "visible": true,
+      "locked": false
+    }
+  ],
+  "layers": [
+    {
+      "id": "label_bg",
+      "groupId": "group_etiqueta",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FFF9EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "logo_brand",
+      "groupId": "group_etiqueta",
+      "type": "image",
+      "x": 48,
+      "y": 10,
+      "w": 400,
+      "h": 175,
+      "zIndex": 10,
+      "props": {
+        "src": "diseno-promocional/capas/etiqueta_logo_eddeli.png",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null,
+      "name": "Logo EdDeli",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "product_image",
+      "groupId": "group_etiqueta",
+      "type": "image",
+      "x": 108,
+      "y": 195,
+      "w": 280,
+      "h": 280,
+      "zIndex": 15,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 8
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "sep_line_l",
+      "groupId": "group_etiqueta",
+      "type": "shape",
+      "x": 20,
+      "y": 478,
+      "w": 100,
+      "h": 3,
+      "zIndex": 18,
+      "props": {
+        "fill": "#D4A017",
+        "borderRadius": 0
+      },
+      "name": "Línea separador izq",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "sep_line_r",
+      "groupId": "group_etiqueta",
+      "type": "shape",
+      "x": 376,
+      "y": 478,
+      "w": 100,
+      "h": 3,
+      "zIndex": 18,
+      "props": {
+        "fill": "#D4A017",
+        "borderRadius": 0
+      },
+      "name": "Línea separador der",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "product_name",
+      "groupId": "group_etiqueta",
+      "type": "text",
+      "x": 16,
+      "y": 485,
+      "w": 464,
+      "h": 48,
+      "zIndex": 20,
+      "props": {
+        "text": "0",
+        "fontFamily": "Montserrat, Inter, system-ui, Arial",
+        "fontSize": 26,
+        "fontWeight": 900,
+        "color": "#4A301D",
+        "align": "center",
+        "verticalAlign": "center",
+        "maxLines": 1,
+        "lineHeight": 1.1
+      },
+      "bind": {
+        "textFrom": "product.id"
+      },
+      "name": "ID producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "footer_contact",
+      "groupId": "group_etiqueta",
+      "type": "image",
+      "x": 20,
+      "y": 540,
+      "w": 456,
+      "h": 155,
+      "zIndex": 25,
+      "props": {
+        "src": "diseno-promocional/capas/etiqueta_footer_eddeli.png",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null,
+      "name": "Teléfono y redes",
+      "visible": true,
+      "locked": false
+    }
+  ],
+  "data": {}
+}

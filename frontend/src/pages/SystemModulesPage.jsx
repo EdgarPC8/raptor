@@ -12,14 +12,12 @@ import ScheduleIcon from "@mui/icons-material/Schedule";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
-import FactCheckIcon from "@mui/icons-material/FactCheck";
 import SettingsApplicationsIcon from "@mui/icons-material/SettingsApplications";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import PeopleIcon from "@mui/icons-material/People";
 import HomeIcon from "@mui/icons-material/Home";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
-import StorefrontIcon from "@mui/icons-material/Storefront";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import GroupsIcon from "@mui/icons-material/Groups";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
@@ -46,12 +44,10 @@ const FILTERS = [
 const GROUP_ICON = {
   acceso: HomeIcon,
   operacion: PointOfSaleIcon,
-  "comprobantes-sri": FactCheckIcon,
   ventas: PeopleIcon,
   inventario: Inventory2Icon,
   finanzas: AccountBalanceWalletIcon,
   produccion: PrecisionManufacturingIcon,
-  canal: StorefrontIcon,
   documentos: DescriptionIcon,
   logistica: LocalShippingIcon,
   comunidad: GroupsIcon,

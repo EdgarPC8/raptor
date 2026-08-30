@@ -56,6 +56,23 @@ function isBlockedStagingPath(name) {
   return BLOCKED_BACKUP_JSON.test(name);
 }
 
+function unstageBlockedPaths(repoDir, label, logTag) {
+  const tag = logTag || label;
+  const staged = runOut("git diff --cached --name-only", repoDir);
+  const blocked = staged
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter(isBlockedStagingPath);
+  if (!blocked.length) return;
+  console.warn(
+    `[${tag}] Omitiendo del commit (sensibles): ${blocked.join(", ")}`,
+  );
+  for (const file of blocked) {
+    run(`git restore --staged -- ${JSON.stringify(file)}`, repoDir);
+  }
+}
+
 function assertNoBlockedStaging(repoDir, label) {
   const staged = runOut("git diff --cached --name-only", repoDir);
   const blocked = staged
@@ -79,6 +96,7 @@ export function commitAndPush(repoDir, label, message, logTag) {
     console.log(`\n[${tag}] Cambios en ${label}:`);
     console.log(porcelain);
     run("git add -A", repoDir);
+    unstageBlockedPaths(repoDir, label, tag);
     assertNoBlockedStaging(repoDir, label);
     const staged = runOut("git diff --cached --name-only", repoDir);
     if (!staged) {

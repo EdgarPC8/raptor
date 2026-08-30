@@ -38,6 +38,10 @@ import {
   dissolveSupplierPackRequest,
   paySupplierPackRequest,
 } from "../../../../api/ordersRequest";
+import {
+  fetchSupplierOrderForEdit,
+  mergeSupplierOrderForEdit,
+} from "./collectionsOrderEditHelpers.js";
 import { useAuth } from "../../../../context/AuthContext";
 import {
   money,
@@ -440,30 +444,28 @@ export default function SupplierPayablesWorkbench() {
     }
   };
 
-  const openEditOrder = (ord) => {
-    if (!ord?.id) return;
-    const full = orders.find((o) => Number(o.id) === Number(ord.id)) || ord;
-    setOrderToEdit({
-      id: full.id,
-      supplierId: full.supplierId,
-      date: full.date,
-      notes: full.notes || "",
-      status: full.status,
-      receivedAt: full.receivedAt || null,
-      paidAt: full.paidAt || null,
-      ERP_supplier_order_items: (full.items || []).map((it) => ({
-        id: it.id,
-        productId: it.productId,
-        quantity: it.quantity,
-        unitPrice: it.unitPrice,
-        taxRate: it.taxRate ?? 0,
-        ERP_inventory_product: {
-          id: it.productId,
-          name: it.product || "(sin nombre)",
-        },
-      })),
-    });
-    setEditOrderOpen(true);
+  const openEditOrder = async (ord) => {
+    const id = Number(ord?.id ?? ord);
+    if (!Number.isFinite(id)) return;
+    const stub = orders.find((o) => Number(o.id) === id) || ord;
+    try {
+      setLoading(true);
+      const fetched = await fetchSupplierOrderForEdit(id, stub?.date);
+      const mapped = mergeSupplierOrderForEdit(fetched, stub);
+      if (!mapped) {
+        setUiMsg({ type: "error", text: "No se pudo cargar el pedido para editar" });
+        return;
+      }
+      setOrderToEdit(mapped);
+      setEditOrderOpen(true);
+    } catch (err) {
+      setUiMsg({
+        type: "error",
+        text: err?.response?.data?.message || "Error al abrir el pedido",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const closeEditOrder = () => {

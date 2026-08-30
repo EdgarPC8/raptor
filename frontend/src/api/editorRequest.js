@@ -97,6 +97,19 @@ export const deleteTemplateLayer = (templateId, layerKey) =>
     }
   );
 
+/** PSD Photopea — GET binario */
+export const fetchTemplatePsd = (templateId) =>
+  axios.get(`/editor/templates/${templateId}/psd`, {
+    responseType: "arraybuffer",
+    headers: { Authorization: jwt() },
+  });
 
-
+/** PSD Photopea — PUT binario */
+export const saveTemplatePsd = (templateId, arrayBuffer) =>
+  axios.put(`/editor/templates/${templateId}/psd`, arrayBuffer, {
+    headers: {
+      Authorization: jwt(),
+      "Content-Type": "application/octet-stream",
+    },
+  });
 

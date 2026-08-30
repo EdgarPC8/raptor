@@ -59,14 +59,14 @@ export const SYSTEM_PLANS = [
   {
     id: "pro",
     name: "Plan Pro",
-    tagline: "Canal digital, publicidad y preparación SRI.",
+    tagline: "Marketing, sucursales y facturación SRI bajo Comprobantes POS.",
     priceLabel: "Pro",
     priceHint: "Negocio completo",
     highlighted: false,
     features: [
       "Todo del Plan Medio",
-      "Comprobantes electrónicos SRI",
-      "Catálogo web y puntos de venta",
+      "Comprobantes POS (caja + SRI)",
+      "Catálogo web y marketing",
       "Publicidad en pantallas TV",
       "Diseño promocional",
     ],

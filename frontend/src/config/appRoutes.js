@@ -210,8 +210,8 @@ export const LEGACY_ROUTE_REDIRECTS = [
   ["/comandos", APP_ROUTES.developer.commands],
   // Diseño promocional
   ["/editor", APP_ROUTES.promoDesign.editor],
-  ["/editorDefault", APP_ROUTES.promoDesign.editor],
-  ["/publicity_edit", APP_ROUTES.promoDesign.editor],
+  ["/editorDefault", APP_ROUTES.promoDesign.preview],
+  ["/publicity_edit", APP_ROUTES.promoDesign.templates],
   ["/templates", APP_ROUTES.promoDesign.templates],
   // Público
   ["/public/catalog", APP_ROUTES.public.catalog],

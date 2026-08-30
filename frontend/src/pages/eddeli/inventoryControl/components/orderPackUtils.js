@@ -41,9 +41,8 @@ export function hydratePacksAndLots(rawItems, opts = {}) {
         expiresAt: "",
         manufacturedAt: "",
         totalPrice: "",
-        // Al editar, una paca que ya tiene productos comienza compacta.
-        // Su estado puede cambiarse durante la edición desde el tablero.
-        expanded: false,
+        // Al editar desde cobranzas/pedidos, abrir pacas para ver el contenido de una.
+        expanded: true,
       };
       packByKey.set(packKey, pack);
       packs.push(pack);

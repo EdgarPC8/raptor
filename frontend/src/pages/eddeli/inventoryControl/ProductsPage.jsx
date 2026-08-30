@@ -312,7 +312,7 @@ function ProductsPage() {
               size="small"
               variant="outlined"
               onClick={() => openProductStock(row)}
-              title="Ver distribución y traspasar entre locales"
+              title="Ver por local, editar stock o traspasar"
             >
               {Number(row.stock || 0)}
             </Button>
@@ -565,6 +565,7 @@ function ProductsPage() {
             categoryFilter={categoryFilter}
             onEdit={openEditProduct}
             onReload={fecthData}
+            onOpenStock={openProductStock}
             loading={loading}
           />
         </Paper>

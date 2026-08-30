@@ -8,8 +8,7 @@
  * - Vista rápida: muestra doc.data (JSON), textos e imágenes con su estado de bind
  * 
  * Se usa en:
- * - ProductTemplateStudio (siempre visible)
- * - EditorPage (opcional, con toggle)
+ * - ProductTemplateStudio (Vista con productos)
  */
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
@@ -31,8 +30,31 @@ import { getCatalogTemplateItems } from "../../../../api/inventoryControlRequest
 import { pathImg } from "../../../../api/axios";
 import { resolveLayer } from "../bind/resolveTemplate";
 import { normalizeKey, resolveValue } from "../bind/resolveMedia";
+import { code128SvgMarkup } from "../../../../utils/code128Barcode.js";
 
-export default function ProductSelector({ autoSelectFirst = false }) {
+function buildCatalogComputed(catalogItem = {}, product = {}) {
+  const price =
+    catalogItem.displayPrice ??
+    catalogItem.priceOverride ??
+    product.price ??
+    null;
+  const priceText =
+    price != null && !Number.isNaN(Number(price)) ? `$${Number(price).toFixed(2)}` : "";
+
+  const barcodeRaw = String(product.barcode || product.sku || "").trim();
+  const barcodeImageUrl = barcodeRaw
+    ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+        code128SvgMarkup(barcodeRaw, { height: 80, maxWidth: 420 })
+      )}`
+    : "";
+
+  return {
+    priceText,
+    barcodeImageUrl,
+  };
+}
+
+export default function ProductSelector({ autoSelectFirst = false, compact = false }) {
   const { state, dispatch } = useEditor();
 
   const [loading, setLoading] = useState(false);
@@ -60,6 +82,7 @@ export default function ProductSelector({ autoSelectFirst = false }) {
           ...catalogItem,
           product,
           imageUrl: imageUrl || undefined,
+          computed: buildCatalogComputed(catalogItem, product),
         },
       });
     },
@@ -197,6 +220,95 @@ export default function ProductSelector({ autoSelectFirst = false }) {
     return { k: rawKey, value: v, state: "ok" };
   };
 
+  const catalogPanel = (
+    <Box sx={{ p: 2 }}>
+      <Typography sx={{ fontWeight: 900, color: "#fff", mb: 1 }}>
+        {compact ? "Productos" : "Catálogo"}
+      </Typography>
+
+      <TextField
+        size="small"
+        label="Buscar producto"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        fullWidth
+      />
+
+      <Box sx={{ height: 10 }} />
+
+      <FormControl size="small" fullWidth>
+        <InputLabel id="catalog-item-select">Producto</InputLabel>
+        <Select
+          labelId="catalog-item-select"
+          label="Producto"
+          value={selectedId}
+          onChange={(e) => handleSelect(e.target.value)}
+        >
+          {loading && (
+            <MenuItem value="">
+              <Stack direction="row" spacing={1} alignItems="center">
+                <CircularProgress size={16} />
+                <span>Cargando...</span>
+              </Stack>
+            </MenuItem>
+          )}
+
+          {!loading && filtered.length === 0 && <MenuItem value="">No hay productos</MenuItem>}
+
+          {!loading &&
+            filtered.map((it) => {
+              const name = it?.displayName || it?.title || it?.product?.name || `Item #${it.id}`;
+              const sec = it.section ? `[${it.section}] ` : "";
+              const price =
+                typeof it.displayPrice !== "undefined"
+                  ? ` — $${it.displayPrice}`
+                  : typeof it.price !== "undefined"
+                  ? ` — $${it.price}`
+                  : "";
+              return (
+                <MenuItem key={it.id} value={it.id}>
+                  {sec}
+                  {name}
+                  {price}
+                </MenuItem>
+              );
+            })}
+        </Select>
+      </FormControl>
+
+      {compact ? (
+        <Box sx={{ mt: 1.5, color: "rgba(255,255,255,0.65)", fontSize: 12 }}>
+          Solo cambias qué producto se muestra. Para editar la plantilla usa el Editor de plantilla.
+        </Box>
+      ) : (
+        <>
+          <Box sx={{ mt: 1, color: "rgba(255,255,255,0.7)", fontSize: 12 }}>
+            Selecciona un producto para ver el preview en el canvas.
+          </Box>
+          <Box sx={{ mt: 1, color: "rgba(255,255,255,0.5)", fontSize: 11 }}>
+            base pathImg: <span style={{ wordBreak: "break-all" }}>{String(pathImg)}</span>
+          </Box>
+        </>
+      )}
+    </Box>
+  );
+
+  if (compact) {
+    return (
+      <Box
+        sx={{
+          minHeight: 0,
+          overflow: "auto",
+          borderRight: "1px solid rgba(255,255,255,0.08)",
+          background: "rgba(0,0,0,0.35)",
+          height: "100%",
+        }}
+      >
+        {catalogPanel}
+      </Box>
+    );
+  }
+
   return (
     <Box
       sx={{
@@ -209,72 +321,11 @@ export default function ProductSelector({ autoSelectFirst = false }) {
         height: "100%",
       }}
     >
-      {/* ===================== SELECTOR DE PRODUCTOS ===================== */}
-      <Box sx={{ p: 2 }}>
-        <Typography sx={{ fontWeight: 900, color: "#fff", mb: 1 }}>Catálogo</Typography>
-
-        <TextField
-          size="small"
-          label="Buscar (nombre, badge, sección)"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          fullWidth
-        />
-
-        <Box sx={{ height: 10 }} />
-
-        <FormControl size="small" fullWidth>
-          <InputLabel id="catalog-item-select">Seleccionar item</InputLabel>
-          <Select
-            labelId="catalog-item-select"
-            label="Seleccionar item"
-            value={selectedId}
-            onChange={(e) => handleSelect(e.target.value)}
-          >
-            {loading && (
-              <MenuItem value="">
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <CircularProgress size={16} />
-                  <span>Cargando...</span>
-                </Stack>
-              </MenuItem>
-            )}
-
-            {!loading && filtered.length === 0 && <MenuItem value="">No hay items</MenuItem>}
-
-            {!loading &&
-              filtered.map((it) => {
-                const name = it?.displayName || it?.title || it?.product?.name || `Item #${it.id}`;
-                const sec = it.section ? `[${it.section}] ` : "";
-                const price =
-                  typeof it.displayPrice !== "undefined"
-                    ? ` — $${it.displayPrice}`
-                    : typeof it.price !== "undefined"
-                    ? ` — $${it.price}`
-                    : "";
-                return (
-                  <MenuItem key={it.id} value={it.id}>
-                    {sec}
-                    {name}
-                    {price}
-                  </MenuItem>
-                );
-              })}
-          </Select>
-        </FormControl>
-
-        <Box sx={{ mt: 1, color: "rgba(255,255,255,0.7)", fontSize: 12 }}>
-          Selecciona un producto para ver el preview en el canvas.
-        </Box>
-
-        <Box sx={{ mt: 1, color: "rgba(255,255,255,0.5)", fontSize: 11 }}>
-          base pathImg: <span style={{ wordBreak: "break-all" }}>{String(pathImg)}</span>
-        </Box>
-      </Box>
+      {catalogPanel}
 
       <Divider sx={{ borderColor: "rgba(255,255,255,0.08)" }} />
 
-      {/* ===================== VISTA RÁPIDA DE CAPAS ===================== */}
+      {/* debug panel — solo en modo editor */}
       <Box sx={{ p: 2, overflow: "auto", minHeight: 0, flex: 1 }}>
         <Typography sx={{ fontWeight: 900, color: "#fff", mb: 1 }}>Vista rápida (capas)</Typography>
 

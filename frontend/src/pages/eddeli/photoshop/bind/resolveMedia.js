@@ -44,11 +44,14 @@ export const resolveValue = (docData, rawKey) => {
 export const resolveImageUrl = (value, { base = pathImg, prefix = "" } = {}) => {
   if (!isNonEmptyString(value)) return "";
 
-  const v = String(value);
-
+  const v = String(value).trim();
   if (isAbsoluteUrl(v)) return v;
+
+  const baseClean = String(base).replace(/\/+$/, "");
+  // Ya resuelta bajo base (evita /eddeliapi/img/eddeliapi/img/... al re-renderizar)
+  if (v.startsWith(`${baseClean}/`) || v === baseClean) return v;
 
   if (isNonEmptyString(prefix)) return joinUrl(prefix, v);
 
-  return joinUrl(base, v);
+  return joinUrl(baseClean, v);
 };

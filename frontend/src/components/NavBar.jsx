@@ -59,7 +59,6 @@ import GroupIcon from "@mui/icons-material/Group";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import FactCheckIcon from "@mui/icons-material/FactCheck";
 import ScienceIcon from "@mui/icons-material/Science";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
@@ -68,7 +67,6 @@ import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
 import FactoryIcon from "@mui/icons-material/Factory";
 import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
-import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import BakeryDiningIcon from "@mui/icons-material/BakeryDining";
 import StoreMallDirectoryRoundedIcon from "@mui/icons-material/StoreMallDirectoryRounded";
 import ViewModuleIcon from "@mui/icons-material/ViewModule";
@@ -95,6 +93,8 @@ import CambiarRol from "./CambiarRol.jsx";
 import SimpleDialog from "./Dialogs/SimpleDialog.jsx";
 import { PageSkeleton } from "./ContentSkeleton.jsx";
 import { getUnreadCount } from "../api/notificationsRequest.js";
+import { getNewsRequest } from "../api/newsRequest.js";
+import { countUnseenNews } from "../utils/newsLocalState.js";
 import { useNotificationSocket } from "../hooks/useNotificationSocket.js";
 import {
   notificationToastCategory,
@@ -110,22 +110,13 @@ import {
 } from "../config/sectionMaintenanceAccess.js";
 
 const DRAWER_W = 260;
+/** Ancho del drawer contraído (equiv. theme.spacing(7)). */
+const DRAWER_COLLAPSED_W = 56;
 
-/** Accesos directos (siempre visibles arriba del menú). */
-const MENU_ITEMS = [
-  {
-    name: "Dashboard",
-    link: APP_ROUTES.dashboard,
-    icon: <DashboardIcon />,
-    roles: ["Programador", "Administrador"],
-  },
-  {
-    name: "Notificaciones",
-    link: APP_ROUTES.system.notifications,
-    icon: <NotificationsIcon />,
-    roles: ["Programador", "Administrador", "Empleado"],
-  },
-];
+/** Accesos directos del drawer (Panel y Notificaciones van en la barra superior). */
+const MENU_ITEMS = [];
+
+const PANEL_ROLES = ["Programador", "Administrador"];
 
 /** Módulos agrupados en acordeón. */
 const MENU_GROUPS = [
@@ -161,60 +152,6 @@ const MENU_GROUPS = [
         name: "Supervisión caja",
         link: APP_ROUTES.operation.shiftSupervision,
         icon: <AssessmentIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-    ],
-  },
-  {
-    id: "comprobantes-sri",
-    label: "Comprobantes electrónicos",
-    items: [
-      {
-        name: "Inicio SRI",
-        link: APP_ROUTES.electronicDocs.hub,
-        icon: <FactCheckIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Facturas",
-        link: APP_ROUTES.electronicDocs.invoices,
-        icon: <ReceiptLongIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Notas de venta",
-        link: APP_ROUTES.electronicDocs.salesNotes,
-        icon: <ReceiptIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Notas de crédito",
-        link: APP_ROUTES.electronicDocs.creditNotes,
-        icon: <ReceiptLongIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Retenciones",
-        link: APP_ROUTES.electronicDocs.withholdings,
-        icon: <AccountBalanceWalletIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Guías de remisión",
-        link: APP_ROUTES.electronicDocs.deliveryGuides,
-        icon: <LocalShippingIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Documentos emitidos",
-        link: APP_ROUTES.electronicDocs.issued,
-        icon: <Inventory2Icon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Configuración SRI",
-        link: APP_ROUTES.electronicDocs.sriSettings,
-        icon: <SettingsApplicationsIcon />,
         roles: ["Programador", "Administrador"],
       },
     ],
@@ -296,6 +233,12 @@ const MENU_GROUPS = [
         roles: ["Programador", "Administrador"],
       },
       {
+        name: "Sucursales / locales",
+        link: APP_ROUTES.channel.stores,
+        icon: <StorefrontRoundedIcon />,
+        roles: ["Programador", "Administrador"],
+      },
+      {
         name: "Movimientos",
         link: APP_ROUTES.inventory.movement,
         icon: <CompareArrowsIcon />,
@@ -358,36 +301,6 @@ const MENU_GROUPS = [
     ],
   },
   {
-    id: "canal",
-    label: "Canal digital",
-    items: [
-      {
-        name: "Catálogo config",
-        link: APP_ROUTES.channel.catalog,
-        icon: <ViewModuleIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Sucursales / locales",
-        link: APP_ROUTES.channel.stores,
-        icon: <StorefrontRoundedIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Productos destacados",
-        link: APP_ROUTES.channel.featuredProducts,
-        icon: <StarRoundedIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-      {
-        name: "Grupos comparativos",
-        link: APP_ROUTES.channel.compareGroups,
-        icon: <CompareArrowsIcon />,
-        roles: ["Programador", "Administrador"],
-      },
-    ],
-  },
-  {
     id: "marketing",
     label: "Marketing",
     items: [
@@ -401,6 +314,18 @@ const MENU_GROUPS = [
         name: "Noticias",
         link: APP_ROUTES.marketing.news,
         icon: <NewspaperIcon />,
+        roles: ["Programador", "Administrador"],
+      },
+      {
+        name: "Catálogo config",
+        link: APP_ROUTES.channel.catalog,
+        icon: <ViewModuleIcon />,
+        roles: ["Programador", "Administrador"],
+      },
+      {
+        name: "Grupos comparativos",
+        link: APP_ROUTES.channel.compareGroups,
+        icon: <CompareArrowsIcon />,
         roles: ["Programador", "Administrador"],
       },
       {
@@ -575,6 +500,7 @@ export default function NavBar() {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const isPromoEditor = /\/diseno-promocional\/editor\/\d+/.test(location.pathname);
   const { isAuthenticated, isLoading, isGuest, user, logout, profileImageUser, toast } =
     useAuth();
   const { activeApp } = useAppSettings();
@@ -587,6 +513,7 @@ export default function NavBar() {
   const [notifAnchor, setNotifAnchor] = useState(null);
   const [openChangeRol, setOpenChangeRol] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [newsUnreadCount, setNewsUnreadCount] = useState(0);
 
   const publicNavItems = useMemo(() => {
     return PUBLIC_NAV.filter((item) => {
@@ -608,11 +535,24 @@ export default function NavBar() {
   const showDrawer = isAuthenticated && profileReady;
   const showUserActions = isAuthenticated && profileReady;
   const profileLoading = isAuthenticated && !profileReady;
+  const canSeeNews =
+    showUserActions &&
+    ["Programador", "Administrador"].includes(user?.loginRol);
 
   const displayName =
-    [user?.firstName, user?.firstLastName].filter(Boolean).join(" ") ||
+    [
+      user?.firstName,
+      user?.secondName,
+      user?.firstLastName,
+      user?.secondLastName,
+    ]
+      .filter(Boolean)
+      .join(" ") ||
     user?.username ||
     "";
+
+  const canSeePanel =
+    showUserActions && PANEL_ROLES.includes(user?.loginRol);
 
   const menuItems = useMemo(() => {
     const items = menuItemsForRole(user?.loginRol);
@@ -720,9 +660,32 @@ export default function NavBar() {
     }
   }, [user?.userId, user?.isGuest]);
 
+  const refreshNewsBadge = useCallback(async () => {
+    if (!canSeeNews || isGuest) {
+      setNewsUnreadCount(0);
+      return;
+    }
+    try {
+      const { data } = await getNewsRequest();
+      setNewsUnreadCount(countUnseenNews(Array.isArray(data) ? data : []));
+    } catch {
+      /* ignore */
+    }
+  }, [canSeeNews, isGuest]);
+
   useEffect(() => {
     fetchUnreadCount();
   }, [fetchUnreadCount]);
+
+  useEffect(() => {
+    refreshNewsBadge();
+  }, [refreshNewsBadge, location.pathname]);
+
+  useEffect(() => {
+    const onSeen = () => setNewsUnreadCount(0);
+    window.addEventListener("raptor:news-seen", onSeen);
+    return () => window.removeEventListener("raptor:news-seen", onSeen);
+  }, []);
 
   // Cerrar overlays al cambiar de ruta (evita backdrop MUI huérfano).
   useEffect(() => {
@@ -762,82 +725,135 @@ export default function NavBar() {
       : "/inicio"
     : "/home";
 
+  const brandSrc = activeApp.iconUrl || activeApp.logoUrl || null;
+  const brandTitle = activeApp.alias || activeApp.name || "App";
+  const brandSubtitle = activeApp.description || "";
+
   const drawerContent = (
-    <>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
-          px: 1,
+          flexShrink: 0,
+          px: drawerOpen ? 1.25 : 0.75,
           ...theme.mixins.toolbar,
-          height: "auto",
           minHeight: (theme.mixins.toolbar?.minHeight ?? 64),
-          py: 1,
-          justifyContent: "flex-end",
+          justifyContent: drawerOpen ? "space-between" : "center",
           gap: 0.5,
         }}
       >
         <Box
+          onClick={() => {
+            if (!drawerOpen) setDrawerOpen(true);
+          }}
+          title={!drawerOpen ? brandTitle : undefined}
           sx={{
             display: "flex",
             alignItems: "center",
             gap: 1,
-            flex: 1,
-            px: 1,
             minWidth: 0,
+            flex: drawerOpen ? 1 : "none",
+            cursor: drawerOpen ? "default" : "pointer",
+            borderRadius: 1.5,
+            py: 0.25,
+            px: drawerOpen ? 0 : 0.25,
+            "&:hover": drawerOpen
+              ? undefined
+              : { bgcolor: "action.hover" },
           }}
         >
           <Box
-            component="img"
-            src={activeApp.logoUrl}
-            alt={activeApp.alias}
             sx={{
-              width: 44,
-              height: 44,
-              borderRadius: "50%",
-              objectFit: "cover",
+              width: 36,
+              height: 36,
+              borderRadius: 1.5,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              bgcolor: "transparent",
               flexShrink: 0,
+              overflow: "hidden",
             }}
-          />
-          {drawerOpen && (
-            <Typography
-              variant="subtitle2"
-              fontWeight={700}
-              title={activeApp.alias}
-              sx={{
-                flex: 1,
-                minWidth: 0,
-                lineHeight: 1.2,
-                fontSize:
-                  String(activeApp.alias || "").length > 28
-                    ? "0.7rem"
-                    : String(activeApp.alias || "").length > 18
-                      ? "0.78rem"
-                      : "0.875rem",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-                wordBreak: "break-word",
-                hyphens: "auto",
-              }}
-            >
-              {activeApp.alias}
-            </Typography>
-          )}
+          >
+            {brandSrc ? (
+              <Box
+                component="img"
+                src={brandSrc}
+                alt={brandTitle}
+                sx={{
+                  width: 28,
+                  height: 28,
+                  objectFit: "contain",
+                }}
+              />
+            ) : (
+              <BakeryDiningIcon sx={{ fontSize: 20, color: "text.secondary" }} />
+            )}
+          </Box>
+          {drawerOpen ? (
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography
+                noWrap
+                title={brandTitle}
+                sx={{
+                  display: "block",
+                  fontSize: "0.875rem",
+                  fontWeight: 700,
+                  lineHeight: 1.2,
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {brandTitle}
+              </Typography>
+              {brandSubtitle ? (
+                <Typography
+                  noWrap
+                  title={brandSubtitle}
+                  sx={{
+                    display: "block",
+                    fontSize: "0.625rem",
+                    lineHeight: 1.25,
+                    color: "text.secondary",
+                  }}
+                >
+                  {brandSubtitle}
+                </Typography>
+              ) : null}
+            </Box>
+          ) : null}
         </Box>
-        <IconButton
-          sx={{ flexShrink: 0 }}
-          onClick={() => {
-            setDrawerOpen(false);
-            setExpandedGroupId(null);
-          }}
-        >
-          <ChevronLeftIcon />
-        </IconButton>
+        {drawerOpen ? (
+          <IconButton
+            sx={{ flexShrink: 0 }}
+            onClick={() => {
+              setDrawerOpen(false);
+              setExpandedGroupId(null);
+            }}
+            aria-label="Contraer menú"
+          >
+            <ChevronLeftIcon />
+          </IconButton>
+        ) : null}
       </Box>
-      <Divider />
-      <List sx={{ px: 1, py: 1 }}>
+      <Divider sx={{ flexShrink: 0 }} />
+      <List
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          overflowX: "hidden",
+          px: 1,
+          py: 1,
+        }}
+      >
         {menuItems.map((item) => renderMenuItem(item))}
         {menuGroups.length > 0 && menuItems.length > 0 && (
           <Divider sx={{ my: 1 }} />
@@ -891,7 +907,7 @@ export default function NavBar() {
           ),
         )}
       </List>
-    </>
+    </Box>
   );
 
   return (
@@ -899,6 +915,7 @@ export default function NavBar() {
       sx={{
         display: "flex",
         minHeight: "100vh",
+        ...(isPromoEditor && { height: "100vh", overflow: "hidden" }),
         width: "100%",
         overflowX: "hidden",
       }}
@@ -907,11 +924,16 @@ export default function NavBar() {
         position="fixed"
         sx={{
           zIndex: theme.zIndex.drawer + 1,
-          ...(showDrawer &&
-            drawerOpen && {
-              ml: `${DRAWER_W}px`,
-              width: `calc(100% - ${DRAWER_W}px)`,
+          ...(showDrawer && {
+            ml: drawerOpen ? `${DRAWER_W}px` : `${DRAWER_COLLAPSED_W}px`,
+            width: drawerOpen
+              ? `calc(100% - ${DRAWER_W}px)`
+              : `calc(100% - ${DRAWER_COLLAPSED_W}px)`,
+            transition: theme.transitions.create(["margin", "width"], {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.enteringScreen,
             }),
+          }),
         }}
       >
         <Toolbar>
@@ -921,14 +943,11 @@ export default function NavBar() {
               edge="start"
               onClick={() => setDrawerOpen(true)}
               sx={{ mr: 1 }}
+              aria-label="Expandir menú"
             >
               <MenuIcon />
             </IconButton>
           )}
-
-          <Typography variant="h6" fontWeight={700} noWrap sx={{ mr: 2 }}>
-            {showUserActions ? user?.loginRol : activeApp.alias}
-          </Typography>
 
           <Button
             color="inherit"
@@ -945,6 +964,24 @@ export default function NavBar() {
           >
             Inicio
           </Button>
+
+          {canSeePanel ? (
+            <Button
+              color="inherit"
+              startIcon={<DashboardIcon />}
+              onClick={() => navigate(APP_ROUTES.dashboard)}
+              sx={{
+                textTransform: "none",
+                fontWeight: 600,
+                mr: 1,
+                ...(location.pathname === APP_ROUTES.dashboard && {
+                  bgcolor: "rgba(255,255,255,0.12)",
+                }),
+              }}
+            >
+              Panel
+            </Button>
+          ) : null}
 
           {publicNavItems.map((item) => (
             <Button
@@ -1003,6 +1040,21 @@ export default function NavBar() {
 
           {showUserActions && !isGuest && (
             <>
+              {canSeeNews ? (
+                <Tooltip title="Noticias">
+                  <IconButton
+                    color="inherit"
+                    onClick={() => navigate(APP_ROUTES.marketing.news)}
+                    disabled={location.pathname === APP_ROUTES.marketing.news}
+                    aria-label="Noticias"
+                  >
+                    <Badge badgeContent={newsUnreadCount} color="error">
+                      <NewspaperIcon />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+              ) : null}
+
               <IconButton
                 color="inherit"
                 onClick={(e) => setNotifAnchor(e.currentTarget)}
@@ -1043,12 +1095,41 @@ export default function NavBar() {
 
           {showUserActions && (
             <>
-              <Typography
-                variant="body2"
-                sx={{ mx: 1.5, display: { xs: "none", sm: "block" } }}
+              <Box
+                sx={{
+                  mx: 1.5,
+                  display: { xs: "none", sm: "flex" },
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  minWidth: 0,
+                  maxWidth: 220,
+                  lineHeight: 1.15,
+                }}
               >
-                {displayName}
-              </Typography>
+                <Typography
+                  variant="body2"
+                  noWrap
+                  sx={{ fontWeight: 600, maxWidth: "100%" }}
+                >
+                  {displayName}
+                </Typography>
+                {user?.loginRol ? (
+                  <Typography
+                    variant="caption"
+                    noWrap
+                    sx={{
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.4,
+                      opacity: 0.85,
+                      fontSize: "0.65rem",
+                      maxWidth: "100%",
+                    }}
+                  >
+                    {user.loginRol}
+                  </Typography>
+                ) : null}
+              </Box>
               <IconButton
                 id="user-menu-button"
                 color="inherit"
@@ -1185,12 +1266,19 @@ export default function NavBar() {
           variant="permanent"
           open={drawerOpen}
           sx={{
-            width: drawerOpen ? DRAWER_W : theme.spacing(7),
+            width: drawerOpen ? DRAWER_W : DRAWER_COLLAPSED_W,
             flexShrink: 0,
             "& .MuiDrawer-paper": {
-              width: drawerOpen ? DRAWER_W : theme.spacing(7),
+              width: drawerOpen ? DRAWER_W : DRAWER_COLLAPSED_W,
               boxSizing: "border-box",
-              overflowX: "hidden",
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              transition: theme.transitions.create("width", {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.enteringScreen,
+              }),
             },
           }}
         >
@@ -1202,13 +1290,26 @@ export default function NavBar() {
         component="main"
         sx={{
           flexGrow: 1,
-          pt: 10,
-          px: { xs: 1.5, sm: 2, md: 3 },
-          pb: 3,
           width: "100%",
           minWidth: 0,
-          overflowX: "hidden",
           boxSizing: "border-box",
+          ...(isPromoEditor
+            ? {
+                pt: `${theme.mixins.toolbar?.minHeight ?? 64}px`,
+                px: 0,
+                pb: 0,
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 0,
+                alignSelf: "stretch",
+              }
+            : {
+                pt: 10,
+                px: { xs: 1.5, sm: 2, md: 3 },
+                pb: 3,
+                overflowX: "hidden",
+              }),
         }}
       >
         <Suspense

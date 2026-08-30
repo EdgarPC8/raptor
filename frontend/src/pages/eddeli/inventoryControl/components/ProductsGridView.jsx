@@ -57,7 +57,15 @@ function unitAbbrOf(p) {
   );
 }
 
-function ProductCard({ product, onEdit, onDuplicate, onStockAdjusted, pathImgBase, multiStockEnabled }) {
+function ProductCard({
+  product,
+  onEdit,
+  onDuplicate,
+  onStockAdjusted,
+  onOpenStock,
+  pathImgBase,
+  multiStockEnabled,
+}) {
   const { toast: authToast } = useAuth();
   const imgSrc = buildImageUrl(product?.primaryImageUrl);
   const categoryName = formatProductCategoryName(product);
@@ -177,10 +185,32 @@ function ProductCard({ product, onEdit, onDuplicate, onStockAdjusted, pathImgBas
           <Typography variant="body2" fontWeight={600}>
             ${Number(product?.price ?? 0).toFixed(2)}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {multiStockEnabled ? "Total" : "Stock"}: <strong>{current}</strong>
-            {abbr ? ` ${abbr}` : ""}
-          </Typography>
+          {multiStockEnabled && onOpenStock ? (
+            <Button
+              size="small"
+              color="inherit"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenStock(product);
+              }}
+              sx={{
+                textTransform: "none",
+                fontWeight: 700,
+                minWidth: 0,
+                px: 1,
+                py: 0.25,
+                bgcolor: "action.hover",
+              }}
+            >
+              Total: {current}
+              {abbr ? ` ${abbr}` : ""}
+            </Button>
+          ) : (
+            <Typography variant="caption" color="text.secondary">
+              {multiStockEnabled ? "Total" : "Stock"}: <strong>{current}</strong>
+              {abbr ? ` ${abbr}` : ""}
+            </Typography>
+          )}
         </Box>
         {!multiStockEnabled ? (
           <Box sx={{ mt: 1, display: "flex", gap: 0.5, alignItems: "flex-start" }}>
@@ -333,6 +363,7 @@ export default function ProductsGridView({
   categoryFilter = "",
   onEdit,
   onReload,
+  onOpenStock,
   pathImgBase = pathImg,
   loading = false,
 }) {
@@ -383,7 +414,7 @@ export default function ProductsGridView({
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Ordenadas por stock (mayor a menor).
         {multiStockEnabled
-          ? " Con multistock activo el total es la suma por local; ajustes en Locales."
+          ? " Con multistock, el Total es la suma por local: hacé clic para ver, editar o traspasar."
           : " Puede ajustar stock con el check (movimiento de ajuste)."}
       </Typography>
       {loading ? (
@@ -398,6 +429,7 @@ export default function ProductsGridView({
                   onEdit={onEdit}
                   onDuplicate={(prod) => setDuplicateProduct(prod)}
                   onStockAdjusted={onReload}
+                  onOpenStock={onOpenStock}
                   pathImgBase={pathImgBase}
                   multiStockEnabled={multiStockEnabled}
                 />

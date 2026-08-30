@@ -3,6 +3,12 @@ export const template = {
     "width": 1920,
     "height": 1080
   },
+  "meta": {
+    "name": "Banner producto default",
+    "templateKind": "producto",
+    "requiresProduct": true,
+    "backgroundMode": "image"
+  },
   "groups": [
     {
       "id": "group_product",

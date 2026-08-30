@@ -68,7 +68,7 @@ if (type === "text") {
       fontFamily: "Inter, system-ui, Arial",
       fontSize: 48,
       fontWeight: 800,
-      color: "#FFFFFF",
+      color: "#1A1A1A",
       align: "left",
 
       // NUEVO (no rompe nada)

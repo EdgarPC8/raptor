@@ -518,6 +518,8 @@ const guestData = {
         return this.sriSettings;
       case "profile":
         return this.profile;
+      case "news":
+        return [];
       case "expensesForChart":
         return this.expensesForChart;
       case "calendarYear": {

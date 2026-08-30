@@ -1,37 +1,63 @@
-/** Tour Configuración → pestañas de negocio (no SRI). */
-export const CONFIG_APP_TOUR_ID = "config-app";
-
 /**
- * @param {{ goInventarioTab?: () => void }} [hooks]
+ * Tours de Configuración — uno por pestaña (excepto SRI, en configSriTour.js).
+ * Anclas: data-tour en AppSettingsPage / BackupsPage / ThemePaletteEditor.
  */
-export function getConfigAppTourSteps(hooks = {}) {
+
+export const CONFIG_TAB_TOUR_IDS = {
+  marca: "config-marca",
+  sistema: "config-sistema",
+  inventario: "config-inventario",
+  comprobantes: "config-comprobantes",
+  publico: "config-publico",
+  backups: "config-backups",
+};
+
+/** @deprecated Usar CONFIG_TAB_TOUR_IDS.marca */
+export const CONFIG_APP_TOUR_ID = CONFIG_TAB_TOUR_IDS.marca;
+
+const headerStep = (extra = "") => ({
+  element: "[data-tour='config-header']",
+  popover: {
+    title: "Configuración",
+    description:
+      `Cada pestaña guarda su propio bloque de opciones.${extra ? ` ${extra}` : ""} Usá el ? de ayuda para repetir este tutorial.`,
+    side: "bottom",
+    align: "start",
+  },
+});
+
+const tabsStep = {
+  element: "[data-tour='config-tabs']",
+  popover: {
+    title: "Pestañas",
+    description:
+      "Marca, Sistema, Inventario, Comprobantes, Público, Facturación SRI y (si sos Programador) Backups. Cambiá de pestaña para ver otro tutorial.",
+    side: "bottom",
+    align: "center",
+  },
+};
+
+const saveStep = {
+  element: "[data-tour='config-save']",
+  popover: {
+    title: "Guardar",
+    description:
+      "El botón flotante guarda los cambios de la pestaña actual. No olvides guardarlos antes de salir.",
+    side: "left",
+    align: "center",
+  },
+};
+
+export function getConfigMarcaTourSteps() {
   return [
-    {
-      element: "[data-tour='config-header']",
-      popover: {
-        title: "Configuración del sistema",
-        description:
-          "Acá definís marca, sistema, inventario, comprobantes, vista pública y facturación SRI. Cada tipo tiene su pestaña arriba.",
-        side: "bottom",
-        align: "start",
-      },
-    },
-    {
-      element: "[data-tour='config-tabs']",
-      popover: {
-        title: "Categorías",
-        description:
-          "Navegá como un menú de juego: Marca, Sistema, Inventario, Comprobantes, Público y Facturación SRI. Se pueden agregar más pestañas después.",
-        side: "bottom",
-        align: "center",
-      },
-    },
+    headerStep("Acá definís la identidad visual del negocio."),
+    tabsStep,
     {
       element: "[data-tour='config-logo']",
       popover: {
         title: "Logo de marca",
         description:
-          "El logo es la imagen de marca (suele incluir el nombre). Se usa en pantallas e informes, no como favicon.",
+          "Imagen grande de marca (suele incluir el nombre). Se usa en pantallas e informes; no es el favicon.",
         side: "bottom",
         align: "start",
       },
@@ -41,7 +67,7 @@ export function getConfigAppTourSteps(hooks = {}) {
       popover: {
         title: "Icono de la app",
         description:
-          "Emblema pequeño (cuadrado) para la pestaña del navegador / favicon. Es distinto del logo con nombre.",
+          "Emblema cuadrado para la pestaña del navegador (favicon). Debe verse bien en tamaño pequeño.",
         side: "bottom",
         align: "start",
       },
@@ -49,43 +75,229 @@ export function getConfigAppTourSteps(hooks = {}) {
     {
       element: "[data-tour='config-identity']",
       popover: {
-        title: "Identidad",
+        title: "Datos del negocio",
         description:
-          "Nombre completo, alias corto, versión, autor y descripción que se muestran en la app.",
+          "Nombre completo, alias corto, versión, autor, descripción, teléfono y redes. El alias es el que ves en la barra lateral.",
         side: "top",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='config-theme-palette']",
+      allowMissing: true,
+      popover: {
+        title: "Paleta de colores",
+        description:
+          "Colores de marca para tema claro, oscuro y neón. Se guardan en el servidor y se cachean en el navegador.",
+        side: "top",
+        align: "start",
+      },
+    },
+    saveStep,
+  ];
+}
+
+export function getConfigSistemaTourSteps() {
+  return [
+    headerStep("Zona horaria, notificaciones y operación diaria."),
+    tabsStep,
+    {
+      element: "[data-tour='config-timezone']",
+      popover: {
+        title: "Hora y zona",
+        description:
+          "Todas las fechas del sistema usan esta zona IANA (ej. America/Guayaquil). El reloj de abajo muestra la hora resultante.",
+        side: "bottom",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='config-notifications']",
+      allowMissing: true,
+      popover: {
+        title: "Notificaciones",
+        description:
+          "Cómo se muestran los toasts (abajo a la derecha) según el tipo de aviso: sonido, duración, etc.",
+        side: "top",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='config-sistema-operacion']",
+      allowMissing: true,
+      popover: {
+        title: "Operación",
+        description:
+          "Carpeta de medios (logos/icons), filtro de accesos rápidos en caja y etiqueta del cliente mostrador (consumidor final).",
+        side: "top",
+        align: "start",
+      },
+    },
+    saveStep,
+  ];
+}
+
+export function getConfigInventarioTourSteps() {
+  return [
+    headerStep("Montos, stock y atajos de caja."),
+    tabsStep,
+    {
+      element: "[data-tour='config-inventario']",
+      popover: {
+        title: "Inventario y montos",
+        description:
+          "Decimales en pantalla, redondeo, si se muestra el costo al elegir producto, y ajustes al entregar pedidos.",
+        side: "bottom",
         align: "start",
       },
     },
     {
       element: "[data-tour='config-open-pack']",
       allowMissing: true,
-      onHighlightStarted: (_el, _step, { driver }) => {
-        hooks?.goInventarioTab?.();
-        window.setTimeout(() => {
-          try {
-            driver.refresh();
-          } catch {
-            /* ignore */
-          }
-        }, 120);
-      },
       popover: {
-        title: "Sugerir abrir empaque en caja",
+        title: "Abrir empaque en caja",
         description:
-          "En Inventario: si al cobrar falta stock y hay un empaque enlazado con existencias, Caja pregunta si querés abrirlo. Primero enlazá en Producción → Insumos y presentaciones.",
+          "Si al cobrar falta stock y hay un empaque enlazado con existencias, Caja pregunta si querés abrirlo. Requiere enlace en Producción → Insumos.",
         side: "left",
         align: "start",
       },
     },
     {
-      element: "[data-tour='config-save']",
+      element: "[data-tour='config-caja-products']",
+      allowMissing: true,
       popover: {
-        title: "Guardar",
+        title: "Productos desde caja",
         description:
-          "Guardá los cambios de la categoría actual. En Facturación SRI el botón guarda los datos fiscales.",
-        side: "left",
-        align: "center",
+          "Crear producto desde el buscador o el escáner, editar desde el carrito, descuento % por producto/compra y sugerir actualizar precio al cobrar. Por defecto están apagados.",
+        side: "top",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='config-multistock']",
+      allowMissing: true,
+      popover: {
+        title: "Multistock",
+        description:
+          "Stock por local/sucursal. Activarlo cambia el modo clásico (stock en el producto) a inventario por sede. Según tu plan puede estar bloqueado.",
+        side: "top",
+        align: "start",
+      },
+    },
+    saveStep,
+  ];
+}
+
+export function getConfigComprobantesTourSteps() {
+  return [
+    headerStep("Cómo se imprimen y se ven los comprobantes."),
+    tabsStep,
+    {
+      element: "[data-tour='config-receipt-print']",
+      popover: {
+        title: "Impresión",
+        description:
+          "Formato predeterminado: A4, ticket 80 mm o 55 mm. Podés previsualizar la plantilla y cambiar el tamaño en cada impresión.",
+        side: "bottom",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='config-receipt-detail']",
+      popover: {
+        title: "Texto del detalle",
+        description:
+          "Mayúsculas, límite de caracteres, número de línea, código de barras, unidad y a qué documentos aplica (factura / nota de venta). No cambia la base de datos.",
+        side: "top",
+        align: "start",
+      },
+    },
+    saveStep,
+  ];
+}
+
+export function getConfigPublicoTourSteps() {
+  return [
+    headerStep("Qué ve un visitante sin iniciar sesión."),
+    tabsStep,
+    {
+      element: "[data-tour='config-public']",
+      popover: {
+        title: "Vista pública",
+        description:
+          "Activá o ocultá el catálogo público, las sucursales propias y las vitrinas en la pantalla de Inicio / menú sin sesión.",
+        side: "bottom",
+        align: "start",
+      },
+    },
+    saveStep,
+  ];
+}
+
+export function getConfigBackupsTourSteps() {
+  return [
+    headerStep("Solo Programador: respaldos JSON de la base."),
+    tabsStep,
+    {
+      element: "[data-tour='config-backups']",
+      popover: {
+        title: "Backups JSON",
+        description:
+          "Exportá o guardá un snapshot de la BD, subí un JSON y recargá la base desde backup.json. Subir un archivo no cambia datos hasta que uses Recargar BD.",
+        side: "bottom",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='config-backups-actions']",
+      allowMissing: true,
+      popover: {
+        title: "Acciones rápidas",
+        description:
+          "Actualizar lista, Guardar desde BD (crea/actualiza backup.json) y Recargar BD (restaura desde el backup fijo del servidor).",
+        side: "bottom",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='config-backups-main']",
+      allowMissing: true,
+      popover: {
+        title: "backup.json fijo",
+        description:
+          "El archivo principal en el servidor. Desde acá podés descargarlo o subir uno nuevo para reemplazarlo.",
+        side: "top",
+        align: "start",
       },
     },
   ];
+}
+
+/** Steps del tour de la pestaña activa (no SRI). */
+export function getConfigTabTourSteps(tabId) {
+  switch (tabId) {
+    case "sistema":
+      return getConfigSistemaTourSteps();
+    case "inventario":
+      return getConfigInventarioTourSteps();
+    case "comprobantes":
+      return getConfigComprobantesTourSteps();
+    case "publico":
+      return getConfigPublicoTourSteps();
+    case "backups":
+      return getConfigBackupsTourSteps();
+    case "marca":
+    default:
+      return getConfigMarcaTourSteps();
+  }
+}
+
+/** @deprecated Preferir getConfigTabTourSteps('marca') */
+export function getConfigAppTourSteps() {
+  return getConfigMarcaTourSteps();
+}
+
+export function configTourIdForTab(tabId) {
+  if (tabId === "sri") return null;
+  return CONFIG_TAB_TOUR_IDS[tabId] || CONFIG_TAB_TOUR_IDS.marca;
 }

@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import EditNoteIcon from "@mui/icons-material/EditNote";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { alpha } from "@mui/material/styles";
 import { money, moneyUnitPrice, toNum } from "./helpers.js";
 import {
@@ -30,6 +31,7 @@ import {
   formatCreditDueLabel,
   pickNextCredit,
 } from "./creditHelpers.js";
+import OrderItemsPackBreakdown from "./OrderItemsPackBreakdown.jsx";
 
 const VIEW_TABS = [
   { id: "orders", label: "Por pedidos" },
@@ -64,6 +66,7 @@ export default function SupplierPendingViewTab({
   const isPaid = mode === "paid";
   const selectEnabled = canSelect && !isPaid;
   const [sub, setSub] = useState(0);
+  const [expandedOrders, setExpandedOrders] = useState(() => new Set());
   const view = VIEW_TABS[sub]?.id || "orders";
 
   const freeItems = useMemo(
@@ -108,6 +111,28 @@ export default function SupplierPendingViewTab({
     ids.length > 0 &&
     ids.some((id) => selectedItemIds.includes(id)) &&
     !idsAllSelected(ids);
+
+  const toggleOrderExpanded = (orderId) => {
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      const key = Number(orderId);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleSingleItem = (id) => onToggleItemIds?.([id]);
+
+  const itemsByOrderId = useMemo(() => {
+    const map = new Map();
+    for (const it of pendingItems || []) {
+      const oid = Number(it.orderId);
+      if (!map.has(oid)) map.set(oid, []);
+      map.get(oid).push(it);
+    }
+    return map;
+  }, [pendingItems]);
 
   return (
     <Box sx={{ p: { xs: 1.25, sm: 1.5 } }}>
@@ -241,6 +266,7 @@ export default function SupplierPendingViewTab({
             <TableHead>
               <TableRow>
                 {selectEnabled ? <TableCell padding="checkbox" sx={{ width: 40 }} /> : null}
+                <TableCell sx={{ width: 36, py: 0.75 }} />
                 <TableCell sx={{ fontWeight: 800, py: 0.75 }}>Pedido</TableCell>
                 <TableCell sx={{ fontWeight: 800, py: 0.75 }}>Fecha</TableCell>
                 {!isPaid ? (
@@ -252,7 +278,7 @@ export default function SupplierPendingViewTab({
                 <TableCell align="right" sx={{ fontWeight: 800, py: 0.75 }}>
                   Total
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800, py: 0.75, width: 130 }}>
+                <TableCell align="right" sx={{ fontWeight: 800, py: 0.75, width: 150 }}>
                   Acción
                 </TableCell>
               </TableRow>
@@ -267,8 +293,14 @@ export default function SupplierPendingViewTab({
                   ? toNum(ord.paidAmount) || toNum(ord.totalAmount)
                   : toNum(ord.remainingAmount);
                 const credit = !isPaid ? pickNextCredit(ord) : null;
+                const orderItems =
+                  itemsByOrderId.get(Number(ord.id)) || ord.items || [];
+                const expanded = expandedOrders.has(Number(ord.id));
+                const colSpan =
+                  (selectEnabled ? 1 : 0) + 7;
                 return (
-                  <TableRow key={ord.id} hover sx={{ "& td": { py: 0.5 } }}>
+                  <React.Fragment key={ord.id}>
+                  <TableRow hover sx={{ "& td": { py: 0.5 } }}>
                     {selectEnabled ? (
                       <TableCell padding="checkbox">
                         <Checkbox
@@ -279,6 +311,21 @@ export default function SupplierPendingViewTab({
                         />
                       </TableCell>
                     ) : null}
+                    <TableCell sx={{ width: 36, py: 0.25 }}>
+                      <IconButton
+                        size="small"
+                        onClick={() => toggleOrderExpanded(ord.id)}
+                        aria-label={expanded ? "Ocultar productos" : "Ver productos"}
+                      >
+                        <ExpandMoreIcon
+                          fontSize="small"
+                          sx={{
+                            transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
+                            transition: "transform 0.15s",
+                          }}
+                        />
+                      </IconButton>
+                    </TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>#{ord.id}</TableCell>
                     <TableCell>{ord.date || "—"}</TableCell>
                     {!isPaid ? (
@@ -345,6 +392,21 @@ export default function SupplierPendingViewTab({
                       </Stack>
                     </TableCell>
                   </TableRow>
+                  {expanded ? (
+                    <TableRow>
+                      <TableCell colSpan={colSpan} sx={{ py: 1, bgcolor: "action.hover" }}>
+                        <OrderItemsPackBreakdown
+                          items={orderItems}
+                          variant="supplier"
+                          canSelect={selectEnabled}
+                          selectedItemIds={selectedItemIds}
+                          onToggleItem={toggleSingleItem}
+                          busy={busy}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  </React.Fragment>
                 );
               })}
             </TableBody>

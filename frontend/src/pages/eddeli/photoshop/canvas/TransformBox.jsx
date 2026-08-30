@@ -1,6 +1,6 @@
 import React from "react";
-import { Box } from "@mui/material";
-import { SCALE } from "../editorActions";
+import { Box, Typography } from "@mui/material";
+import MarchingAntsBox from "./MarchingAntsBox.jsx";
 
 const HANDLE_SIZE = 12;
 
@@ -12,6 +12,7 @@ const handleStyle = (cursor) => ({
   background: "#00E5FF",
   border: "1px solid rgba(0,0,0,0.4)",
   cursor,
+  zIndex: 2,
 });
 
 const handles = [
@@ -25,23 +26,53 @@ const handles = [
   { key: "w", cursor: "ew-resize", left: -HANDLE_SIZE / 2, top: "50%", transform: "translateY(-50%)" },
 ];
 
-export default function TransformBox({ layer, selectedBorder, onResizeStart }) {
+export default function TransformBox({ layer, viewScale = 1, onResizeStart }) {
+  const w = Math.round(layer.w || 0);
+  const h = Math.round(layer.h || 0);
+  const displayW = w / viewScale;
+  const displayH = h / viewScale;
+
   return (
-    <>
-      {handles.map((h) => (
+    <Box sx={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      <MarchingAntsBox left={0} top={0} width={displayW} height={displayH} shape="rect" />
+
+      <Typography
+        sx={{
+          position: "absolute",
+          top: -22,
+          left: 0,
+          px: 0.75,
+          py: 0.2,
+          fontSize: 10,
+          fontWeight: 600,
+          color: "#fff",
+          background: "rgba(0,0,0,0.75)",
+          borderRadius: 0.5,
+          whiteSpace: "nowrap",
+          zIndex: 3,
+        }}
+      >
+        {w} × {h} px
+      </Typography>
+
+      {handles.map((hnd) => (
         <Box
-          key={h.key}
-          onMouseDown={(e) => onResizeStart(layer.id, h.key, e)}
+          key={hnd.key}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            onResizeStart(layer.id, hnd.key, e);
+          }}
           sx={{
-            ...handleStyle(h.cursor),
-            ...(h.left !== undefined ? { left: h.left } : {}),
-            ...(h.right !== undefined ? { right: h.right } : {}),
-            ...(h.top !== undefined ? { top: h.top } : {}),
-            ...(h.bottom !== undefined ? { bottom: h.bottom } : {}),
-            ...(h.transform ? { transform: h.transform } : {}),
+            ...handleStyle(hnd.cursor),
+            pointerEvents: "auto",
+            ...(hnd.left !== undefined ? { left: hnd.left } : {}),
+            ...(hnd.right !== undefined ? { right: hnd.right } : {}),
+            ...(hnd.top !== undefined ? { top: hnd.top } : {}),
+            ...(hnd.bottom !== undefined ? { bottom: hnd.bottom } : {}),
+            ...(hnd.transform ? { transform: hnd.transform } : {}),
           }}
         />
       ))}
-    </>
+    </Box>
   );
 }

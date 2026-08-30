@@ -1,0 +1,4841 @@
+{
+  "canvas": {
+    "width": 2480,
+    "height": 3508
+  },
+  "meta": {
+    "name": "Etiquetas A4 EdDeli — 5×5 (1:1 + barras)",
+    "templateKind": "mixto",
+    "requiresProduct": true,
+    "backgroundMode": "color"
+  },
+  "groups": [
+    {
+      "id": "group_page",
+      "x": 0,
+      "y": 0,
+      "visible": true,
+      "locked": true
+    },
+    {
+      "id": "group_label_r0c0",
+      "x": 0,
+      "y": 0,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r0c1",
+      "x": 496,
+      "y": 0,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r0c2",
+      "x": 992,
+      "y": 0,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r0c3",
+      "x": 1488,
+      "y": 0,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r0c4",
+      "x": 1984,
+      "y": 0,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r1c0",
+      "x": 0,
+      "y": 701,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r1c1",
+      "x": 496,
+      "y": 701,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r1c2",
+      "x": 992,
+      "y": 701,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r1c3",
+      "x": 1488,
+      "y": 701,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r1c4",
+      "x": 1984,
+      "y": 701,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r2c0",
+      "x": 0,
+      "y": 1402,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r2c1",
+      "x": 496,
+      "y": 1402,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r2c2",
+      "x": 992,
+      "y": 1402,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r2c3",
+      "x": 1488,
+      "y": 1402,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r2c4",
+      "x": 1984,
+      "y": 1402,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r3c0",
+      "x": 0,
+      "y": 2103,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r3c1",
+      "x": 496,
+      "y": 2103,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r3c2",
+      "x": 992,
+      "y": 2103,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r3c3",
+      "x": 1488,
+      "y": 2103,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r3c4",
+      "x": 1984,
+      "y": 2103,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r4c0",
+      "x": 0,
+      "y": 2804,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r4c1",
+      "x": 496,
+      "y": 2804,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r4c2",
+      "x": 992,
+      "y": 2804,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r4c3",
+      "x": 1488,
+      "y": 2804,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "group_label_r4c4",
+      "x": 1984,
+      "y": 2804,
+      "visible": true,
+      "locked": false
+    }
+  ],
+  "layers": [
+    {
+      "id": "page_bg",
+      "groupId": "group_page",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 2480,
+      "h": 3508,
+      "zIndex": 0,
+      "props": {
+        "fill": "#FFFFFF",
+        "borderRadius": 0
+      },
+      "name": "Hoja A4",
+      "visible": true,
+      "locked": true
+    },
+    {
+      "id": "r0c0_bg",
+      "groupId": "group_label_r0c0",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c0_logo",
+      "groupId": "group_label_r0c0",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c0_logo_text",
+      "groupId": "group_label_r0c0",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c0_zone_producto",
+      "groupId": "group_label_r0c0",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c0_product_image",
+      "groupId": "group_label_r0c0",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c0_product_name",
+      "groupId": "group_label_r0c0",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c0_zone_barcode",
+      "groupId": "group_label_r0c0",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c0_barcode_image",
+      "groupId": "group_label_r0c0",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c0_barcode_text",
+      "groupId": "group_label_r0c0",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c1_bg",
+      "groupId": "group_label_r0c1",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c1_logo",
+      "groupId": "group_label_r0c1",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c1_logo_text",
+      "groupId": "group_label_r0c1",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c1_zone_producto",
+      "groupId": "group_label_r0c1",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c1_product_image",
+      "groupId": "group_label_r0c1",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c1_product_name",
+      "groupId": "group_label_r0c1",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c1_zone_barcode",
+      "groupId": "group_label_r0c1",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c1_barcode_image",
+      "groupId": "group_label_r0c1",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c1_barcode_text",
+      "groupId": "group_label_r0c1",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c2_bg",
+      "groupId": "group_label_r0c2",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c2_logo",
+      "groupId": "group_label_r0c2",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c2_logo_text",
+      "groupId": "group_label_r0c2",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c2_zone_producto",
+      "groupId": "group_label_r0c2",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c2_product_image",
+      "groupId": "group_label_r0c2",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c2_product_name",
+      "groupId": "group_label_r0c2",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c2_zone_barcode",
+      "groupId": "group_label_r0c2",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c2_barcode_image",
+      "groupId": "group_label_r0c2",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c2_barcode_text",
+      "groupId": "group_label_r0c2",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c3_bg",
+      "groupId": "group_label_r0c3",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c3_logo",
+      "groupId": "group_label_r0c3",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c3_logo_text",
+      "groupId": "group_label_r0c3",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c3_zone_producto",
+      "groupId": "group_label_r0c3",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c3_product_image",
+      "groupId": "group_label_r0c3",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c3_product_name",
+      "groupId": "group_label_r0c3",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c3_zone_barcode",
+      "groupId": "group_label_r0c3",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c3_barcode_image",
+      "groupId": "group_label_r0c3",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c3_barcode_text",
+      "groupId": "group_label_r0c3",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c4_bg",
+      "groupId": "group_label_r0c4",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c4_logo",
+      "groupId": "group_label_r0c4",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c4_logo_text",
+      "groupId": "group_label_r0c4",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c4_zone_producto",
+      "groupId": "group_label_r0c4",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c4_product_image",
+      "groupId": "group_label_r0c4",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c4_product_name",
+      "groupId": "group_label_r0c4",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c4_zone_barcode",
+      "groupId": "group_label_r0c4",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c4_barcode_image",
+      "groupId": "group_label_r0c4",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r0c4_barcode_text",
+      "groupId": "group_label_r0c4",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c0_bg",
+      "groupId": "group_label_r1c0",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c0_logo",
+      "groupId": "group_label_r1c0",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c0_logo_text",
+      "groupId": "group_label_r1c0",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c0_zone_producto",
+      "groupId": "group_label_r1c0",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c0_product_image",
+      "groupId": "group_label_r1c0",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c0_product_name",
+      "groupId": "group_label_r1c0",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c0_zone_barcode",
+      "groupId": "group_label_r1c0",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c0_barcode_image",
+      "groupId": "group_label_r1c0",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c0_barcode_text",
+      "groupId": "group_label_r1c0",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c1_bg",
+      "groupId": "group_label_r1c1",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c1_logo",
+      "groupId": "group_label_r1c1",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c1_logo_text",
+      "groupId": "group_label_r1c1",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c1_zone_producto",
+      "groupId": "group_label_r1c1",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c1_product_image",
+      "groupId": "group_label_r1c1",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c1_product_name",
+      "groupId": "group_label_r1c1",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c1_zone_barcode",
+      "groupId": "group_label_r1c1",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c1_barcode_image",
+      "groupId": "group_label_r1c1",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c1_barcode_text",
+      "groupId": "group_label_r1c1",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c2_bg",
+      "groupId": "group_label_r1c2",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c2_logo",
+      "groupId": "group_label_r1c2",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c2_logo_text",
+      "groupId": "group_label_r1c2",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c2_zone_producto",
+      "groupId": "group_label_r1c2",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c2_product_image",
+      "groupId": "group_label_r1c2",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c2_product_name",
+      "groupId": "group_label_r1c2",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c2_zone_barcode",
+      "groupId": "group_label_r1c2",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c2_barcode_image",
+      "groupId": "group_label_r1c2",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c2_barcode_text",
+      "groupId": "group_label_r1c2",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c3_bg",
+      "groupId": "group_label_r1c3",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c3_logo",
+      "groupId": "group_label_r1c3",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c3_logo_text",
+      "groupId": "group_label_r1c3",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c3_zone_producto",
+      "groupId": "group_label_r1c3",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c3_product_image",
+      "groupId": "group_label_r1c3",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c3_product_name",
+      "groupId": "group_label_r1c3",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c3_zone_barcode",
+      "groupId": "group_label_r1c3",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c3_barcode_image",
+      "groupId": "group_label_r1c3",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c3_barcode_text",
+      "groupId": "group_label_r1c3",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c4_bg",
+      "groupId": "group_label_r1c4",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c4_logo",
+      "groupId": "group_label_r1c4",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c4_logo_text",
+      "groupId": "group_label_r1c4",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c4_zone_producto",
+      "groupId": "group_label_r1c4",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c4_product_image",
+      "groupId": "group_label_r1c4",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c4_product_name",
+      "groupId": "group_label_r1c4",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c4_zone_barcode",
+      "groupId": "group_label_r1c4",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c4_barcode_image",
+      "groupId": "group_label_r1c4",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r1c4_barcode_text",
+      "groupId": "group_label_r1c4",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c0_bg",
+      "groupId": "group_label_r2c0",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c0_logo",
+      "groupId": "group_label_r2c0",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c0_logo_text",
+      "groupId": "group_label_r2c0",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c0_zone_producto",
+      "groupId": "group_label_r2c0",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c0_product_image",
+      "groupId": "group_label_r2c0",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c0_product_name",
+      "groupId": "group_label_r2c0",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c0_zone_barcode",
+      "groupId": "group_label_r2c0",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c0_barcode_image",
+      "groupId": "group_label_r2c0",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c0_barcode_text",
+      "groupId": "group_label_r2c0",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c1_bg",
+      "groupId": "group_label_r2c1",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c1_logo",
+      "groupId": "group_label_r2c1",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c1_logo_text",
+      "groupId": "group_label_r2c1",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c1_zone_producto",
+      "groupId": "group_label_r2c1",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c1_product_image",
+      "groupId": "group_label_r2c1",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c1_product_name",
+      "groupId": "group_label_r2c1",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c1_zone_barcode",
+      "groupId": "group_label_r2c1",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c1_barcode_image",
+      "groupId": "group_label_r2c1",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c1_barcode_text",
+      "groupId": "group_label_r2c1",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c2_bg",
+      "groupId": "group_label_r2c2",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c2_logo",
+      "groupId": "group_label_r2c2",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c2_logo_text",
+      "groupId": "group_label_r2c2",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c2_zone_producto",
+      "groupId": "group_label_r2c2",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c2_product_image",
+      "groupId": "group_label_r2c2",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c2_product_name",
+      "groupId": "group_label_r2c2",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c2_zone_barcode",
+      "groupId": "group_label_r2c2",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c2_barcode_image",
+      "groupId": "group_label_r2c2",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c2_barcode_text",
+      "groupId": "group_label_r2c2",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c3_bg",
+      "groupId": "group_label_r2c3",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c3_logo",
+      "groupId": "group_label_r2c3",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c3_logo_text",
+      "groupId": "group_label_r2c3",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c3_zone_producto",
+      "groupId": "group_label_r2c3",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c3_product_image",
+      "groupId": "group_label_r2c3",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c3_product_name",
+      "groupId": "group_label_r2c3",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c3_zone_barcode",
+      "groupId": "group_label_r2c3",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c3_barcode_image",
+      "groupId": "group_label_r2c3",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c3_barcode_text",
+      "groupId": "group_label_r2c3",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c4_bg",
+      "groupId": "group_label_r2c4",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c4_logo",
+      "groupId": "group_label_r2c4",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c4_logo_text",
+      "groupId": "group_label_r2c4",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c4_zone_producto",
+      "groupId": "group_label_r2c4",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c4_product_image",
+      "groupId": "group_label_r2c4",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c4_product_name",
+      "groupId": "group_label_r2c4",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c4_zone_barcode",
+      "groupId": "group_label_r2c4",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c4_barcode_image",
+      "groupId": "group_label_r2c4",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r2c4_barcode_text",
+      "groupId": "group_label_r2c4",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c0_bg",
+      "groupId": "group_label_r3c0",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c0_logo",
+      "groupId": "group_label_r3c0",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c0_logo_text",
+      "groupId": "group_label_r3c0",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c0_zone_producto",
+      "groupId": "group_label_r3c0",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c0_product_image",
+      "groupId": "group_label_r3c0",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c0_product_name",
+      "groupId": "group_label_r3c0",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c0_zone_barcode",
+      "groupId": "group_label_r3c0",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c0_barcode_image",
+      "groupId": "group_label_r3c0",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c0_barcode_text",
+      "groupId": "group_label_r3c0",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c1_bg",
+      "groupId": "group_label_r3c1",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c1_logo",
+      "groupId": "group_label_r3c1",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c1_logo_text",
+      "groupId": "group_label_r3c1",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c1_zone_producto",
+      "groupId": "group_label_r3c1",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c1_product_image",
+      "groupId": "group_label_r3c1",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c1_product_name",
+      "groupId": "group_label_r3c1",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c1_zone_barcode",
+      "groupId": "group_label_r3c1",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c1_barcode_image",
+      "groupId": "group_label_r3c1",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c1_barcode_text",
+      "groupId": "group_label_r3c1",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c2_bg",
+      "groupId": "group_label_r3c2",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c2_logo",
+      "groupId": "group_label_r3c2",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c2_logo_text",
+      "groupId": "group_label_r3c2",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c2_zone_producto",
+      "groupId": "group_label_r3c2",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c2_product_image",
+      "groupId": "group_label_r3c2",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c2_product_name",
+      "groupId": "group_label_r3c2",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c2_zone_barcode",
+      "groupId": "group_label_r3c2",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c2_barcode_image",
+      "groupId": "group_label_r3c2",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c2_barcode_text",
+      "groupId": "group_label_r3c2",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c3_bg",
+      "groupId": "group_label_r3c3",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c3_logo",
+      "groupId": "group_label_r3c3",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c3_logo_text",
+      "groupId": "group_label_r3c3",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c3_zone_producto",
+      "groupId": "group_label_r3c3",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c3_product_image",
+      "groupId": "group_label_r3c3",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c3_product_name",
+      "groupId": "group_label_r3c3",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c3_zone_barcode",
+      "groupId": "group_label_r3c3",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c3_barcode_image",
+      "groupId": "group_label_r3c3",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c3_barcode_text",
+      "groupId": "group_label_r3c3",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c4_bg",
+      "groupId": "group_label_r3c4",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c4_logo",
+      "groupId": "group_label_r3c4",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c4_logo_text",
+      "groupId": "group_label_r3c4",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c4_zone_producto",
+      "groupId": "group_label_r3c4",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c4_product_image",
+      "groupId": "group_label_r3c4",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c4_product_name",
+      "groupId": "group_label_r3c4",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c4_zone_barcode",
+      "groupId": "group_label_r3c4",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c4_barcode_image",
+      "groupId": "group_label_r3c4",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r3c4_barcode_text",
+      "groupId": "group_label_r3c4",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c0_bg",
+      "groupId": "group_label_r4c0",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c0_logo",
+      "groupId": "group_label_r4c0",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c0_logo_text",
+      "groupId": "group_label_r4c0",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c0_zone_producto",
+      "groupId": "group_label_r4c0",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c0_product_image",
+      "groupId": "group_label_r4c0",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c0_product_name",
+      "groupId": "group_label_r4c0",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c0_zone_barcode",
+      "groupId": "group_label_r4c0",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c0_barcode_image",
+      "groupId": "group_label_r4c0",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c0_barcode_text",
+      "groupId": "group_label_r4c0",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c1_bg",
+      "groupId": "group_label_r4c1",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c1_logo",
+      "groupId": "group_label_r4c1",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c1_logo_text",
+      "groupId": "group_label_r4c1",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c1_zone_producto",
+      "groupId": "group_label_r4c1",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c1_product_image",
+      "groupId": "group_label_r4c1",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c1_product_name",
+      "groupId": "group_label_r4c1",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c1_zone_barcode",
+      "groupId": "group_label_r4c1",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c1_barcode_image",
+      "groupId": "group_label_r4c1",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c1_barcode_text",
+      "groupId": "group_label_r4c1",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c2_bg",
+      "groupId": "group_label_r4c2",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c2_logo",
+      "groupId": "group_label_r4c2",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c2_logo_text",
+      "groupId": "group_label_r4c2",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c2_zone_producto",
+      "groupId": "group_label_r4c2",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c2_product_image",
+      "groupId": "group_label_r4c2",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c2_product_name",
+      "groupId": "group_label_r4c2",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c2_zone_barcode",
+      "groupId": "group_label_r4c2",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c2_barcode_image",
+      "groupId": "group_label_r4c2",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c2_barcode_text",
+      "groupId": "group_label_r4c2",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c3_bg",
+      "groupId": "group_label_r4c3",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c3_logo",
+      "groupId": "group_label_r4c3",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c3_logo_text",
+      "groupId": "group_label_r4c3",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c3_zone_producto",
+      "groupId": "group_label_r4c3",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c3_product_image",
+      "groupId": "group_label_r4c3",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c3_product_name",
+      "groupId": "group_label_r4c3",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c3_zone_barcode",
+      "groupId": "group_label_r4c3",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c3_barcode_image",
+      "groupId": "group_label_r4c3",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c3_barcode_text",
+      "groupId": "group_label_r4c3",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c4_bg",
+      "groupId": "group_label_r4c4",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 496,
+      "h": 701,
+      "zIndex": 1,
+      "props": {
+        "fill": "#FAF6EE",
+        "borderRadius": 0
+      },
+      "name": "Fondo etiqueta",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c4_logo",
+      "groupId": "group_label_r4c4",
+      "type": "shape",
+      "x": 230,
+      "y": 6,
+      "w": 36,
+      "h": 36,
+      "zIndex": 5,
+      "props": {
+        "fill": "#E8DCC8",
+        "borderRadius": 999
+      },
+      "name": "Logo (fijo)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c4_logo_text",
+      "groupId": "group_label_r4c4",
+      "type": "text",
+      "x": 208,
+      "y": 8,
+      "w": 80,
+      "h": 32,
+      "zIndex": 6,
+      "props": {
+        "text": "ED Deli",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 900,
+        "color": "#5D4037",
+        "align": "center",
+        "verticalAlign": "center"
+      },
+      "name": "Texto logo",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c4_zone_producto",
+      "groupId": "group_label_r4c4",
+      "type": "shape",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 10,
+      "props": {
+        "fill": "#7EC8E3",
+        "borderRadius": 6
+      },
+      "name": "Zona imagen 1:1 (azul)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c4_product_image",
+      "groupId": "group_label_r4c4",
+      "type": "image",
+      "x": 16,
+      "y": 36,
+      "w": 464,
+      "h": 464,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 6
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Imagen producto 1:1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c4_product_name",
+      "groupId": "group_label_r4c4",
+      "type": "text",
+      "x": 6,
+      "y": 504,
+      "w": 484,
+      "h": 30,
+      "zIndex": 20,
+      "props": {
+        "text": "NOMBRE PRODUCTO",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 20,
+        "fontWeight": 900,
+        "color": "#1A1A1A",
+        "align": "center",
+        "maxLines": 2,
+        "lineHeight": 1.05
+      },
+      "bind": {
+        "textFrom": "displayName",
+        "maxLen": 36
+      },
+      "name": "Nombre producto",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c4_zone_barcode",
+      "groupId": "group_label_r4c4",
+      "type": "shape",
+      "x": 0,
+      "y": 538,
+      "w": 496,
+      "h": 163,
+      "zIndex": 15,
+      "props": {
+        "fill": "#FFB74D",
+        "borderRadius": 0
+      },
+      "name": "Zona código barras (naranja)",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c4_barcode_image",
+      "groupId": "group_label_r4c4",
+      "type": "image",
+      "x": 10,
+      "y": 546,
+      "w": 476,
+      "h": 127,
+      "zIndex": 16,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": {
+        "srcFrom": "computed.barcodeImageUrl",
+        "fallbackSrc": ""
+      },
+      "name": "Código de barras",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "r4c4_barcode_text",
+      "groupId": "group_label_r4c4",
+      "type": "text",
+      "x": 6,
+      "y": 677,
+      "w": 484,
+      "h": 20,
+      "zIndex": 17,
+      "props": {
+        "text": "0000000000000",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#1A1A1A",
+        "align": "center"
+      },
+      "bind": {
+        "textFrom": "product.barcode"
+      },
+      "name": "Número barras",
+      "visible": true,
+      "locked": false
+    }
+  ],
+  "data": {}
+}

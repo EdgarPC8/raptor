@@ -28,6 +28,7 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
+import BackupOutlinedIcon from "@mui/icons-material/BackupOutlined";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
 import { useSubscriptions } from "../hooks/useSubscriptions.js";
@@ -42,13 +43,17 @@ import { buildImageUrl } from "../api/axios.js";
 import AppTimeClockPanel from "../components/AppTimeClockPanel.jsx";
 import NotificationToastSettings from "../components/NotificationToastSettings.jsx";
 import SriBillingSettingsPanel from "../components/SriBillingSettingsPanel.jsx";
+import BackupsPage from "./BackupsPage.jsx";
 import ReceiptDetailPreviewDialog from "../components/settings/ReceiptDetailPreviewDialog.jsx";
 import ThemePaletteEditor from "../components/settings/ThemePaletteEditor.jsx";
 import PrintFormatToggle from "../components/saleReceipt/PrintFormatToggle.jsx";
 import { PageSkeleton } from "../components/ContentSkeleton.jsx";
 import TourHelpButton from "../components/TourHelpButton.jsx";
 import { usePageTour } from "../hooks/usePageTour.js";
-import { CONFIG_APP_TOUR_ID, getConfigAppTourSteps } from "../tours/configAppTour.js";
+import {
+  configTourIdForTab,
+  getConfigTabTourSteps,
+} from "../tours/configAppTour.js";
 import { CONFIG_SRI_TOUR_ID, getConfigSriTourSteps } from "../tours/configSriTour.js";
 import { APP_TIMEZONE_OPTIONS } from "../utils/appDateTime.js";
 import {
@@ -89,6 +94,13 @@ const SETTINGS_TABS = [
     saveKind: "app",
   },
   { id: "sri", label: "Facturación SRI", icon: <FactCheckIcon fontSize="small" />, saveKind: "sri" },
+  {
+    id: "backups",
+    label: "Backups",
+    icon: <BackupOutlinedIcon fontSize="small" />,
+    saveKind: "none",
+    programmerOnly: true,
+  },
 ];
 
 const TAB_IDS = new Set(SETTINGS_TABS.map((t) => t.id));
@@ -178,9 +190,20 @@ export default function AppSettingsPage() {
   const { settings, activeApp, loading, reload, setSettings } = useAppSettings();
   const { subscription } = useSubscriptions();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = resolveTabId(searchParams.get("tab"));
-  const activeTabMeta = SETTINGS_TABS.find((t) => t.id === tab) || SETTINGS_TABS[0];
+  const requestedTab = resolveTabId(searchParams.get("tab"));
+  const visibleTabs = useMemo(
+    () =>
+      SETTINGS_TABS.filter(
+        (t) => !t.programmerOnly || user?.loginRol === "Programador",
+      ),
+    [user?.loginRol],
+  );
+  const tab = visibleTabs.some((t) => t.id === requestedTab)
+    ? requestedTab
+    : visibleTabs[0]?.id || "marca";
+  const activeTabMeta = visibleTabs.find((t) => t.id === tab) || visibleTabs[0];
   const isSriTab = activeTabMeta.saveKind === "sri";
+  const isBackupsTab = activeTabMeta.saveKind === "none";
   const sriPanelRef = useRef(null);
   const [sriSaving, setSriSaving] = useState(false);
 
@@ -194,27 +217,19 @@ export default function AppSettingsPage() {
 
   const pageReady = !loading && Boolean(form);
 
-  const getAppTourSteps = useCallback(
-    () =>
-      getConfigAppTourSteps({
-        goInventarioTab: () => {
-          const next = new URLSearchParams(searchParams);
-          next.set("tab", "inventario");
-          setSearchParams(next, { replace: true });
-        },
-      }),
-    [searchParams, setSearchParams],
-  );
+  const activeTourId = isSriTab
+    ? CONFIG_SRI_TOUR_ID
+    : configTourIdForTab(tab);
 
-  const { startTour: startAppTour } = usePageTour({
-    tourId: CONFIG_APP_TOUR_ID,
-    getSteps: getAppTourSteps,
-    enabled: pageReady && !isSriTab,
-  });
-  const { startTour: startSriTour } = usePageTour({
-    tourId: CONFIG_SRI_TOUR_ID,
-    getSteps: getConfigSriTourSteps,
-    enabled: pageReady && isSriTab,
+  const getActiveTourSteps = useCallback(() => {
+    if (isSriTab) return getConfigSriTourSteps();
+    return getConfigTabTourSteps(tab);
+  }, [isSriTab, tab]);
+
+  const { startTour } = usePageTour({
+    tourId: activeTourId,
+    getSteps: getActiveTourSteps,
+    enabled: pageReady && Boolean(activeTourId),
   });
 
   useEffect(() => {
@@ -251,6 +266,7 @@ export default function AppSettingsPage() {
         cajaAllowCreateProductFromScan: Boolean(settings.cajaAllowCreateProductFromScan),
         cajaAllowEditProductFromCart: Boolean(settings.cajaAllowEditProductFromCart),
         cajaSuggestUpdateProductPrice: Boolean(settings.cajaSuggestUpdateProductPrice),
+        cajaAllowPercentDiscount: Boolean(settings.cajaAllowPercentDiscount),
         notificationsToastGreeting: Boolean(settings.notificationsToastGreeting),
         notificationsToastStock: Boolean(settings.notificationsToastStock),
         notificationsToastCredit: Boolean(settings.notificationsToastCredit),
@@ -285,8 +301,8 @@ export default function AppSettingsPage() {
     !multiStockUnlocked || (multiStockAlreadyOn && !multiStockCanToggleOff);
 
   const tabIndex = useMemo(
-    () => SETTINGS_TABS.findIndex((t) => t.id === tab),
-    [tab],
+    () => visibleTabs.findIndex((t) => t.id === tab),
+    [tab, visibleTabs],
   );
 
   if (!ALLOWED.has(user?.loginRol)) return <Navigate to="/" replace />;
@@ -493,8 +509,12 @@ export default function AppSettingsPage() {
           Configuración
         </Typography>
         <TourHelpButton
-          onClick={isSriTab ? startSriTour : startAppTour}
-          title={isSriTab ? "Ver tutorial de SRI" : "Ver tutorial de configuración"}
+          onClick={startTour}
+          title={
+            isSriTab
+              ? "Ver tutorial de Facturación SRI"
+              : `Ver tutorial de ${activeTabMeta?.label || "configuración"}`
+          }
         />
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -512,7 +532,7 @@ export default function AppSettingsPage() {
         <Tabs
           data-tour="config-tabs"
           value={tabIndex < 0 ? 0 : tabIndex}
-          onChange={(_, i) => setTab(SETTINGS_TABS[i].id)}
+          onChange={(_, i) => setTab(visibleTabs[i].id)}
           variant="scrollable"
           scrollButtons="auto"
           allowScrollButtonsMobile
@@ -545,7 +565,7 @@ export default function AppSettingsPage() {
             },
           })}
         >
-          {SETTINGS_TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <Tab key={t.id} icon={t.icon} iconPosition="start" label={t.label} />
           ))}
         </Tabs>
@@ -800,11 +820,16 @@ export default function AppSettingsPage() {
               <SettingsSection
                 title="Notificaciones"
                 hint="Bandeja y toasts abajo a la derecha, por tipo de aviso."
+                tourId="config-notifications"
               >
                 <NotificationToastSettings />
               </SettingsSection>
 
-              <SettingsSection title="Operación" hint="Carpetas, caja y cliente mostrador.">
+              <SettingsSection
+                title="Operación"
+                hint="Carpetas, caja y cliente mostrador."
+                tourId="config-sistema-operacion"
+              >
                 <SettingsRow
                   label="Carpeta de medios"
                   description="Prefijo en src/img (logos, icons, qr)."
@@ -1016,6 +1041,23 @@ export default function AppSettingsPage() {
                       />
                     }
                     label={form.cajaAllowEditProductFromCart ? "Activado" : "Desactivado"}
+                  />
+                }
+              />
+              <SettingsRow
+                label="Descuento por porcentaje en caja"
+                description="Muestra columna de descuento % por producto y un % sobre el total de la compra. Apagado por defecto."
+                control={
+                  <FormControlLabel
+                    sx={{ m: 0 }}
+                    control={
+                      <Switch
+                        size="small"
+                        checked={Boolean(form.cajaAllowPercentDiscount)}
+                        onChange={onToggle("cajaAllowPercentDiscount")}
+                      />
+                    }
+                    label={form.cajaAllowPercentDiscount ? "Activado" : "Desactivado"}
                   />
                 }
               />
@@ -1239,6 +1281,12 @@ export default function AppSettingsPage() {
           )}
 
           {tab === "sri" && <SriBillingSettingsPanel ref={sriPanelRef} />}
+
+          {tab === "backups" && user?.loginRol === "Programador" ? (
+            <Box data-tour="config-backups">
+              <BackupsPage embedded />
+            </Box>
+          ) : null}
         </Box>
       </Paper>
 
@@ -1250,6 +1298,7 @@ export default function AppSettingsPage() {
         onFormatChange={onDefaultPrintFormat}
       />
 
+      {!isBackupsTab ? (
       <Button
         data-tour="config-save"
         variant="contained"
@@ -1273,6 +1322,7 @@ export default function AppSettingsPage() {
       >
         {footerLabel}
       </Button>
+      ) : null}
     </Box>
   );
 }

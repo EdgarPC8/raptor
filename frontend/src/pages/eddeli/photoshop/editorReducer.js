@@ -8,6 +8,11 @@
  * - SET_DOC, SET_DOC_DATA_*: documento y datos para bind.
  */
 import { ensureUniqueId, makeDefaultLayer } from "./editorActions";
+import {
+  pushHistoryState,
+  applyUndo,
+  applyRedo,
+} from "./editorHistory.js";
 
 export const initialState = (template) => ({
   doc: {
@@ -23,6 +28,8 @@ export const initialState = (template) => ({
   action: null, // move/resize runtime
   ops: [],
   dragId: null,
+  historyPast: [],
+  historyFuture: [],
 });
 
 const pushOp = (state, op) => ({
@@ -161,15 +168,54 @@ export function editorReducer(state, action) {
       const maxZ = Math.max(...state.doc.layers.map((l) => l.zIndex || 0), 0);
       layer.zIndex = maxZ + 1;
 
-      layer.x = Math.round(state.doc.canvas.width * 0.45);
-      layer.y = Math.round(state.doc.canvas.height * 0.35);
+      layer.x = Math.round(state.doc.canvas.width * 0.1);
+      layer.y = Math.round(state.doc.canvas.height * 0.1);
+
+      if (action.propsPatch && typeof action.propsPatch === "object") {
+        layer.props = { ...(layer.props || {}), ...action.propsPatch };
+      }
+      if (action.layerPatch && typeof action.layerPatch === "object") {
+        layer = { ...layer, ...action.layerPatch };
+      }
+      if (action.clearBind) {
+        layer.bind = null;
+      }
+      if (action.layerName) {
+        layer.name = action.layerName;
+      }
 
       return pushOp(
         {
           ...state,
           doc: { ...state.doc, layers: [...state.doc.layers, layer] },
+          selected: { kind: "layer", id: layer.id },
         },
         { type: "add-layer", layerType, groupId }
+      );
+    }
+
+    case "ADD_BACKGROUND_LAYER": {
+      const groupId = state.doc.groups?.[0]?.id;
+      if (!groupId || !state.doc?.canvas) return state;
+
+      const used = new Set(state.doc.layers.map((l) => l.id));
+      let layer = makeDefaultLayer({ type: "shape", groupId });
+      layer.id = ensureUniqueId("background", used);
+      layer.name = "Fondo";
+      layer.x = 0;
+      layer.y = 0;
+      layer.w = state.doc.canvas.width;
+      layer.h = state.doc.canvas.height;
+      layer.zIndex = 0;
+      layer.props = { fill: "#FFFFFF", borderRadius: 0 };
+
+      return pushOp(
+        {
+          ...state,
+          doc: { ...state.doc, layers: [...state.doc.layers, layer] },
+          selected: { kind: "layer", id: layer.id },
+        },
+        { type: "add-background-layer", groupId }
       );
     }
 
@@ -209,7 +255,11 @@ export function editorReducer(state, action) {
       copy.visible = true;
 
       return pushOp(
-        { ...state, doc: { ...state.doc, layers: [...state.doc.layers, copy] } },
+        {
+          ...state,
+          doc: { ...state.doc, layers: [...state.doc.layers, copy] },
+          selected: { kind: "layer", id: copy.id },
+        },
         { type: "duplicate-layer", layerId: src.id }
       );
     }
@@ -249,6 +299,8 @@ export function editorReducer(state, action) {
         action: null,
         ops: [],
         dragId: null,
+        historyPast: [],
+        historyFuture: [],
       };
     }
 
@@ -261,8 +313,19 @@ export function editorReducer(state, action) {
         action: null,
         ops: [],
         dragId: null,
+        historyPast: [],
+        historyFuture: [],
       };
     }
+
+    case "_PUSH_HISTORY":
+      return pushHistoryState(state, action.snapshot);
+
+    case "UNDO":
+      return applyUndo(state);
+
+    case "REDO":
+      return applyRedo(state);
     
 
     case "SET_DOC_DATA_PRODUCT": {
@@ -277,6 +340,16 @@ export function editorReducer(state, action) {
         },
       };
     }
+    case "SET_DOC_META": {
+      return {
+        ...state,
+        doc: {
+          ...state.doc,
+          meta: { ...(state.doc?.meta || {}), ...(action.patch || {}) },
+        },
+      };
+    }
+
     case "SET_DOC_DATA_PATCH": {
       const prevDoc = state.doc || {};
       const prevData = prevDoc.data || {};
@@ -307,18 +380,26 @@ export function editorReducer(state, action) {
       };
     }
 
-    case "DELETE_LAYER":
-  return {
-    ...state,
-    doc: {
-      ...state.doc,
-      layers: state.doc.layers.filter(
-        (l) => l.id !== action.layerId
-      ),
-    },
-    selected:
-      state.selected?.id === action.layerId ? null : state.selected,
-  };
+    case "DELETE_LAYER": {
+      const layerId = action.layerId;
+      const target = state.doc.layers.find((l) => l.id === layerId);
+      if (!target || target.locked) return state;
+
+      return pushOp(
+        {
+          ...state,
+          doc: {
+            ...state.doc,
+            layers: state.doc.layers.filter((l) => l.id !== layerId),
+          },
+          selected:
+            state.selected?.kind === "layer" && state.selected.id === layerId
+              ? null
+              : state.selected,
+        },
+        { type: "delete-layer", layerId }
+      );
+    }
 
     
 

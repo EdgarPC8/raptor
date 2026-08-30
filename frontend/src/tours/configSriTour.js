@@ -34,6 +34,17 @@ export function getConfigSriTourSteps() {
       },
     },
     {
+      element: "[data-tour='sri-invoice-email']",
+      allowMissing: true,
+      popover: {
+        title: "Correo de facturas",
+        description:
+          "Opciones de envío o plantilla de correo asociadas a la factura electrónica, cuando el flujo de emisión esté activo.",
+        side: "top",
+        align: "start",
+      },
+    },
+    {
       element: "[data-tour='sri-certificate']",
       allowMissing: true,
       popover: {

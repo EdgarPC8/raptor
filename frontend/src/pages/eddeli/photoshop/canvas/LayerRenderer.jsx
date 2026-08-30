@@ -2,28 +2,78 @@ import React from "react";
 import { Box } from "@mui/material";
 import { SCALE } from "../editorActions";
 import { resolveLayer } from "../bind/resolveTemplate";
+import { editorImageUrl } from "../editorImageUpload.js";
+import { hasCrop } from "../imageCrop.js";
+import { getEditorCursor, isSelectionTool } from "../editorCursors.js";
+import { useImageCropCtx } from "../useImageCrop.jsx";
 import TransformBox from "./TransformBox";
+import CropOverlay from "./CropOverlay";
 
-function LayerContent({ layer, scale }) {
+function CroppedImagePreview({ src, fit, cropNorm, borderRadius }) {
+  const url = editorImageUrl(src);
+  const cn = cropNorm;
+
+  if (!cn || !hasCrop(cn)) {
+    return (
+      <img
+        src={url}
+        alt=""
+        draggable={false}
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "block",
+          objectFit: fit || "contain",
+          borderRadius,
+          userSelect: "none",
+          pointerEvents: "none",
+        }}
+      />
+    );
+  }
+
+  const iw = 100 / cn.w;
+  const ih = 100 / cn.h;
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        borderRadius,
+      }}
+    >
+      <img
+        src={url}
+        alt=""
+        draggable={false}
+        style={{
+          width: `${iw}%`,
+          height: `${ih}%`,
+          maxWidth: "none",
+          marginLeft: `${(-cn.x / cn.w) * 100}%`,
+          marginTop: `${(-cn.y / cn.h) * 100}%`,
+          display: "block",
+          userSelect: "none",
+          pointerEvents: "none",
+        }}
+      />
+    </div>
+  );
+}
+
+function LayerContent({ layer, scale, previewCropNorm }) {
   if (layer.type === "image") {
     const src = layer.props?.src || "";
+    const cropNorm = previewCropNorm || layer.props?.cropNorm;
     return (
-<img
-  key={src}
-  src={src}
-  alt=""
-  draggable={false}
-  style={{
-    width: "100%",
-    height: "100%",
-    display: "block",
-    objectFit: layer.props?.fit || "contain",
-    borderRadius: layer.props?.borderRadius || 0,
-    userSelect: "none",
-    pointerEvents: "none",
-  }}
-/>
-
+      <CroppedImagePreview
+        src={src}
+        fit={layer.props?.fit || "contain"}
+        cropNorm={cropNorm}
+        borderRadius={layer.props?.borderRadius || 0}
+      />
     );
   }
 
@@ -116,10 +166,18 @@ export default function LayerRenderer({
   docData,
   selected,
   selectedBorder,
+  readOnly = false,
+  viewScale,
   onLayerMouseDown,
   onResizeStart,
   onGroupMouseDown,
+  activeTool = "move",
+  cropDraft = null,
+  onCropChange,
+  onSelectionPointerDown,
 }) {
+  const scale = viewScale || SCALE;
+  const { beginMarqueeFromEvent } = useImageCropCtx();
   const groups = doc?.groups || [];
   const layers = doc?.layers || [];
 
@@ -128,11 +186,11 @@ export default function LayerRenderer({
       {groups.map((group) => (
         <Box
           key={group.id}
-          onMouseDown={(e) => onGroupMouseDown(group.id, e)}
+          onMouseDown={readOnly ? undefined : (e) => onGroupMouseDown(group.id, e)}
           sx={{
             position: "absolute",
-            left: (group.x || 0) / SCALE,
-            top: (group.y || 0) / SCALE,
+            left: (group.x || 0) / scale,
+            top: (group.y || 0) / scale,
           }}
         >
           {layers
@@ -142,31 +200,87 @@ export default function LayerRenderer({
               // ✅ AQUÍ: resolver con doc + docData
               const layer = resolveLayer(doc, docData, rawLayer);
 
-              const isSelected = selected?.kind === "layer" && selected.id === layer.id;
+              const isSelected = !readOnly && selected?.kind === "layer" && selected.id === layer.id;
+              const isCropTarget =
+                !readOnly &&
+                isSelectionTool(activeTool) &&
+                cropDraft?.layerId === layer.id &&
+                layer.type === "image";
+              const previewCropNorm =
+                isCropTarget ? cropDraft.cropNorm : layer.props?.cropNorm;
+
+              const layerCursor = readOnly
+                ? "default"
+                : isSelectionTool(activeTool) && layer.type === "image"
+                  ? "crosshair"
+                  : isCropTarget
+                    ? "crosshair"
+                    : layer.locked
+                      ? "not-allowed"
+                      : activeTool === "move"
+                        ? "grab"
+                        : getEditorCursor(activeTool);
 
               return (
                 <Box
                   key={layer.id}
-                  onMouseDown={(e) => onLayerMouseDown(layer.id, e)}
+                  onMouseDown={
+                    readOnly
+                      ? undefined
+                      : (e) => {
+                          if (
+                            (activeTool === "select-rect" || activeTool === "select-ellipse") &&
+                            layer.type === "image" &&
+                            !layer.locked
+                          ) {
+                            e.stopPropagation();
+                            beginMarqueeFromEvent(layer, activeTool, e, scale);
+                            return;
+                          }
+                          if (activeTool === "crop" && layer.type === "image" && !layer.locked) {
+                            onSelectionPointerDown?.(layer, e);
+                            return;
+                          }
+                          if (!isCropTarget) onLayerMouseDown(layer.id, e);
+                        }
+                  }
                   sx={{
                     position: "absolute",
-                    left: (layer.x || 0) / SCALE,
-                    top: (layer.y || 0) / SCALE,
-                    width: (layer.w || 0) / SCALE,
-                    height: (layer.h || 0) / SCALE,
+                    left: (layer.x || 0) / scale,
+                    top: (layer.y || 0) / scale,
+                    width: (layer.w || 0) / scale,
+                    height: (layer.h || 0) / scale,
                     zIndex: layer.zIndex,
-                    cursor: layer.locked ? "not-allowed" : "grab",
-                    outline: isSelected ? selectedBorder : "none",
+                    cursor: layerCursor,
+                    outline:
+                      isSelected && !isCropTarget && activeTool !== "move"
+                        ? selectedBorder
+                        : "none",
                     outlineOffset: 2,
                     opacity: layer.visible === false ? 0.4 : 1,
                   }}
                 >
-                  <LayerContent layer={layer} scale={SCALE} />
+                  <LayerContent
+                    layer={layer}
+                    scale={scale}
+                    previewCropNorm={previewCropNorm}
+                  />
 
-                  {isSelected && !layer.locked && (
+                  {isCropTarget && (
+                    <CropOverlay
+                      layer={layer}
+                      cropNorm={cropDraft.cropNorm}
+                      onChange={onCropChange}
+                      scale={scale}
+                      selectionShape={cropDraft.selectionShape || "rect"}
+                      onMarqueePointerDown={(e) => onSelectionPointerDown?.(layer, e)}
+                    />
+                  )}
+
+                  {isSelected && !layer.locked && !isCropTarget && activeTool === "move" && (
                     <TransformBox
                       layer={layer}
-                      selectedBorder={selectedBorder}
+                      viewScale={scale}
                       onResizeStart={onResizeStart}
                     />
                   )}

@@ -9,6 +9,15 @@ import {
   MenuItem,
 } from "@mui/material";
 import { useEditor } from "../EditorProvider";
+import {
+  TEXT_BIND_PRESETS,
+  IMAGE_BIND_PRESETS,
+  getLayerBindMode,
+} from "../templateSettings";
+import { useEditorImageUpload } from "../useEditorImageUpload.jsx";
+import { useImageCropCtx } from "../useImageCrop.jsx";
+import { editorImageUrl } from "../editorImageUpload.js";
+import LayerGeometryFields from "./LayerGeometryFields.jsx";
 
 const FONT_OPTIONS = [
   { label: "Inter (Normal)", value: "Inter, system-ui, Arial" },
@@ -79,6 +88,10 @@ export default function InspectorPanel({
   toggleVisible,
   toggleLocked,
 }) {
+  const { dispatch, state } = useEditor();
+  const { uploading, openFilePicker, HiddenFileInput } = useEditorImageUpload();
+  const { startCrop, splitWithToast, splitEtiquetaWithToast, applyEtiquetaLayoutWithToast, cropBusy } =
+    useImageCropCtx();
   const layer = useMemo(() => {
     if (!selectedLayer) return null;
     return (layers || []).find((l) => l.id === selectedLayer) || null;
@@ -90,6 +103,15 @@ export default function InspectorPanel({
         <Typography sx={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>
           Selecciona una capa para editar. Para el fondo usa una capa tipo imagen que ocupe todo el canvas.
         </Typography>
+        <Button
+          variant="outlined"
+          size="small"
+          disabled={cropBusy}
+          onClick={applyEtiquetaLayoutWithToast}
+          sx={{ alignSelf: "flex-start", color: "#fff", borderColor: "rgba(255,255,255,0.3)" }}
+        >
+          Aplicar layout etiqueta EdDeli
+        </Button>
       </Stack>
     );
   }
@@ -107,11 +129,21 @@ export default function InspectorPanel({
 
   // ✅ Lee la “referencia” real desde bind.*
   const bindKeyValue = getBindKey(layer);
+  const bindMode = getLayerBindMode(layer);
+  const bindPresets = layer.type === "text" ? TEXT_BIND_PRESETS : layer.type === "image" ? IMAGE_BIND_PRESETS : [];
 
-  // ✅ Actualiza bind usando UPDATE_LAYER (no setLayerMeta)
   const setBindKey = (value) => {
     const patch = patchBindKey(layer, value);
     dispatch({ type: "UPDATE_LAYER", layerId: layer.id, patch });
+  };
+
+  const setBindMode = (mode) => {
+    if (mode === "fixed") {
+      setBindKey("");
+      return;
+    }
+    const preset = bindPresets[0];
+    if (preset) setBindKey(preset.value);
   };
 
   const applyGoldTitle = () => {
@@ -145,6 +177,7 @@ export default function InspectorPanel({
 
   return (
     <Stack spacing={1.2}>
+      <HiddenFileInput />
       <Stack direction="row" spacing={1} alignItems="center">
         <Chip size="small" label={layer.type} />
         <Button size="small" onClick={() => toggleVisible(layer.id)}>
@@ -164,7 +197,54 @@ export default function InspectorPanel({
         fullWidth
       />
 
-      {/* ✅ Referencia REAL (bind.textFrom / bind.srcFrom) */}
+      <LayerGeometryFields
+        layer={layer}
+        canvas={state?.doc?.canvas}
+        onPatch={(patch) =>
+          dispatch({ type: "UPDATE_LAYER", layerId: layer.id, patch })
+        }
+      />
+
+      {/* Contenido: fijo vs producto */}
+      {layer.type !== "shape" && (
+        <>
+          <TextField
+            select
+            size="small"
+            label="Origen del contenido"
+            value={bindMode}
+            onChange={(e) => setBindMode(e.target.value)}
+            fullWidth
+          >
+            <MenuItem value="fixed">Texto / imagen fijo</MenuItem>
+            <MenuItem value="product">Desde producto (bind)</MenuItem>
+          </TextField>
+
+          {bindMode === "product" && bindPresets.length > 0 && (
+            <TextField
+              select
+              size="small"
+              label="Campo del catálogo (preset)"
+              value={bindPresets.some((p) => p.value === bindKeyValue) ? bindKeyValue : ""}
+              onChange={(e) => setBindKey(e.target.value)}
+              fullWidth
+              displayEmpty
+            >
+              <MenuItem value="">
+                <em>Personalizado (editar abajo)</em>
+              </MenuItem>
+              {bindPresets.map((preset) => (
+                <MenuItem key={preset.value} value={preset.value}>
+                  {preset.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        </>
+      )}
+
+      {/* Referencia REAL (bind.textFrom / bind.srcFrom) */}
+      {bindMode === "product" && (
       <TextField
         size="small"
         label="Referencia (fieldKey)"
@@ -179,12 +259,9 @@ export default function InspectorPanel({
         }
         fullWidth
         disabled={layer.type === "shape"}
-        helperText={
-          layer.type === "shape"
-            ? "Shapes no usan referencia."
-            : "Puedes escribir corto: desc -> data.desc (si quieres)."
-        }
+        helperText="Puedes escribir corto: desc -> data.desc (si quieres)."
       />
+      )}
 
       {/* ======== PROPIEDADES POR TIPO ======== */}
       {isText && (
@@ -361,13 +438,108 @@ export default function InspectorPanel({
       )}
 
       {layer.type === "image" && (
-        <TextField
-          size="small"
-          label="Src (default imagen)"
-          value={layer.props?.src || ""}
-          onChange={(e) => updateLayerProps(layer.id, { src: e.target.value })}
-          fullWidth
-        />
+        <>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Button
+              variant="contained"
+              size="small"
+              disabled={uploading}
+              onClick={() => openFilePicker(bindMode === "product" ? "add" : "replace")}
+            >
+              {uploading ? "Subiendo…" : bindMode === "product" ? "Subir imagen fija" : "Cambiar imagen"}
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={uploading}
+              onClick={() => openFilePicker("add")}
+            >
+              Nueva capa
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={!p.src || cropBusy}
+              onClick={() => startCrop(layer.id)}
+            >
+              Recortar
+            </Button>
+          </Stack>
+
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={!p.src || cropBusy}
+              onClick={() => splitWithToast("horizontal")}
+            >
+              Dividir ↔
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={!p.src || cropBusy}
+              onClick={() => splitWithToast("vertical")}
+            >
+              Dividir ↕
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              color="secondary"
+              disabled={!p.src || cropBusy}
+              onClick={splitEtiquetaWithToast}
+            >
+              Separar etiqueta EdDeli
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={cropBusy}
+              onClick={applyEtiquetaLayoutWithToast}
+            >
+              Layout EdDeli
+            </Button>
+          </Stack>
+
+          {!!p.src && (
+            <Box
+              component="img"
+              src={editorImageUrl(p.src)}
+              alt=""
+              sx={{
+                width: "100%",
+                maxHeight: 120,
+                objectFit: "contain",
+                borderRadius: 1,
+                border: "1px solid rgba(255,255,255,0.15)",
+                background: "rgba(0,0,0,0.2)",
+              }}
+            />
+          )}
+
+          <TextField
+            size="small"
+            label="Ruta imagen (servidor)"
+            value={p.src || ""}
+            onChange={(e) => updateLayerProps(layer.id, { src: e.target.value })}
+            fullWidth
+            helperText="PNG, JPG, SVG guardados en diseno-promocional/capas"
+          />
+
+          <TextField
+            select
+            size="small"
+            label="Ajuste (fit)"
+            value={p.fit || "contain"}
+            onChange={(e) => updateLayerProps(layer.id, { fit: e.target.value })}
+            fullWidth
+          >
+            <MenuItem value="contain">Contain (entera)</MenuItem>
+            <MenuItem value="cover">Cover (recortar)</MenuItem>
+            <MenuItem value="fill">Fill (estirar)</MenuItem>
+          </TextField>
+        </>
       )}
 
       {layer.type === "shape" && (

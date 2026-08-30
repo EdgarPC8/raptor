@@ -285,7 +285,13 @@ const buildOpenPackSuggestions = (issues, productList) => {
   return suggestions;
 };
 
-const lineBreakdown = (row) => {
+const clampPercent = (value) => {
+  const n = Number(String(value ?? "").replace(",", "."));
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(100, n);
+};
+
+const lineGrossTotal = (row) => {
   const qty = Number(row.quantity || 0);
   const unitPrice = Number(row.price || 0);
   const usesLineTotal =
@@ -293,15 +299,25 @@ const lineBreakdown = (row) => {
     (row.pricingMode === "package" ||
       row.pricingMode === "category_package" ||
       row.pricingMode === "tier_group_package");
-  const total = usesLineTotal ? to2(Number(row.lineTotal)) : to2(qty * unitPrice);
+  return usesLineTotal ? to2(Number(row.lineTotal)) : to2(qty * unitPrice);
+};
+
+/** total = bruto tras % línea y % ticket; base/iva desde el total (precio con IVA incluido). */
+const lineBreakdown = (row, ticketDiscountPercent = 0) => {
+  const gross = lineGrossTotal(row);
+  const linePct = clampPercent(row.discountPercent);
+  const ticketPct = clampPercent(ticketDiscountPercent);
+  const afterLine = to2(gross * (1 - linePct / 100));
+  const total = to2(afterLine * (1 - ticketPct / 100));
+  const discountAmount = to2(Math.max(0, gross - total));
   const taxType = String(row.taxType || "gravado");
   const taxRate = Number(row.taxRate || 0);
   if (taxType !== "gravado" || taxRate <= 0) {
-    return { total, base: total, iva: 0 };
+    return { total, base: total, iva: 0, gross, discountAmount, linePct };
   }
   const base = to2(total / (1 + taxRate / 100));
   const iva = to2(total - base);
-  return { total, base, iva };
+  return { total, base, iva, gross, discountAmount, linePct };
 };
 
 export default function CajaPage() {
@@ -323,6 +339,7 @@ export default function CajaPage() {
   const allowCreateFromScan = Boolean(activeApp?.cajaAllowCreateProductFromScan);
   const allowEditFromCart = Boolean(activeApp?.cajaAllowEditProductFromCart);
   const allowSuggestPriceUpdate = Boolean(activeApp?.cajaSuggestUpdateProductPrice);
+  const allowPercentDiscount = Boolean(activeApp?.cajaAllowPercentDiscount);
   const draftUserId = user?.userId != null ? String(user.userId) : null;
   const [products, setProducts] = useState([]);
   const [tierGroups, setTierGroups] = useState([]);
@@ -336,6 +353,7 @@ export default function CajaPage() {
   const [saleType, setSaleType] = useState("contado");
   const [paymentMethod, setPaymentMethod] = useState("efectivo");
   const [amountReceived, setAmountReceived] = useState("");
+  const [ticketDiscountPercent, setTicketDiscountPercent] = useState("");
   const [creditScheduleOpen, setCreditScheduleOpen] = useState(false);
   const [paymentDueDate, setPaymentDueDate] = useState("");
   const [splitCreditPayments, setSplitCreditPayments] = useState(false);
@@ -435,6 +453,11 @@ export default function CajaPage() {
     if (d?.saleType) setSaleType(d.saleType);
     if (d?.paymentMethod) setPaymentMethod(d.paymentMethod);
     setAmountReceived(d?.amountReceived != null ? String(d.amountReceived) : "");
+    setTicketDiscountPercent(
+      d?.ticketDiscountPercent != null && d.ticketDiscountPercent !== ""
+        ? String(d.ticketDiscountPercent)
+        : "",
+    );
     setUseCustomerData(Boolean(d?.useCustomerData));
     const cid = d?.customerId != null ? String(d.customerId) : "";
     if (cid && nextCustomers.some((c) => String(c.id) === cid)) {
@@ -576,6 +599,7 @@ export default function CajaPage() {
         saleType,
         paymentMethod,
         amountReceived,
+        ticketDiscountPercent,
         useCustomerData,
         customerId,
       };
@@ -606,6 +630,7 @@ export default function CajaPage() {
     saleType,
     paymentMethod,
     amountReceived,
+    ticketDiscountPercent,
     useCustomerData,
     customerId,
     refreshPendingDraftCount,
@@ -846,6 +871,7 @@ export default function CajaPage() {
         price: pricing.unitPrice,
         lineTotal: pricing.lineTotal,
         pricingMode: pricing.mode,
+        discountPercent: exists?.discountPercent ?? 0,
         stock: Number(product.stock || 0),
         barcode: product.barcode || "",
         taxType: product.taxType || "gravado",
@@ -872,6 +898,7 @@ export default function CajaPage() {
           price: pricing.unitPrice,
           lineTotal: pricing.lineTotal,
           pricingMode: pricing.mode,
+          discountPercent: 0,
           stock: Number(product.stock || 0),
           barcode: product.barcode || "",
           taxType: product.taxType || "gravado",
@@ -968,7 +995,10 @@ export default function CajaPage() {
     setCart((prev) =>
       prev.map((row) => {
         if (cartRowKey(row) !== String(rowKey)) return row;
-        const next = { ...row, [key]: value };
+        const next = {
+          ...row,
+          [key]: key === "discountPercent" ? clampPercent(value) : value,
+        };
         if (key === "quantity") {
           const product = products.find((p) => Number(p.id) === Number(row.productId));
           if (product) {
@@ -1000,6 +1030,10 @@ export default function CajaPage() {
     [cart, products, effectiveTierGroups],
   );
 
+  const ticketPctActive = allowPercentDiscount
+    ? clampPercent(ticketDiscountPercent)
+    : 0;
+
   const cartDisplayGroups = useMemo(() => {
     const groups = [];
     const mixSeen = new Set();
@@ -1011,7 +1045,15 @@ export default function CajaPage() {
       if (mixSeen.has(row.mixGroupId)) continue;
       mixSeen.add(row.mixGroupId);
       const rows = pricedCart.filter((r) => r.mixGroupId === row.mixGroupId);
-      const groupTotal = rows.reduce((sum, r) => sum + lineBreakdown(r).total, 0);
+      const groupTotal = rows.reduce(
+        (sum, r) =>
+          sum +
+          lineBreakdown(
+            allowPercentDiscount ? r : { ...r, discountPercent: 0 },
+            ticketPctActive,
+          ).total,
+        0,
+      );
       groups.push({
         type: "mix",
         mixGroupId: row.mixGroupId,
@@ -1021,23 +1063,30 @@ export default function CajaPage() {
       });
     }
     return groups;
-  }, [pricedCart]);
+  }, [pricedCart, allowPercentDiscount, ticketPctActive]);
 
   const summary = useMemo(() => {
     return pricedCart.reduce(
       (acc, row) => {
-        const { base, iva, total } = lineBreakdown(row);
+        const calcRow = allowPercentDiscount ? row : { ...row, discountPercent: 0 };
+        const { base, iva, total, discountAmount, gross } = lineBreakdown(
+          calcRow,
+          ticketPctActive,
+        );
         acc.subtotal += base;
         acc.iva += iva;
         acc.total += total;
+        acc.discount += discountAmount;
+        acc.gross += gross;
         return acc;
       },
-      { subtotal: 0, iva: 0, total: 0 }
+      { subtotal: 0, iva: 0, total: 0, discount: 0, gross: 0 }
     );
-  }, [pricedCart]);
+  }, [pricedCart, allowPercentDiscount, ticketPctActive]);
   const subtotal = to2(summary.subtotal);
   const iva = to2(summary.iva);
   const total = to2(summary.total);
+  const discountTotal = to2(summary.discount);
   const receivedNum = Number(String(amountReceived ?? "").trim().replace(",", "."));
   const receivedParsed = Number.isFinite(receivedNum) ? to2(receivedNum) : NaN;
   const change = Math.max((Number.isFinite(receivedParsed) ? receivedParsed : 0) - total, 0);
@@ -1097,18 +1146,40 @@ export default function CajaPage() {
   };
 
   const performSaleDelivery = async ({ resolvedCustomerId, notesText, isInvoice, useCustomerData }) => {
-    const baseNote =
+    const discountNote =
+      allowPercentDiscount && discountTotal > 0
+        ? `Desc. ${ticketPctActive > 0 ? `ticket ${ticketPctActive}% · ` : ""}$${discountTotal.toFixed(2)}`
+        : "";
+    const baseNoteRaw =
       (notesText || "").trim() ||
       (isInvoice || useCustomerData
         ? "Venta generada desde caja"
         : "Venta mostrador sin datos de cliente (consumidor final)");
+    const baseNote = discountNote
+      ? `${baseNoteRaw}${baseNoteRaw ? " · " : ""}${discountNote}`
+      : baseNoteRaw;
     const orderNotes = buildCajaOrderNotes({ baseNote, saleType });
     const isCreditSale = saleType === "credito";
     const storedDocType =
       documentType === "factura"
         ? "factura"
         : resolveStoredDocumentType(documentType, useCustomerData || isInvoice);
-    const cartSnapshot = pricedCart.map((row) => ({ ...row }));
+    const cartSnapshot = pricedCart.map((row) => {
+      const calcRow = allowPercentDiscount ? row : { ...row, discountPercent: 0 };
+      const bd = lineBreakdown(calcRow, ticketPctActive);
+      const qty = Number(row.quantity || 0);
+      const effectiveUnit = qty > 0 ? Number((bd.total / qty).toFixed(3)) : 0;
+      return {
+        ...row,
+        discountPercent: allowPercentDiscount ? clampPercent(row.discountPercent) : 0,
+        price: effectiveUnit,
+        lineTotal: bd.total,
+        pricingMode: "manual",
+        discount: bd.discountAmount,
+        subtotal: bd.base,
+        iva: bd.iva,
+      };
+    });
     const customer = customers.find((c) => String(c.id) === String(resolvedCustomerId));
     const payMethod = isCreditSale ? "credito" : paymentMethod || "efectivo";
     const { data } = await posCheckoutRequest({
@@ -1133,13 +1204,7 @@ export default function CajaPage() {
       items: cartSnapshot.map((row) => ({
         productId: Number(row.productId),
         quantity: Number(row.quantity),
-        price:
-          (row.pricingMode === "package" ||
-            row.pricingMode === "category_package" ||
-            row.pricingMode === "tier_group_package") &&
-          row.lineTotal != null
-            ? Number(row.lineTotal) / Number(row.quantity || 1)
-            : Number(row.price || 0),
+        price: Number(row.price || 0),
       })),
     });
     if (!data?.orderId && !data?.ok) {
@@ -1153,6 +1218,8 @@ export default function CajaPage() {
       paymentMethod: payMethod,
       saleType,
       notes: orderNotes,
+      ticketDiscountPercent: ticketPctActive,
+      discountTotal,
     });
 
     // Factura electrónica SRI: no bloquea el cobro si falla
@@ -1222,6 +1289,7 @@ export default function CajaPage() {
     }
 
     setCart([]);
+    setTicketDiscountPercent("");
     setNotes("");
     setSelectedProductId("");
     setAmountReceived("");
@@ -1646,21 +1714,6 @@ export default function CajaPage() {
         });
         return;
       }
-      const creditSchedule = normalizeScheduleForApi(
-        creditInstallments.length
-          ? creditInstallments
-          : paymentDueDate
-            ? [{ dueDate: paymentDueDate, amount: total }]
-            : [],
-      );
-      if (!creditSchedule.length) {
-        void toast?.({
-          message: "Definí la fecha de cobro o las cuotas del crédito antes de cobrar.",
-          variant: "warning",
-        });
-        setCreditScheduleOpen(true);
-        return;
-      }
     }
     if (saleType === "contado" && paymentMethod === "efectivo") {
       const raw = String(amountReceived ?? "").trim();
@@ -1983,7 +2036,10 @@ export default function CajaPage() {
                   size="small"
                   color="error"
                   variant="outlined"
-                  onClick={() => setCart([])}
+                  onClick={() => {
+                    setCart([]);
+                    setTicketDiscountPercent("");
+                  }}
                 >
                   Vaciar listado
                 </Button>
@@ -2004,6 +2060,9 @@ export default function CajaPage() {
                     ) : null}
                     <TableCell align="center">Cantidad</TableCell>
                     <TableCell align="right">Precio</TableCell>
+                    {allowPercentDiscount ? (
+                      <TableCell align="center">Desc. %</TableCell>
+                    ) : null}
                     <TableCell align="right">IVA</TableCell>
                     <TableCell align="right">Total</TableCell>
                     <TableCell align="center">Opciones</TableCell>
@@ -2017,6 +2076,10 @@ export default function CajaPage() {
                       const stockQty =
                         stockByProductId.get(Number(row.productId)) ?? Number(row.stock || 0);
                       const tierKind = getCartRowTierVisualKind(row, products, effectiveTierGroups);
+                      const bd = lineBreakdown(
+                        allowPercentDiscount ? row : { ...row, discountPercent: 0 },
+                        ticketPctActive,
+                      );
                       return (
                         <TableRow key={rowKey} sx={getTierVisualRowSx(tierKind, theme)}>
                           <TableCell>{row.barcode || "—"}</TableCell>
@@ -2024,7 +2087,7 @@ export default function CajaPage() {
                           {showCartStock ? (
                             <TableCell align="center">{stockQty}</TableCell>
                           ) : null}
-                          <TableCell align="center" sx={{ minWidth: 105 }}>
+                          <TableCell align="center" sx={{ width: 88, maxWidth: 96, px: 0.5 }}>
                             <TextField
                               type="number"
                               size="small"
@@ -2033,9 +2096,10 @@ export default function CajaPage() {
                                 updateCartRow(rowKey, "quantity", Number(e.target.value || 0))
                               }
                               inputProps={{ min: 0, step: "1" }}
+                              sx={{ width: 72 }}
                             />
                           </TableCell>
-                          <TableCell align="right" sx={{ minWidth: 120 }}>
+                          <TableCell align="right" sx={{ width: 112, maxWidth: 120, px: 0.5 }}>
                             <TextField
                               type="number"
                               size="small"
@@ -2049,59 +2113,89 @@ export default function CajaPage() {
                                 ),
                               }}
                               inputProps={{ min: 0, step: "0.01" }}
+                              sx={{ width: 100 }}
                             />
                           </TableCell>
-                          <TableCell align="right">
-                            ${lineBreakdown(row).iva.toFixed(2)}
-                          </TableCell>
-                          <TableCell align="right">
-                            ${lineBreakdown(row).total.toFixed(2)}
-                          </TableCell>
-                          <TableCell align="center">
-                            {allowEditFromCart ? (
-                              <Tooltip
-                                title={
-                                  row.barcode
-                                    ? "Editar producto"
-                                    : "Editar producto (sin código de barras)"
+                          {allowPercentDiscount ? (
+                            <TableCell align="center" sx={{ width: 80, maxWidth: 88, px: 0.5 }}>
+                              <TextField
+                                type="number"
+                                size="small"
+                                value={row.discountPercent ?? 0}
+                                onChange={(e) =>
+                                  updateCartRow(rowKey, "discountPercent", e.target.value)
                                 }
-                              >
-                                <IconButton
-                                  size="small"
-                                  color={row.barcode ? "primary" : "warning"}
-                                  onClick={() => {
-                                    const p = products.find(
-                                      (x) => Number(x.id) === Number(row.productId),
-                                    );
-                                    if (!p) {
-                                      void toast?.({
-                                        message: "No se encontró el producto en el catálogo.",
-                                        variant: "warning",
-                                      });
-                                      return;
-                                    }
-                                    setProductToEdit(p);
-                                    setProductDialogMode("edit");
-                                    setProductDialogOpen(true);
-                                  }}
-                                >
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            ) : null}
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => removeRow(rowKey)}
+                                InputProps={{
+                                  endAdornment: (
+                                    <InputAdornment position="end">%</InputAdornment>
+                                  ),
+                                }}
+                                inputProps={{ min: 0, max: 100, step: "1" }}
+                                sx={{ width: 72 }}
+                              />
+                            </TableCell>
+                          ) : null}
+                          <TableCell align="right">
+                            ${bd.iva.toFixed(2)}
+                          </TableCell>
+                          <TableCell align="right">
+                            ${bd.total.toFixed(2)}
+                          </TableCell>
+                          <TableCell align="center" sx={{ width: 84, whiteSpace: "nowrap" }}>
+                            <Stack
+                              direction="row"
+                              spacing={0}
+                              alignItems="center"
+                              justifyContent="center"
+                              flexWrap="nowrap"
+                              sx={{ display: "inline-flex" }}
                             >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
+                              {allowEditFromCart ? (
+                                <Tooltip
+                                  title={
+                                    row.barcode
+                                      ? "Editar producto"
+                                      : "Editar producto (sin código de barras)"
+                                  }
+                                >
+                                  <IconButton
+                                    size="small"
+                                    color={row.barcode ? "primary" : "warning"}
+                                    onClick={() => {
+                                      const p = products.find(
+                                        (x) => Number(x.id) === Number(row.productId),
+                                      );
+                                      if (!p) {
+                                        void toast?.({
+                                          message: "No se encontró el producto en el catálogo.",
+                                          variant: "warning",
+                                        });
+                                        return;
+                                      }
+                                      setProductToEdit(p);
+                                      setProductDialogMode("edit");
+                                      setProductDialogOpen(true);
+                                    }}
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              ) : null}
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => removeRow(rowKey)}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Stack>
                           </TableCell>
                         </TableRow>
                       );
                     }
 
-                    const colSpan = showCartStock ? 8 : 7;
+                    const colSpan =
+                      (showCartStock ? 8 : 7) + (allowPercentDiscount ? 1 : 0);
                     const mixTierKind = isPanTierGroup({ name: group.label }) ? "pan-group" : "other-group";
                     return (
                       <React.Fragment key={group.mixGroupId}>
@@ -2139,6 +2233,10 @@ export default function CajaPage() {
                           const rowKey = cartRowKey(row);
                           const stockQty =
                             stockByProductId.get(Number(row.productId)) ?? Number(row.stock || 0);
+                          const bd = lineBreakdown(
+                            allowPercentDiscount ? row : { ...row, discountPercent: 0 },
+                            ticketPctActive,
+                          );
                           return (
                             <TableRow
                               key={rowKey}
@@ -2151,7 +2249,7 @@ export default function CajaPage() {
                               {showCartStock ? (
                                 <TableCell align="center">{stockQty}</TableCell>
                               ) : null}
-                              <TableCell align="center" sx={{ minWidth: 105 }}>
+                              <TableCell align="center" sx={{ width: 88, maxWidth: 96, px: 0.5 }}>
                                 <TextField
                                   type="number"
                                   size="small"
@@ -2164,9 +2262,10 @@ export default function CajaPage() {
                                     )
                                   }
                                   inputProps={{ min: 0, step: "1" }}
+                                  sx={{ width: 72 }}
                                 />
                               </TableCell>
-                              <TableCell align="right" sx={{ minWidth: 120 }}>
+                              <TableCell align="right" sx={{ width: 112, maxWidth: 120, px: 0.5 }}>
                                 <TextField
                                   type="number"
                                   size="small"
@@ -2180,53 +2279,82 @@ export default function CajaPage() {
                                     ),
                                   }}
                                   inputProps={{ min: 0, step: "0.01" }}
+                                  sx={{ width: 100 }}
                                 />
                               </TableCell>
-                              <TableCell align="right">
-                                ${lineBreakdown(row).iva.toFixed(2)}
-                              </TableCell>
-                              <TableCell align="right">
-                                ${lineBreakdown(row).total.toFixed(2)}
-                              </TableCell>
-                              <TableCell align="center">
-                                {allowEditFromCart ? (
-                                  <Tooltip
-                                    title={
-                                      row.barcode
-                                        ? "Editar producto"
-                                        : "Editar producto (sin código de barras)"
+                              {allowPercentDiscount ? (
+                                <TableCell align="center" sx={{ width: 80, maxWidth: 88, px: 0.5 }}>
+                                  <TextField
+                                    type="number"
+                                    size="small"
+                                    value={row.discountPercent ?? 0}
+                                    onChange={(e) =>
+                                      updateCartRow(rowKey, "discountPercent", e.target.value)
                                     }
-                                  >
-                                    <IconButton
-                                      size="small"
-                                      color={row.barcode ? "primary" : "warning"}
-                                      onClick={() => {
-                                        const p = products.find(
-                                          (x) => Number(x.id) === Number(row.productId),
-                                        );
-                                        if (!p) {
-                                          void toast?.({
-                                            message: "No se encontró el producto en el catálogo.",
-                                            variant: "warning",
-                                          });
-                                          return;
-                                        }
-                                        setProductToEdit(p);
-                                        setProductDialogMode("edit");
-                                        setProductDialogOpen(true);
-                                      }}
-                                    >
-                                      <EditIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                ) : null}
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  onClick={() => removeRow(rowKey)}
+                                    InputProps={{
+                                      endAdornment: (
+                                        <InputAdornment position="end">%</InputAdornment>
+                                      ),
+                                    }}
+                                    inputProps={{ min: 0, max: 100, step: "1" }}
+                                    sx={{ width: 72 }}
+                                  />
+                                </TableCell>
+                              ) : null}
+                              <TableCell align="right">
+                                ${bd.iva.toFixed(2)}
+                              </TableCell>
+                              <TableCell align="right">
+                                ${bd.total.toFixed(2)}
+                              </TableCell>
+                              <TableCell align="center" sx={{ width: 84, whiteSpace: "nowrap" }}>
+                                <Stack
+                                  direction="row"
+                                  spacing={0}
+                                  alignItems="center"
+                                  justifyContent="center"
+                                  flexWrap="nowrap"
+                                  sx={{ display: "inline-flex" }}
                                 >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
+                                  {allowEditFromCart ? (
+                                    <Tooltip
+                                      title={
+                                        row.barcode
+                                          ? "Editar producto"
+                                          : "Editar producto (sin código de barras)"
+                                      }
+                                    >
+                                      <IconButton
+                                        size="small"
+                                        color={row.barcode ? "primary" : "warning"}
+                                        onClick={() => {
+                                          const p = products.find(
+                                            (x) => Number(x.id) === Number(row.productId),
+                                          );
+                                          if (!p) {
+                                            void toast?.({
+                                              message: "No se encontró el producto en el catálogo.",
+                                              variant: "warning",
+                                            });
+                                            return;
+                                          }
+                                          setProductToEdit(p);
+                                          setProductDialogMode("edit");
+                                          setProductDialogOpen(true);
+                                        }}
+                                      >
+                                        <EditIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  ) : null}
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => removeRow(rowKey)}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </Stack>
                               </TableCell>
                             </TableRow>
                           );
@@ -2313,7 +2441,7 @@ export default function CajaPage() {
                       ? `Crédito: ${creditInstallments.length} cuota(s)`
                       : paymentDueDate
                         ? `Crédito hasta ${paymentDueDate}`
-                        : "Definir fecha o cuotas"}
+                        : "Fecha o cuotas (opcional)"}
                   </Button>
                 </Stack>
               ) : null}
@@ -2434,6 +2562,7 @@ export default function CajaPage() {
                     InputProps={{
                       startAdornment: <InputAdornment position="start">$</InputAdornment>,
                     }}
+                    sx={{ width: 160, maxWidth: "100%", alignSelf: "flex-start" }}
                   />
                   <Typography variant="body2">
                     Vuelto: ${change.toFixed(2)}
@@ -2452,6 +2581,28 @@ export default function CajaPage() {
               <Typography variant="body2">
                 IVA: ${iva.toFixed(2)}
               </Typography>
+              {allowPercentDiscount ? (
+                <>
+                  <TextField
+                    type="number"
+                    size="small"
+                    margin="dense"
+                    label="Desc. compra %"
+                    value={ticketDiscountPercent}
+                    onChange={(e) => setTicketDiscountPercent(e.target.value)}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                    }}
+                    inputProps={{ min: 0, max: 100, step: "1" }}
+                    sx={{ width: 160, maxWidth: "100%", alignSelf: "flex-start" }}
+                  />
+                  {discountTotal > 0 ? (
+                    <Typography variant="body2" color="success.main">
+                      DESCUENTO: −${discountTotal.toFixed(2)}
+                    </Typography>
+                  ) : null}
+                </>
+              ) : null}
               <Typography fontWeight={700}>
                 TOTAL: ${total.toFixed(2)}
               </Typography>
@@ -2593,8 +2744,8 @@ export default function CajaPage() {
         <DialogTitle sx={{ fontSize: "1rem", py: 1.5 }}>Crédito de la venta</DialogTitle>
         <DialogContent dividers sx={{ pt: 1 }}>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-            Definí la fecha máxima de cobro o dividí el total de esta venta en cuotas. El
-            seguimiento y los abonos se gestionan después desde Cobranzas.
+            Opcional: podés definir la fecha máxima de cobro o dividir el total en cuotas. Si no
+            ponés fecha, la venta queda a crédito igual y el seguimiento se hace desde Cobranzas.
           </Typography>
           <OrderPaymentScheduleFields
             deliveryDate={new Date().toISOString().slice(0, 10)}
@@ -2874,13 +3025,12 @@ export default function CajaPage() {
             </Typography>
           ) : null}
           <TextField
-            fullWidth
             size="small"
             type="number"
             label="Cantidad a rebajar (unidad base)"
             value={quickDownQty}
             onChange={(e) => setQuickDownQty(e.target.value)}
-            sx={{ mb: 1 }}
+            sx={{ mb: 1, width: 200, maxWidth: "100%" }}
             inputProps={{ min: 0.01, step: "0.01" }}
           />
           <TextField

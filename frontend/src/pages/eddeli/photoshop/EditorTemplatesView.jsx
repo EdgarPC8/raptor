@@ -25,6 +25,19 @@ import {
 } from "../../../api/editorRequest";
 
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
+import TemplateSettingsFields from "./panels/TemplateSettingsFields";
+import {
+  DEFAULT_TEMPLATE_SETTINGS,
+  settingsFromRow,
+  TEMPLATE_KIND_LABELS,
+  TEMPLATE_FORMATS,
+  CUSTOM_FORMAT_KEY,
+  DEFAULT_CUSTOM_CANVAS,
+  getCanvasSizeByFormat,
+  resolveCanvasSize,
+  getFormatLabel,
+  isCustomFormat,
+} from "./templateSettings";
 
 export default function EditorTemplatesView({
   editorBasePath = APP_ROUTES.promoDesign.editor,
@@ -58,6 +71,7 @@ export default function EditorTemplatesView({
     isDefault: false,
     isActive: true,
     templateJsonText: "",
+    ...DEFAULT_TEMPLATE_SETTINGS,
   });
 
   // form edit
@@ -68,6 +82,7 @@ export default function EditorTemplatesView({
     format: "",
     isDefault: false,
     isActive: true,
+    ...DEFAULT_TEMPLATE_SETTINGS,
   });
 
   // delete
@@ -80,11 +95,21 @@ export default function EditorTemplatesView({
     format: defaultFormat || "16:9",
     isDefault: false,
     isActive: true,
+    templateKind: "manual",
+    requiresProduct: false,
+    backgroundMode: "none",
+    customWidth: DEFAULT_CUSTOM_CANVAS.width,
+    customHeight: DEFAULT_CUSTOM_CANVAS.height,
   });
 
   const openEditor = (id) => {
     if (!id) return;
     nav(`${editorBasePath}/${id}`);
+  };
+
+  const openStudio = (id) => {
+    if (!id) return;
+    nav(`${APP_ROUTES.promoDesign.preview}?templateId=${id}`);
   };
 
   const parseTemplatesResponse = (res) => {
@@ -141,7 +166,6 @@ export default function EditorTemplatesView({
 
   const openDefault = async () => {
     try {
-      // 1) intenta default por app+format
       const r1 = await getEditorTemplates({
         app: importForm.app || defaultApp || undefined,
         format: importForm.format || defaultFormat || undefined,
@@ -149,15 +173,13 @@ export default function EditorTemplatesView({
         limit: 1,
       });
       const a1 = parseTemplatesResponse(r1);
-      if (a1?.[0]?.id) return openEditor(a1[0].id);
+      if (a1?.[0]?.id) return openStudio(a1[0].id);
 
-      // 2) fallback: primera de la lista actual
-      if (rows?.[0]?.id) return openEditor(rows[0].id);
+      if (rows?.[0]?.id) return openStudio(rows[0].id);
 
-      // 3) fallback final: pedir 1
       const r2 = await getEditorTemplates({ limit: 1 });
       const a2 = parseTemplatesResponse(r2);
-      if (a2?.[0]?.id) return openEditor(a2[0].id);
+      if (a2?.[0]?.id) return openStudio(a2[0].id);
 
       alert("No hay plantillas guardadas todavía.");
     } catch (e) {
@@ -225,6 +247,9 @@ export default function EditorTemplatesView({
         format: importForm.format || parsed?.format || defaultFormat || null,
         isDefault: !!importForm.isDefault,
         isActive: importForm.isActive !== false,
+        templateKind: importForm.templateKind,
+        requiresProduct: importForm.requiresProduct,
+        backgroundMode: importForm.backgroundMode,
       };
 
       const res = await importEditorTemplate(parsed, extra);
@@ -268,6 +293,7 @@ export default function EditorTemplatesView({
   // =========================
   const openEdit = (tpl) => {
     if (!tpl?.id) return;
+    const settings = settingsFromRow(tpl);
     setEditForm({
       id: tpl.id,
       name: tpl?.name || "",
@@ -275,6 +301,9 @@ export default function EditorTemplatesView({
       format: tpl?.format || defaultFormat || "",
       isDefault: !!tpl?.isDefault,
       isActive: tpl?.isActive !== false,
+      customWidth: tpl?.canvasWidth || DEFAULT_CUSTOM_CANVAS.width,
+      customHeight: tpl?.canvasHeight || DEFAULT_CUSTOM_CANVAS.height,
+      ...settings,
     });
     setOpenEditDlg(true);
   };
@@ -292,7 +321,15 @@ export default function EditorTemplatesView({
         format: editForm.format || null,
         isDefault: !!editForm.isDefault,
         isActive: editForm.isActive !== false,
+        templateKind: editForm.templateKind,
+        requiresProduct: editForm.requiresProduct,
+        backgroundMode: editForm.backgroundMode,
       };
+
+      if (isCustomFormat(editForm.format)) {
+        payload.canvasWidth = Number(editForm.customWidth) || DEFAULT_CUSTOM_CANVAS.width;
+        payload.canvasHeight = Number(editForm.customHeight) || DEFAULT_CUSTOM_CANVAS.height;
+      }
 
       await updateEditorTemplate(editForm.id, payload);
 
@@ -328,12 +365,16 @@ export default function EditorTemplatesView({
       const originalName = tpl?.name || tpl?.title || tpl?.meta?.name || `Template #${tpl.id}`;
       const newName = `${originalName} - Copia`;
 
+      const settings = settingsFromRow(tpl);
       const extra = {
         name: newName,
         app: tpl?.app || defaultApp || null,
         format: tpl?.format || defaultFormat || null,
-        isDefault: false, // Las copias no son default por defecto
+        isDefault: false,
         isActive: tpl?.isActive !== false,
+        templateKind: settings.templateKind,
+        requiresProduct: settings.requiresProduct,
+        backgroundMode: settings.backgroundMode,
       };
 
       // 3. Importar como nuevo template
@@ -366,27 +407,14 @@ export default function EditorTemplatesView({
   // =========================
   // CREATE EMPTY TEMPLATE
   // =========================
-  const getCanvasSizeByFormat = (format) => {
-    switch (format) {
-      case "16:9":
-        return { width: 1920, height: 1080 };
-      case "9:16":
-        return { width: 1080, height: 1920 };
-      case "1:1":
-        return { width: 1080, height: 1080 };
-      default:
-        return { width: 1920, height: 1080 };
-    }
-  };
-
-  const createEmptyTemplate = (format) => {
-    const canvas = getCanvasSizeByFormat(format);
+  const createEmptyTemplate = (format, custom = {}) => {
+    const canvas = resolveCanvasSize(format, custom);
     return {
       canvas,
-      groups: [{ id: "group_main", x: 0, y: 0, visible: true, locked: false }],
+      groups: [{ id: "group_etiqueta", x: 0, y: 0, visible: true, locked: false }],
       layers: [],
       data: {},
-      meta: { name: "Nueva plantilla" },
+      meta: { name: "Nueva plantilla", ...DEFAULT_TEMPLATE_SETTINGS },
     };
   };
 
@@ -396,17 +424,37 @@ export default function EditorTemplatesView({
       return;
     }
 
+    if (isCustomFormat(createForm.format)) {
+      const w = Number(createForm.customWidth);
+      const h = Number(createForm.customHeight);
+      if (!Number.isFinite(w) || w < 50 || !Number.isFinite(h) || h < 50) {
+        alert("Formato personalizado: ancho y alto deben ser números ≥ 50 px.");
+        return;
+      }
+    }
+
     try {
       setCreating(true);
 
-      const emptyTemplate = createEmptyTemplate(createForm.format);
+      const emptyTemplate = createEmptyTemplate(createForm.format, {
+        width: createForm.customWidth,
+        height: createForm.customHeight,
+      });
       const extra = {
         name: createForm.name.trim(),
         app: createForm.app || defaultApp || null,
         format: createForm.format || null,
         isDefault: !!createForm.isDefault,
         isActive: createForm.isActive !== false,
+        templateKind: createForm.templateKind,
+        requiresProduct: createForm.requiresProduct,
+        backgroundMode: createForm.backgroundMode,
       };
+
+      if (isCustomFormat(createForm.format)) {
+        extra.canvasWidth = Number(createForm.customWidth);
+        extra.canvasHeight = Number(createForm.customHeight);
+      }
 
       const res = await importEditorTemplate(emptyTemplate, extra);
 
@@ -423,6 +471,11 @@ export default function EditorTemplatesView({
         format: defaultFormat || "16:9",
         isDefault: false,
         isActive: true,
+        templateKind: "manual",
+        requiresProduct: false,
+        backgroundMode: "none",
+        customWidth: DEFAULT_CUSTOM_CANVAS.width,
+        customHeight: DEFAULT_CUSTOM_CANVAS.height,
       });
 
       await fetchList(q);
@@ -483,7 +536,8 @@ export default function EditorTemplatesView({
             Diseño Promocional — Plantillas
           </Typography>
           <Typography sx={{ color: "rgba(255,255,255,0.65)", fontSize: 12 }}>
-            Abrir, importar JSON, editar y marcar una plantilla como predeterminada.
+            Almacén de plantillas: crea, importa y gestiona. Desde aquí abres <b>Diseñar</b> (editor tipo
+            Photoshop) o <b>Usar en vista</b> (cambiar producto y exportar).
           </Typography>
         </Box>
 
@@ -501,7 +555,7 @@ export default function EditorTemplatesView({
           </Button>
 
           <Button size="small" variant="contained" onClick={openDefault} disabled={loading}>
-            Abrir default
+            Abrir default en vista
           </Button>
 
           <input
@@ -580,6 +634,7 @@ export default function EditorTemplatesView({
               const updated = t?.updatedAt || t?.updated_at || "";
               const app = t?.app || "";
               const format = t?.format || "";
+              const kind = settingsFromRow(t).templateKind;
 
               return (
                 <Box
@@ -603,7 +658,17 @@ export default function EditorTemplatesView({
 
                         <Chip size="small" label={`id: ${t.id}`} />
                         {!!app && <Chip size="small" label={`app: ${app}`} />}
-                        {!!format && <Chip size="small" label={`format: ${format}`} />}
+                        {!!format && (
+                          <Chip size="small" label={getFormatLabel(format, t)} />
+                        )}
+                        {!!kind && (
+                          <Chip
+                            size="small"
+                            label={TEMPLATE_KIND_LABELS[kind] || kind}
+                            sx={{ borderColor: "rgba(0,229,255,0.25)" }}
+                            variant="outlined"
+                          />
+                        )}
                       </Stack>
 
                       {!!updated && (
@@ -645,8 +710,12 @@ export default function EditorTemplatesView({
                         Eliminar
                       </Button>
 
-                      <Button size="small" variant="contained" onClick={() => openEditor(t.id)}>
-                        Usar
+                      <Button size="small" variant="outlined" onClick={() => openEditor(t.id)}>
+                        Diseñar
+                      </Button>
+
+                      <Button size="small" variant="contained" onClick={() => openStudio(t.id)}>
+                        Usar en vista
                       </Button>
                     </Stack>
                   </Stack>
@@ -690,7 +759,7 @@ export default function EditorTemplatesView({
               onChange={(e) => setImportForm((p) => ({ ...p, format: e.target.value }))}
               fullWidth
               size="small"
-              placeholder="16:9 / 1:1 / 9:16 / ..."
+              placeholder="16:9 / 1:1 / 9:16 / A4 / ..."
             />
 
             <TextField
@@ -716,6 +785,12 @@ export default function EditorTemplatesView({
               <MenuItem value="yes">Sí</MenuItem>
               <MenuItem value="no">No</MenuItem>
             </TextField>
+
+            <TemplateSettingsFields
+              value={importForm}
+              onChange={(settings) => setImportForm((p) => ({ ...p, ...settings }))}
+              disabled={saving}
+            />
 
             <TextField
               label="JSON (solo lectura)"
@@ -778,10 +853,35 @@ export default function EditorTemplatesView({
               fullWidth
               size="small"
             >
-              <MenuItem value="16:9">16:9 (1920×1080) - Horizontal</MenuItem>
-              <MenuItem value="9:16">9:16 (1080×1920) - Vertical/Stories</MenuItem>
-              <MenuItem value="1:1">1:1 (1080×1080) - Cuadrado</MenuItem>
+              {Object.entries(TEMPLATE_FORMATS).map(([key, { label }]) => (
+                <MenuItem key={key} value={key}>
+                  {label}
+                </MenuItem>
+              ))}
             </TextField>
+
+            {isCustomFormat(createForm.format) && (
+              <Stack direction="row" spacing={1}>
+                <TextField
+                  label="Ancho (px)"
+                  type="number"
+                  value={createForm.customWidth}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, customWidth: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  inputProps={{ min: 50, step: 1 }}
+                />
+                <TextField
+                  label="Alto (px)"
+                  type="number"
+                  value={createForm.customHeight}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, customHeight: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  inputProps={{ min: 50, step: 1 }}
+                />
+              </Stack>
+            )}
 
             <TextField
               select
@@ -807,6 +907,12 @@ export default function EditorTemplatesView({
               <MenuItem value="no">No</MenuItem>
             </TextField>
 
+            <TemplateSettingsFields
+              value={createForm}
+              onChange={(settings) => setCreateForm((p) => ({ ...p, ...settings }))}
+              disabled={creating}
+            />
+
             <Stack direction="row" spacing={1} justifyContent="flex-end">
               <Button variant="outlined" onClick={() => setOpenCreateDlg(false)} disabled={creating}>
                 Cancelar
@@ -817,7 +923,9 @@ export default function EditorTemplatesView({
             </Stack>
 
             <Typography sx={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>
-              Se creará una plantilla vacía con el formato seleccionado. Podrás añadir capas después en el editor.
+              {isCustomFormat(createForm.format)
+                ? "Define ancho y alto en píxeles (porte de la etiqueta). Luego añade capas en el editor."
+                : "Se creará una plantilla vacía con el formato seleccionado. Podrás añadir capas después en el editor."}
             </Typography>
           </Stack>
         </Box>
@@ -850,12 +958,42 @@ export default function EditorTemplatesView({
             />
 
             <TextField
+              select
               label="Formato"
               value={editForm.format}
               onChange={(e) => setEditForm((p) => ({ ...p, format: e.target.value }))}
               fullWidth
               size="small"
-            />
+            >
+              {Object.entries(TEMPLATE_FORMATS).map(([key, { label }]) => (
+                <MenuItem key={key} value={key}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            {isCustomFormat(editForm.format) && (
+              <Stack direction="row" spacing={1}>
+                <TextField
+                  label="Ancho (px)"
+                  type="number"
+                  value={editForm.customWidth}
+                  onChange={(e) => setEditForm((p) => ({ ...p, customWidth: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  inputProps={{ min: 50, step: 1 }}
+                />
+                <TextField
+                  label="Alto (px)"
+                  type="number"
+                  value={editForm.customHeight}
+                  onChange={(e) => setEditForm((p) => ({ ...p, customHeight: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  inputProps={{ min: 50, step: 1 }}
+                />
+              </Stack>
+            )}
 
             <TextField
               select
@@ -880,6 +1018,12 @@ export default function EditorTemplatesView({
               <MenuItem value="yes">Sí</MenuItem>
               <MenuItem value="no">No</MenuItem>
             </TextField>
+
+            <TemplateSettingsFields
+              value={editForm}
+              onChange={(settings) => setEditForm((p) => ({ ...p, ...settings }))}
+              disabled={saving}
+            />
 
             <Stack direction="row" spacing={1} justifyContent="flex-end">
               <Button variant="outlined" onClick={() => setOpenEditDlg(false)} disabled={saving}>

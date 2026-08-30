@@ -147,6 +147,9 @@ export function normalizeSaleReceipt(sale) {
   const subtotal = to2(sale.subtotal ?? items.reduce((a, r) => a + r.subtotal, 0));
   const iva = to2(sale.iva ?? items.reduce((a, r) => a + r.iva, 0));
   const total = to2(sale.total ?? items.reduce((a, r) => a + r.lineTotal, 0));
+  const discount = to2(
+    sale.discount ?? items.reduce((a, r) => a + Number(r.discount || 0), 0),
+  );
   const customer = sale.customer || {};
   const docType = sale.documentType || "documento";
   const displayFromOrder = getOrderCustomerDisplay({ notes: sale.notes || "", customer });
@@ -187,6 +190,8 @@ export function normalizeSaleReceipt(sale) {
     subtotal,
     iva,
     total,
+    discount,
+    ticketDiscountPercent: Number(sale.ticketDiscountPercent || 0),
     notes: String(sale.notes || "")
       .replace(/\[CAJA_POS\]/g, "")
       .replace(/\[CONTADO\]/g, "")
@@ -254,15 +259,24 @@ export function buildReceiptFromCheckout({
   paymentMethod,
   saleType,
   notes,
+  ticketDiscountPercent = 0,
+  discountTotal = 0,
 }) {
   const items = cart.map((row) => {
     const qty = Number(row.quantity || 0);
     const price = to3(row.price);
-    const lineTotal = to2(qty * price);
+    const lineTotal =
+      row.lineTotal != null && Number.isFinite(Number(row.lineTotal))
+        ? to2(row.lineTotal)
+        : to2(qty * price);
     const taxRate = Number(row.taxRate || 0);
-    let subtotal = lineTotal;
-    let iva = 0;
-    if (taxRate > 0) {
+    let subtotal =
+      row.subtotal != null && Number.isFinite(Number(row.subtotal))
+        ? to2(row.subtotal)
+        : lineTotal;
+    let iva =
+      row.iva != null && Number.isFinite(Number(row.iva)) ? to2(row.iva) : 0;
+    if (row.subtotal == null && taxRate > 0) {
       subtotal = to2(lineTotal / (1 + taxRate / 100));
       iva = to2(lineTotal - subtotal);
     }
@@ -274,7 +288,8 @@ export function buildReceiptFromCheckout({
       productId: row.productId || row.id || null,
       quantity: qty,
       price,
-      discount: 0,
+      discount: to2(row.discount || 0),
+      discountPercent: Number(row.discountPercent || 0),
       taxRate,
       subtotal,
       iva,
@@ -284,6 +299,10 @@ export function buildReceiptFromCheckout({
   const subtotal = items.reduce((a, r) => a + r.subtotal, 0);
   const iva = items.reduce((a, r) => a + r.iva, 0);
   const total = items.reduce((a, r) => a + r.lineTotal, 0);
+  const discount =
+    discountTotal > 0
+      ? to2(discountTotal)
+      : to2(items.reduce((a, r) => a + Number(r.discount || 0), 0));
   const docType = documentType;
   return normalizeSaleReceipt({
     id: orderId,
@@ -297,6 +316,8 @@ export function buildReceiptFromCheckout({
     subtotal,
     iva,
     total,
+    discount,
+    ticketDiscountPercent: Number(ticketDiscountPercent || 0),
   });
 }
 

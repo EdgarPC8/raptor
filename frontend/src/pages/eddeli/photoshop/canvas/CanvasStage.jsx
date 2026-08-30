@@ -2,19 +2,25 @@ import React from "react";
 import { Box, Typography } from "@mui/material";
 import { useEditor } from "../EditorProvider";
 import { SCALE } from "../editorActions";
+import { useImageCropCtx } from "../useImageCrop.jsx";
+import { getEditorCursor, isSelectionTool } from "../editorCursors.js";
+import MarchingAntsBox from "./MarchingAntsBox.jsx";
 import LayerRenderer from "./LayerRenderer";
 
-export default function CanvasStage() {
+export default function CanvasStage({ readOnly = false }) {
   const ctx = useEditor();
-  const { state, dispatch } = ctx;
+  const { state, dispatch, viewScale, activeTool, pickColorFromCanvas } = ctx;
+  const { cropDraft, updateCropDraft, beginDocMarqueeFromEvent, startCrop, docSelection } =
+    useImageCropCtx();
   const stageRef = ctx.stageRef;
+  const scale = viewScale || SCALE;
 
   const doc = state?.doc;
-  const docData = state?.doc?.data || {}; // ✅ datos backend
+  const docData = state?.doc?.data || {};
 
   const selectedBorder = "2px solid #00E5FF";
+  const noop = () => {};
 
-  // ✅ si todavía no hay template, no intentes render
   if (!doc?.canvas) {
     return (
       <Box
@@ -44,6 +50,7 @@ export default function CanvasStage() {
   };
 
   const startMoveLayer = (layerId, e) => {
+    if (activeTool !== "move") return;
     e.stopPropagation();
     const layer = (doc.layers || []).find((l) => l.id === layerId);
     if (!layer || layer.locked) return;
@@ -56,6 +63,7 @@ export default function CanvasStage() {
   };
 
   const startResizeLayer = (layerId, handle, e) => {
+    if (activeTool !== "move") return;
     e.stopPropagation();
     const layer = (doc.layers || []).find((l) => l.id === layerId);
     if (!layer || layer.locked) return;
@@ -77,12 +85,19 @@ export default function CanvasStage() {
 
   const stop = () => dispatch({ type: "SET_ACTION", action: null });
 
+  const onSelectionPointerDown = (layer, e) => {
+    if (activeTool === "crop") {
+      e.stopPropagation();
+      startCrop(layer.id, "crop");
+    }
+  };
+
   const onMove = (e) => {
     const a = state.action;
     if (!a) return;
 
-    const dx = (e.clientX - a.startX) * SCALE;
-    const dy = (e.clientY - a.startY) * SCALE;
+    const dx = (e.clientX - a.startX) * scale;
+    const dy = (e.clientY - a.startY) * scale;
 
     const clampMin = (v, min) => (v < min ? min : v);
     const layers = doc.layers || [];
@@ -151,34 +166,103 @@ export default function CanvasStage() {
     }
   };
 
+  const onEyedropperClick = (e) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const docX = (e.clientX - rect.left) * scale;
+    const docY = (e.clientY - rect.top) * scale;
+    pickColorFromCanvas(docX, docY);
+  };
+
   const hasLayers = (doc.layers || []).length > 0;
 
   return (
     <Box
       ref={stageRef || undefined}
-      onMouseMove={onMove}
-      onMouseUp={stop}
-      onMouseLeave={stop}
-      onMouseDown={() => dispatch({ type: "SET_SELECTED", selected: null })}
+      onMouseMove={readOnly ? undefined : onMove}
+      onMouseUp={readOnly ? undefined : stop}
+      onMouseLeave={readOnly ? undefined : stop}
+      onMouseDown={
+        readOnly
+          ? undefined
+          : isSelectionTool(activeTool) || activeTool === "eyedropper"
+            ? undefined
+            : () => dispatch({ type: "SET_SELECTED", selected: null })
+      }
+      onMouseDownCapture={
+        readOnly
+          ? undefined
+          : (e) => {
+              if (activeTool === "eyedropper") {
+                onEyedropperClick(e);
+                return;
+              }
+              if (activeTool === "select-rect" || activeTool === "select-ellipse") {
+                if (e.target !== e.currentTarget) return;
+                beginDocMarqueeFromEvent(
+                  e,
+                  scale,
+                  doc.canvas.width,
+                  doc.canvas.height,
+                  activeTool
+                );
+              }
+            }
+      }
       sx={{
-        width: doc.canvas.width / SCALE,
-        height: doc.canvas.height / SCALE,
+        width: doc.canvas.width / scale,
+        height: doc.canvas.height / scale,
         position: "relative",
-        backgroundColor: "rgba(0,0,0,0.2)",
-        border: "2px solid #333",
+        backgroundColor: "#ffffff",
         overflow: "hidden",
-        borderRadius: 2,
+        cursor: isSelectionTool(activeTool) ? "crosshair" : getEditorCursor(activeTool),
+        ...(readOnly ? { pointerEvents: "none", userSelect: "none" } : {}),
       }}
     >
       <LayerRenderer
-        doc={doc}              // ✅ template
-        docData={docData}      // ✅ datos backend
-        selected={state.selected}
+        doc={doc}
+        docData={docData}
+        selected={readOnly ? null : state.selected}
         selectedBorder={selectedBorder}
-        onLayerMouseDown={startMoveLayer}
-        onResizeStart={startResizeLayer}
-        onGroupMouseDown={startMoveGroup}
+        readOnly={readOnly}
+        viewScale={scale}
+        onLayerMouseDown={readOnly ? noop : startMoveLayer}
+        onResizeStart={readOnly ? noop : startResizeLayer}
+        onGroupMouseDown={readOnly ? noop : startMoveGroup}
+        activeTool={activeTool}
+        cropDraft={cropDraft}
+        onCropChange={updateCropDraft}
+        onSelectionPointerDown={onSelectionPointerDown}
       />
+
+      {docSelection ? (
+        <Box sx={{ position: "absolute", inset: 0, zIndex: 30, pointerEvents: "none" }}>
+          <MarchingAntsBox
+            left={docSelection.x / scale}
+            top={docSelection.y / scale}
+            width={Math.max(docSelection.w / scale, 0)}
+            height={Math.max(docSelection.h / scale, 0)}
+            shape={docSelection.shape || "rect"}
+          />
+          <Typography
+            sx={{
+              position: "absolute",
+              left: docSelection.x / scale,
+              top: Math.max(0, docSelection.y / scale - 22),
+              px: 0.75,
+              py: 0.2,
+              fontSize: 10,
+              fontWeight: 600,
+              color: "#fff",
+              background: "rgba(0,0,0,0.75)",
+              borderRadius: 0.5,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {Math.round(docSelection.w)} × {Math.round(docSelection.h)} px
+          </Typography>
+        </Box>
+      ) : null}
 
       {/* Mensaje cuando la plantilla está vacía */}
       {!hasLayers && (

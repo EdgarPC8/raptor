@@ -1,8 +1,6 @@
 import React, { useMemo, useState } from "react";
 import {
   Box,
-  Button,
-  Chip,
   Stack,
   TextField,
   Tooltip,
@@ -20,9 +18,41 @@ import LockOpenIcon from "@mui/icons-material/LockOpen";
 
 import { useEditor } from "../EditorProvider";
 import SimpleDialog from "../../../../components/Dialogs/SimpleDialog";
+import { useEditorImageUpload } from "../useEditorImageUpload.jsx";
+import { PE } from "../editorTheme";
+
+function LayerThumb({ layer }) {
+  const fill =
+    layer.type === "shape"
+      ? layer.props?.fill || "#888"
+      : layer.type === "text"
+      ? "#5a7a9a"
+      : "#6a6a6a";
+  return (
+    <Box
+      sx={{
+        width: 28,
+        height: 28,
+        flexShrink: 0,
+        borderRadius: 0.5,
+        border: `1px solid ${PE.borderLight}`,
+        background: fill,
+        display: "grid",
+        placeItems: "center",
+        fontSize: 9,
+        color: "#fff",
+        fontWeight: 800,
+        textTransform: "uppercase",
+      }}
+    >
+      {layer.type === "text" ? "T" : layer.type === "image" ? "I" : "S"}
+    </Box>
+  );
+}
 
 export default function LayersPanel() {
-  const { state, dispatch, deleteLayer } = useEditor();
+  const { state, dispatch, deleteLayer, foregroundColor } = useEditor();
+  const { uploading, openFilePicker, HiddenFileInput } = useEditorImageUpload();
   const { doc, selected, dragId } = state;
 
   const [layerToDelete, setLayerToDelete] = useState(null);
@@ -42,21 +72,16 @@ export default function LayersPanel() {
   }, [doc.layers]);
 
   return (
-    <Box
-      sx={{
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
-    >
-      {/* BOTONES AGREGAR (ARRIBA, SIEMPRE VISIBLES) */}
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <HiddenFileInput />
+      {/* Acciones capa — estilo Photopea footer */}
       <Box
         sx={{
           display: "flex",
           justifyContent: "center",
-          gap: 0.5,
-          pb: 0.5,
+          gap: 0.25,
+          pb: 0.75,
+          borderBottom: `1px solid ${PE.border}`,
         }}
       >
         <Tooltip title="Añadir capa de texto">
@@ -64,31 +89,28 @@ export default function LayersPanel() {
             size="small"
             onClick={() => dispatch({ type: "ADD_LAYER", layerType: "text" })}
             sx={{
-              color: "#fff",
-              background: "rgba(0, 229, 255, 0.15)",
-              border: "1px solid rgba(0, 229, 255, 0.3)",
-              "&:hover": {
-                background: "rgba(0, 229, 255, 0.25)",
-                borderColor: "rgba(0, 229, 255, 0.5)",
-              },
+              color: PE.text,
+              background: "rgba(255,255,255,0.06)",
+              border: `1px solid ${PE.borderLight}`,
+              borderRadius: 0.5,
+              "&:hover": { background: "rgba(255,255,255,0.12)" },
             }}
           >
             <TextFieldsIcon fontSize="small" />
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Añadir capa de imagen">
+        <Tooltip title="Subir imagen (PNG/JPG/SVG)">
           <IconButton
             size="small"
-            onClick={() => dispatch({ type: "ADD_LAYER", layerType: "image" })}
+            disabled={uploading}
+            onClick={() => openFilePicker("add")}
             sx={{
-              color: "#fff",
-              background: "rgba(0, 229, 255, 0.15)",
-              border: "1px solid rgba(0, 229, 255, 0.3)",
-              "&:hover": {
-                background: "rgba(0, 229, 255, 0.25)",
-                borderColor: "rgba(0, 229, 255, 0.5)",
-              },
+              color: PE.text,
+              background: "rgba(255,255,255,0.06)",
+              border: `1px solid ${PE.borderLight}`,
+              borderRadius: 0.5,
+              "&:hover": { background: "rgba(255,255,255,0.12)" },
             }}
           >
             <ImageIcon fontSize="small" />
@@ -98,15 +120,19 @@ export default function LayersPanel() {
         <Tooltip title="Añadir capa de forma">
           <IconButton
             size="small"
-            onClick={() => dispatch({ type: "ADD_LAYER", layerType: "shape" })}
+            onClick={() =>
+              dispatch({
+                type: "ADD_LAYER",
+                layerType: "shape",
+                propsPatch: { fill: foregroundColor },
+              })
+            }
             sx={{
-              color: "#fff",
-              background: "rgba(0, 229, 255, 0.15)",
-              border: "1px solid rgba(0, 229, 255, 0.3)",
-              "&:hover": {
-                background: "rgba(0, 229, 255, 0.25)",
-                borderColor: "rgba(0, 229, 255, 0.5)",
-              },
+              color: PE.text,
+              background: "rgba(255,255,255,0.06)",
+              border: `1px solid ${PE.borderLight}`,
+              borderRadius: 0.5,
+              "&:hover": { background: "rgba(255,255,255,0.12)" },
             }}
           >
             <ShapeLineIcon fontSize="small" />
@@ -114,155 +140,93 @@ export default function LayersPanel() {
         </Tooltip>
       </Box>
 
-      <Divider sx={{ borderColor: "rgba(255,255,255,0.08)", mb: 1 }} />
+      <Divider sx={{ borderColor: PE.border, mb: 0.5 }} />
 
-      {/* LISTA DE CAPAS (con scroll, ocupa el resto del alto) */}
-      <Box
-        sx={{
-          flex: 1,
-          overflowY: "auto",
-          overflowX: "hidden",
-          pr: 0.5,
-        }}
-      >
-        <Stack spacing={0.7}>
+      <Box sx={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+        <Stack spacing={0.25}>
           {sortedLayers.length === 0 ? (
-            <Box
-              sx={{
-                p: 2,
-                textAlign: "center",
-                color: "rgba(255,255,255,0.5)",
-                fontSize: 12,
-              }}
-            >
-              No hay capas. Usa los botones de abajo para añadir.
+            <Box sx={{ p: 2, textAlign: "center", color: PE.textMuted, fontSize: 11 }}>
+              Sin capas. Usa la barra izquierda o Capa → Nueva.
             </Box>
           ) : (
             sortedLayers.map((l) => (
-          <Box
-            key={l.id}
-            draggable
-            onDragStart={() =>
-              dispatch({ type: "SET_DRAG_ID", dragId: l.id })
-            }
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() =>
-              dispatch({
-                type: "REORDER_BY_DROP",
-                fromId: dragId,
-                toId: l.id,
-              })
-            }
-            onClick={() =>
-              dispatch({
-                type: "SET_SELECTED",
-                selected: { kind: "layer", id: l.id },
-              })
-            }
-            sx={{
-              p: 1,
-              borderRadius: 1,
-              border:
-                selectedLayer?.id === l.id
-                  ? "2px solid #00E5FF"
-                  : "1px solid rgba(255,255,255,0.12)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              cursor: "pointer",
-            }}
-          >
-            {/* IZQUIERDA */}
-            <Stack direction="row" spacing={0.5} alignItems="center">
-              <Tooltip title={l.visible ? "Ocultar capa" : "Mostrar capa"}>
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    dispatch({ type: "TOGGLE_VISIBLE", layerId: l.id });
-                  }}
-                  sx={{
-                    color: l.visible ? "#fff" : "rgba(255,255,255,0.4)",
-                    p: 0.5,
-                  }}
-                >
-                  {l.visible ? (
-                    <VisibilityIcon fontSize="small" />
-                  ) : (
-                    <VisibilityOffIcon fontSize="small" />
-                  )}
-                </IconButton>
-              </Tooltip>
-
-              <Tooltip title={l.locked ? "Desbloquear capa" : "Bloquear capa"}>
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    dispatch({ type: "TOGGLE_LOCKED", layerId: l.id });
-                  }}
-                  sx={{
-                    color: l.locked ? "#ffb74d" : "rgba(255,255,255,0.4)",
-                    p: 0.5,
-                  }}
-                >
-                  {l.locked ? (
-                    <LockIcon fontSize="small" />
-                  ) : (
-                    <LockOpenIcon fontSize="small" />
-                  )}
-                </IconButton>
-              </Tooltip>
-
-              <Chip
-                size="small"
-                label={l.type}
+              <Box
+                key={l.id}
+                draggable
+                onDragStart={() => dispatch({ type: "SET_DRAG_ID", dragId: l.id })}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => dispatch({ type: "REORDER_BY_DROP", fromId: dragId, toId: l.id })}
+                onClick={() => dispatch({ type: "SET_SELECTED", selected: { kind: "layer", id: l.id } })}
                 sx={{
-                  fontSize: 10,
-                  height: 20,
-                  "& .MuiChip-label": { px: 0.75 },
+                  px: 0.5,
+                  py: 0.4,
+                  borderRadius: 0.5,
+                  background: selectedLayer?.id === l.id ? "rgba(74,158,255,0.2)" : "transparent",
+                  border: selectedLayer?.id === l.id ? `1px solid ${PE.accent}` : "1px solid transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                  cursor: "pointer",
+                  "&:hover": { background: "rgba(255,255,255,0.05)" },
                 }}
-              />
-            </Stack>
+              >
+                <LayerThumb layer={l} />
 
-            {/* DERECHA */}
-            <Stack direction="row" spacing={1} alignItems="center">
-              <TextField
-                size="small"
-                value={l.name}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) =>
-                  dispatch({
-                    type: "UPDATE_LAYER",
-                    layerId: l.id,
-                    patch: { name: e.target.value },
-                  })
-                }
-                sx={{
-                  width: 120,
-                  "& .MuiInputBase-root": {
-                    fontSize: 11,
-                    height: 28,
-                  },
-                }}
-              />
+                <Tooltip title={l.visible ? "Ocultar" : "Mostrar"}>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      dispatch({ type: "TOGGLE_VISIBLE", layerId: l.id });
+                    }}
+                    sx={{ color: l.visible ? PE.text : PE.textMuted, p: 0.25 }}
+                  >
+                    {l.visible ? <VisibilityIcon sx={{ fontSize: 16 }} /> : <VisibilityOffIcon sx={{ fontSize: 16 }} />}
+                  </IconButton>
+                </Tooltip>
 
-              {/* ELIMINAR */}
-              <Tooltip title="Eliminar capa">
-                <Button
+                <TextField
                   size="small"
-                  color="error"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setLayerToDelete(l);
+                  value={l.name}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) =>
+                    dispatch({ type: "UPDATE_LAYER", layerId: l.id, patch: { name: e.target.value } })
+                  }
+                  variant="standard"
+                  sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    "& .MuiInputBase-root": { fontSize: 11, color: PE.text },
+                    "& .MuiInput-underline:before": { borderColor: PE.borderLight },
                   }}
-                  sx={{ minWidth: 32 }}
-                >
-                  <DeleteOutlineIcon fontSize="small" />
-                </Button>
-              </Tooltip>
-            </Stack>
-          </Box>
+                />
+
+                <Tooltip title={l.locked ? "Desbloquear" : "Bloquear"}>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      dispatch({ type: "TOGGLE_LOCKED", layerId: l.id });
+                    }}
+                    sx={{ color: l.locked ? "#ffb74d" : PE.textMuted, p: 0.25 }}
+                  >
+                    {l.locked ? <LockIcon sx={{ fontSize: 16 }} /> : <LockOpenIcon sx={{ fontSize: 16 }} />}
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title="Eliminar">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLayerToDelete(l);
+                    }}
+                    sx={{ color: PE.danger, p: 0.25 }}
+                  >
+                    <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
             ))
           )}
         </Stack>

@@ -11,14 +11,37 @@
 import React, {
   createContext,
   useContext,
-  useMemo,
-  useReducer,
   useEffect,
+  useReducer,
   useRef,
+  useMemo,
+  useState,
+  useCallback,
 } from "react";
+import {
+  makeSnapshot,
+  shouldRecordHistory,
+} from "./editorHistory.js";
 import { editorReducer, initialState } from "./editorReducer";
 import { resolveTemplate, resolveLayer } from "./bind/resolveTemplate";
 import { toRelativeImagePath } from "./editorActions";
+import { drawImageWithCrop } from "./imageCrop.js";
+import {
+  DEFAULT_FOREGROUND,
+  DEFAULT_BACKGROUND,
+  normalizeColor,
+  getLayerColor,
+  canLayerTakeColor,
+  layerColorPropPatch,
+} from "./editorColors.js";
+import { sampleColorAtDocPoint } from "./docCanvasRender.js";
+import {
+  normalizeTemplateSettings,
+  settingsFromRow,
+  templateRequiresProduct,
+  settingsToMeta,
+  getCanvasSizeByFormat,
+} from "./templateSettings";
 
 // ✅ Fallback local template
 import { template as LOCAL_TEMPLATE } from "./template";
@@ -29,7 +52,6 @@ import {
   getEditorTemplateById,
   getEditorDefaultTemplate,
   updateEditorTemplateDoc,
-  deleteTemplateLayer,
   getEditorTemplateResolved
 
 } from "../../../api/editorRequest";
@@ -185,11 +207,7 @@ const mapDbTemplateToDoc = (row) => {
   if (canvasWidth && canvasHeight && canvasWidth > 0 && canvasHeight > 0) {
     canvas = { width: canvasWidth, height: canvasHeight };
   } else if (row?.format) {
-    // Intentar inferir del formato si no hay canvas
-    const format = String(row.format);
-    if (format === "9:16") canvas = { width: 1080, height: 1920 };
-    else if (format === "1:1") canvas = { width: 1080, height: 1080 };
-    // else mantiene 16:9 por defecto
+    canvas = getCanvasSizeByFormat(String(row.format));
   }
 
   return normalizeDoc({
@@ -197,30 +215,147 @@ const mapDbTemplateToDoc = (row) => {
     canvas,
     groups,
     layers,
-    meta: { name: row?.name || "Template" },
+    meta: {
+      name: row?.name || "Template",
+      ...normalizeTemplateSettings(row?.settingsJson || row?.meta || {}, {
+        layers,
+        backgroundSrc: row?.backgroundSrc,
+      }),
+    },
     app: row?.app ?? null,
     format: row?.format ?? null,
     isDefault: row?.isDefault ?? false,
     isActive: row?.isActive ?? true,
+    backgroundSrc: row?.backgroundSrc ?? null,
   });
 };
 
 
 
 export function EditorProvider({ children, designId = null, autoload = true }) {
-  const [state, dispatch] = useReducer(
+  const [state, dispatchBase] = useReducer(
     editorReducer,
     BASE_TEMPLATE,
     (tpl) => initialState(normalizeDoc(tpl))
   );
 
+  /** Estado sincronizado en cada dispatch para poder guardar en BD justo después. */
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const dispatch = useCallback((action) => {
+    const prev = stateRef.current;
+
+    if (shouldRecordHistory(action, prev)) {
+      const snapshot = makeSnapshot(prev);
+      const afterHistory = editorReducer(prev, { type: "_PUSH_HISTORY", snapshot });
+      stateRef.current = afterHistory;
+      dispatchBase({ type: "_PUSH_HISTORY", snapshot });
+    }
+
+    stateRef.current = editorReducer(stateRef.current, action);
+    dispatchBase(action);
+  }, []);
+
+  const undo = useCallback(() => {
+    dispatch({ type: "UNDO" });
+  }, [dispatch]);
+
+  const redo = useCallback(() => {
+    dispatch({ type: "REDO" });
+  }, [dispatch]);
+
+  const canUndo = (state.historyPast || []).length > 0;
+  const canRedo = (state.historyFuture || []).length > 0;
+
   const didLoadRef = useRef(false);
   /** Ref al contenedor del canvas (para zoom, scroll o mediciones si se necesitan después) */
   const stageRef = useRef(null);
+  /** Escala lógica → pantalla (píxeles doc / píxeles CSS). Ajustada por CanvasViewport. */
+  const [viewScale, setViewScale] = useState(3);
+  const [activeTool, setActiveTool] = useState("move");
+  const [foregroundColor, setForegroundColorState] = useState(DEFAULT_FOREGROUND);
+  const [backgroundColor, setBackgroundColorState] = useState(DEFAULT_BACKGROUND);
+  const [activeColorSlot, setActiveColorSlot] = useState("foreground");
 
   const layers = state.doc?.layers || [];
   const groups = state.doc?.groups || [];
   const selectedId = state.selected?.kind === "layer" ? state.selected.id : null;
+
+  const applyColorToLayer = useCallback(
+    (layerId, color) => {
+      const layer = (state.doc?.layers || []).find((l) => l.id === layerId);
+      if (!canLayerTakeColor(layer)) return;
+      const patch = layerColorPropPatch(layer.type, normalizeColor(color));
+      if (patch) {
+        dispatch({ type: "UPDATE_LAYER_PROPS", layerId, propsPatch: patch });
+      }
+    },
+    [state.doc?.layers]
+  );
+
+  const setForegroundColor = useCallback(
+    (color, applyToSelection = true) => {
+      const normalized = normalizeColor(color);
+      setForegroundColorState(normalized);
+      if (applyToSelection && selectedId) applyColorToLayer(selectedId, normalized);
+    },
+    [applyColorToLayer, selectedId]
+  );
+
+  const setBackgroundColor = useCallback(
+    (color, applyToSelection = true) => {
+      const normalized = normalizeColor(color);
+      setBackgroundColorState(normalized);
+      if (applyToSelection && selectedId && activeColorSlot === "background") {
+        applyColorToLayer(selectedId, normalized);
+      }
+    },
+    [activeColorSlot, applyColorToLayer, selectedId]
+  );
+
+  const pickColor = useCallback(
+    (color, { applyToSelection = true, slot = activeColorSlot } = {}) => {
+      const normalized = normalizeColor(color);
+      if (slot === "background") {
+        setBackgroundColorState(normalized);
+      } else {
+        setForegroundColorState(normalized);
+      }
+      if (applyToSelection && selectedId) applyColorToLayer(selectedId, normalized);
+    },
+    [activeColorSlot, applyColorToLayer, selectedId]
+  );
+
+  const swapColors = useCallback(() => {
+    const fg = foregroundColor;
+    const bg = backgroundColor;
+    setForegroundColorState(bg);
+    setBackgroundColorState(fg);
+  }, [foregroundColor, backgroundColor]);
+
+  const pickColorFromCanvas = useCallback(
+    async (docX, docY) => {
+      const doc = state.doc;
+      if (!doc?.canvas) return;
+      try {
+        const color = await sampleColorAtDocPoint(doc, doc.data || {}, docX, docY);
+        pickColor(color, { slot: activeColorSlot });
+        setActiveTool("move");
+      } catch (err) {
+        console.warn("pickColorFromCanvas failed", err);
+      }
+    },
+    [activeColorSlot, pickColor, state.doc]
+  );
+
+  // Sincronizar swatch con capa seleccionada
+  useEffect(() => {
+    if (!selectedId) return;
+    const layer = layers.find((l) => l.id === selectedId);
+    const c = getLayerColor(layer);
+    if (c) setForegroundColorState(normalizeColor(c));
+  }, [selectedId, layers]);
 
   const setLayerMeta = (id, patch) =>
     dispatch({ type: "UPDATE_LAYER", layerId: id, patch });
@@ -241,16 +376,17 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
   };
 
   const getTemplateId = () => {
-    const a = state?.doc?.__metaTemplateId;
+    const doc = stateRef.current?.doc || state.doc || {};
+    const a = doc.__metaTemplateId;
     if (a != null && a !== "") return Number(a);
-    const b = state?.doc?.id;
+    const b = doc.id;
     if (b != null && b !== "") return Number(b);
     return null;
   };
 
-  /** Doc listo para guardar o exportar: sin backgroundSrc, sin __meta*, imágenes con ruta relativa (ej. sistema/products/x.png). */
+  /** Doc listo para guardar o exportar: sin backgroundSrc, sin __meta*, imágenes con ruta relativa. */
   const getDocForExport = () => {
-    const doc = state.doc || {};
+    const doc = stateRef.current?.doc || state.doc || {};
     const { __metaSource, __metaTemplateId, backgroundSrc, ...docClean } = doc;
     Object.keys(docClean).forEach((k) => {
       if (k.startsWith("__meta")) delete docClean[k];
@@ -266,32 +402,51 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
       }
       return out;
     });
+    docClean.meta = {
+      ...(doc.meta || {}),
+      ...settingsToMeta(doc.meta || {}),
+    };
     return docClean;
   };
 
   const saveTemplateDoc = async () => {
     const templateId = getTemplateId();
     if (!templateId) {
-      console.error("[saveTemplateDoc] state.doc:", state?.doc);
+      console.error("[saveTemplateDoc] state.doc:", stateRef.current?.doc);
       throw new Error("No hay templateId para guardar.");
     }
     await updateEditorTemplateDoc(templateId, getDocForExport());
     return templateId;
   };
-  const deleteLayer = async (layerId) => {
+
+  /** Guarda en BD tras cambios (subida imagen, recorte, etc.). No lanza si falta templateId. */
+  const autoSaveTemplateDoc = useCallback(async () => {
     const templateId = getTemplateId();
-  
-    // 🔴 si no hay template, solo borra local
     if (!templateId) {
-      dispatch({ type: "DELETE_LAYER", layerId });
-      return;
+      return { ok: false, reason: "no_template_id" };
     }
-  
     try {
-      await deleteTemplateLayer(templateId, layerId);
-      dispatch({ type: "DELETE_LAYER", layerId });
+      await updateEditorTemplateDoc(templateId, getDocForExport());
+      return { ok: true, templateId };
     } catch (err) {
-      console.error("Error eliminando capa:", err);
+      console.error("[autoSaveTemplateDoc]", err);
+      return { ok: false, reason: "api_error", error: err };
+    }
+  }, []);
+  const deleteLayer = async (layerId) => {
+    const doc = stateRef.current?.doc || state.doc;
+    const layer = (doc?.layers || []).find((l) => l.id === layerId);
+    if (!layer || layer.locked) return;
+
+    dispatch({ type: "DELETE_LAYER", layerId });
+
+    const templateId = getTemplateId();
+    if (!templateId) return;
+
+    try {
+      await autoSaveTemplateDoc();
+    } catch (err) {
+      console.error("Error guardando tras eliminar capa:", err);
     }
   };
   
@@ -313,26 +468,39 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
   
     // normalizar
     const doc = mapDbTemplateToDoc(rawDoc);
+    const templateInfo = row?.template || {};
+    const settings = settingsFromRow({
+      ...templateInfo,
+      resolved: rawDoc,
+      layers: doc.layers,
+      backgroundSrc: doc.backgroundSrc,
+      meta: doc.meta,
+    });
+
+    doc.meta = {
+      ...(doc.meta || {}),
+      name: templateInfo.name || doc.meta?.name || "Template",
+      ...settings,
+    };
   
     if (!doc.canvas?.width || !doc.canvas?.height) {
       throw new Error(`Plantilla #${id} tiene canvas inválido`);
     }
   
-    // 🔑 RESOLVER el template
-    const resolvedDoc = resolveTemplate(doc, doc.data || {});
-  
-    const templateId = Number(row?.id ?? doc?.id ?? id);
-  
+    const templateId = Number(row?.templateId ?? row?.id ?? doc?.id ?? id);
+
+    // Guardar rutas relativas en estado; resolveLayer/resolveTemplate resuelven al pintar/exportar.
     setDoc(
       {
-        ...resolvedDoc,
-        id: resolvedDoc.id ?? templateId,
+        ...doc,
+        meta: doc.meta,
+        id: templateId,
         __metaTemplateId: templateId,
       },
       "backend(loadById)"
     );
-  
-    return resolvedDoc;
+
+    return { ...doc, meta: doc.meta };
   };
   
 
@@ -342,6 +510,14 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
 
     const rawDoc = row?.resolved ?? row;
     const doc = mapDbTemplateToDoc(rawDoc);
+    const templateInfo = row?.template || {};
+    const settings = settingsFromRow({
+      ...templateInfo,
+      resolved: rawDoc,
+      layers: doc.layers,
+      backgroundSrc: doc.backgroundSrc,
+      meta: doc.meta,
+    });
 
     const templateId = Number(row?.templateId ?? row?.template?.id ?? doc?.id ?? null);
 
@@ -349,6 +525,11 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
       ...doc,
       id: doc.id ?? templateId ?? null,
       __metaTemplateId: templateId ?? doc.id ?? null,
+      meta: {
+        ...(doc.meta || {}),
+        name: templateInfo.name || doc.meta?.name || "Template",
+        ...settings,
+      },
     };
 
     setDoc(fixed, "backend(default)");
@@ -498,7 +679,7 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
           if (!src) continue;
           try {
             const im = await loadImage(src);
-            drawImageFit(
+            drawImageWithCrop(
               ctx,
               im,
               x,
@@ -506,7 +687,8 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
               w,
               h,
               layer.props?.fit || "cover",
-              layer.props?.borderRadius || 0
+              layer.props?.borderRadius || 0,
+              layer.props?.cropNorm
             );
           } catch (err) {
             console.warn("Image load failed:", src, err);
@@ -615,11 +797,34 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
     }
   };
 
+  const updateTemplateMeta = (patch) => {
+    dispatch({ type: "SET_DOC_META", patch: settingsToMeta(patch) });
+  };
+
+  const addBackgroundLayer = useCallback(() => {
+    dispatch({ type: "ADD_BACKGROUND_LAYER" });
+  }, []);
+
   const value = useMemo(
     () => ({
       state,
       dispatch,
       stageRef,
+      viewScale,
+      setViewScale,
+      activeTool,
+      setActiveTool,
+      addBackgroundLayer,
+
+      foregroundColor,
+      backgroundColor,
+      activeColorSlot,
+      setForegroundColor,
+      setBackgroundColor,
+      setActiveColorSlot,
+      swapColors,
+      pickColor,
+      pickColorFromCanvas,
 
       layers,
       groups,
@@ -630,6 +835,11 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
       toggleVisible,
       toggleLocked,
       deleteLayer,
+
+      undo,
+      redo,
+      canUndo,
+      canRedo,
 
       exportAsImage,
       copyTemplate,
@@ -644,9 +854,13 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
       setDoc,
 
       saveTemplateDoc,
+      autoSaveTemplateDoc,
       getTemplateId,
+      updateTemplateMeta,
+      templateSettings: settingsFromRow(state.doc || {}),
+      requiresProduct: templateRequiresProduct(state.doc || {}),
     }),
-    [state, layers, groups, selectedId]
+    [state, layers, groups, selectedId, viewScale, activeTool, addBackgroundLayer, foregroundColor, backgroundColor, activeColorSlot, setForegroundColor, setBackgroundColor, pickColor, pickColorFromCanvas, swapColors, autoSaveTemplateDoc, undo, redo, canUndo, canRedo]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

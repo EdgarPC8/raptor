@@ -18,6 +18,7 @@ import {
   RadioGroup,
   FormControl,
   FormLabel,
+  MenuItem,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import AddBoxIcon from "@mui/icons-material/AddBox";
@@ -29,6 +30,8 @@ import SearchIcon from "@mui/icons-material/Search";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import ImageIcon from "@mui/icons-material/Image";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import PaymentsIcon from "@mui/icons-material/Payments";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useForm } from "react-hook-form";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -41,7 +44,14 @@ import {
   markSupplierOrderReceivedRequest,
   markSupplierOrderPaidRequest,
 } from "../../../../api/ordersRequest";
-import { getAllProductsAll } from "../../../../api/inventoryControlRequest";
+import { getAllProductsAll, getStoresRequest } from "../../../../api/inventoryControlRequest";
+import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
+import {
+  locationKindLabel,
+  normalizeLocationKind,
+  sortStoresByKind,
+  storeHoldsInventory,
+} from "../../../../utils/storeLocationKind.js";
 import { lookupSriPurchaseInvoiceByAccessKey } from "../../../../api/sriInvoicesRequest.js";
 import { useAuth } from "../../../../context/AuthContext";
 import SearchableSelect from "../../../../components/SearchableSelect";
@@ -153,8 +163,8 @@ function hydratePacksAndLots(rawItems) {
         expiresAt: "",
         manufacturedAt: "",
         totalPrice: "",
-        // Los packs reconstruidos pertenecen a un pedido existente.
-        expanded: false,
+        // Al editar, abrir pacas para ver productos agrupados.
+        expanded: true,
       };
       packByKey.set(packKey, pack);
       packs.push(pack);
@@ -308,11 +318,16 @@ function SupplierOrderForm(
   const [confirmReceived, setConfirmReceived] = useState(true);
   const [confirmPaid, setConfirmPaid] = useState(true);
   const [confirmPayMethod, setConfirmPayMethod] = useState("efectivo");
-  const settleRef = useRef({ receive: false, pay: false, payMethod: "efectivo" });
+  const [confirmReceiveStoreId, setConfirmReceiveStoreId] = useState("");
+  const [inventoryStores, setInventoryStores] = useState([]);
+  const [storesLoading, setStoresLoading] = useState(false);
+  const settleRef = useRef({ receive: false, pay: false, payMethod: "efectivo", storeId: null });
   const tourGenRef = useRef(0);
   const lotsRef = useRef([]);
   const packsRef = useRef([]);
   const { toast } = useAuth();
+  const { activeApp } = useAppSettings();
+  const multiStockEnabled = activeApp?.multiStockEnabled !== false;
 
   useEffect(() => {
     lotsRef.current = lots;
@@ -1073,6 +1088,69 @@ function SupplierOrderForm(
     if (id != null) setSelectedSupplier(String(id));
   };
 
+  const loadConfirmStores = async () => {
+    try {
+      setStoresLoading(true);
+      const { data } = await getStoresRequest();
+      const list = sortStoresByKind(
+        (Array.isArray(data) ? data : []).filter(
+          (s) => storeHoldsInventory(s.locationKind) && s.isActive !== false,
+        ),
+      );
+      setInventoryStores(list);
+      if (receiveStoreId) {
+        setConfirmReceiveStoreId(String(receiveStoreId));
+      } else {
+        const propia = list.find((s) => normalizeLocationKind(s.locationKind) === "propia");
+        const bodega = list.find((s) => normalizeLocationKind(s.locationKind) === "bodega");
+        const preferred = propia || bodega || list[0];
+        setConfirmReceiveStoreId(preferred ? String(preferred.id) : "");
+      }
+    } catch {
+      setInventoryStores([]);
+      setConfirmReceiveStoreId(receiveStoreId ? String(receiveStoreId) : "");
+    } finally {
+      setStoresLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (confirmOpen && multiStockEnabled && confirmReceived) {
+      void loadConfirmStores();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmOpen, multiStockEnabled, confirmReceived]);
+
+  const openConfirmDialog = ({ receive = true, pay = true } = {}) => {
+    setConfirmReceived(receive);
+    setConfirmPaid(pay);
+    setConfirmPayMethod("efectivo");
+    setConfirmOpen(true);
+  };
+
+  const resolveReceiveStoreId = () => {
+    const sid = confirmReceiveStoreId || receiveStoreId;
+    return sid ? Number(sid) : null;
+  };
+
+  const handleConfirmSettle = (receive, pay) => {
+    if (receive && multiStockEnabled && !resolveReceiveStoreId()) {
+      void toast?.({
+        message: "Elige Bodega o una sucursal para recibir el stock.",
+        variant: "warning",
+      });
+      return;
+    }
+    settleRef.current = {
+      receive,
+      pay,
+      payMethod: confirmPayMethod,
+      storeId: receive && multiStockEnabled ? resolveReceiveStoreId() : null,
+    };
+    setConfirmOpen(false);
+    handleSubmit(submitOrder)();
+  };
+
   const submitOrder = async (data) => {
     if (items.length === 0) {
       toast({ message: "Agrega al menos un producto", variant: "warning" });
@@ -1185,7 +1263,7 @@ function SupplierOrderForm(
     };
 
     const voucherFile = pendingVoucherFile;
-    const settle = settleRef.current || { receive: false, pay: false, payMethod: "efectivo" };
+    const settle = settleRef.current || { receive: false, pay: false, payMethod: "efectivo", storeId: null };
     const supplierName =
       suppliers.find((s) => String(s.id) === String(selectedSupplier))?.name || "Proveedor";
 
@@ -1230,10 +1308,10 @@ function SupplierOrderForm(
 
       if (orderId && settle.receive && !datos?.receivedAt) {
         try {
-          await markSupplierOrderReceivedRequest(orderId, {
-            receivedAt: payload.date,
-            ...(receiveStoreId ? { storeId: Number(receiveStoreId) } : {}),
-          });
+          const receivePayload = { receivedAt: payload.date };
+          const sid = settle.storeId || (receiveStoreId ? Number(receiveStoreId) : null);
+          if (sid) receivePayload.storeId = sid;
+          await markSupplierOrderReceivedRequest(orderId, receivePayload);
         } catch (err) {
           toast({
             message:
@@ -1272,7 +1350,7 @@ function SupplierOrderForm(
         });
       }
 
-      settleRef.current = { receive: false, pay: false, payMethod: "efectivo" };
+      settleRef.current = { receive: false, pay: false, payMethod: "efectivo", storeId: null };
       setConfirmOpen(false);
       reset();
       setItems([]);
@@ -1993,10 +2071,32 @@ function SupplierOrderForm(
             size="small"
             sx={{ minWidth: 150, px: 2 }}
             onClick={() => {
-              settleRef.current = { receive: false, pay: false, payMethod: "efectivo" };
+              settleRef.current = { receive: false, pay: false, payMethod: "efectivo", storeId: null };
             }}
           >
             {isEditing ? "Guardar pedido" : "Guardar pedido"}
+          </Button>
+          <Button
+            type="button"
+            variant="outlined"
+            size="small"
+            color="warning"
+            startIcon={<LocalShippingIcon />}
+            sx={{ minWidth: 140, px: 2 }}
+            onClick={() => openConfirmDialog({ receive: true, pay: false })}
+          >
+            Solo recibir
+          </Button>
+          <Button
+            type="button"
+            variant="outlined"
+            size="small"
+            color="secondary"
+            startIcon={<PaymentsIcon />}
+            sx={{ minWidth: 130, px: 2 }}
+            onClick={() => openConfirmDialog({ receive: false, pay: true })}
+          >
+            Solo pagar
           </Button>
           <Button
             type="button"
@@ -2004,12 +2104,7 @@ function SupplierOrderForm(
             size="small"
             color={fromShift ? "primary" : "secondary"}
             sx={{ minWidth: 160, px: 2 }}
-            onClick={() => {
-              setConfirmReceived(true);
-              setConfirmPaid(true);
-              setConfirmPayMethod("efectivo");
-              setConfirmOpen(true);
-            }}
+            onClick={() => openConfirmDialog({ receive: true, pay: true })}
           >
             Recibir y pagar
           </Button>
@@ -2018,13 +2113,19 @@ function SupplierOrderForm(
 
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle sx={{ fontWeight: 700, fontSize: "1.05rem" }}>
-          ¿Confirmás recibido y pagado?
+          {confirmReceived && confirmPaid
+            ? "Recibir y pagar pedido"
+            : confirmReceived
+              ? "Recibir pedido"
+              : confirmPaid
+                ? "Registrar pago"
+                : "Confirmar acción"}
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
             {fromShift
               ? "Si pagás en efectivo, sale de la caja del turno para que cuadre al cierre."
-              : "Podés marcar solo lo que ya pasó. Lo demás queda pendiente."}
+              : "Elegí qué registrar ahora. Lo demás queda pendiente para después."}
           </Typography>
           <FormControlLabel
             control={
@@ -2035,6 +2136,33 @@ function SupplierOrderForm(
             }
             label="Recibido (entra al inventario)"
           />
+          {confirmReceived && multiStockEnabled ? (
+            <Box sx={{ mt: 1, mb: 1.5 }}>
+              <Alert severity="warning" sx={{ py: 0.75, mb: 1.5 }}>
+                Multistock activo: elegí <strong>dónde entra</strong> la mercadería antes de confirmar.
+              </Alert>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="Recibir en"
+                value={confirmReceiveStoreId}
+                onChange={(e) => setConfirmReceiveStoreId(e.target.value)}
+                disabled={storesLoading}
+                helperText={
+                  storesLoading
+                    ? "Cargando locales…"
+                    : "Recomendado: la sucursal donde abrís caja."
+                }
+              >
+                {inventoryStores.map((s) => (
+                  <MenuItem key={s.id} value={String(s.id)}>
+                    {s.name} ({locationKindLabel(s.locationKind)})
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+          ) : null}
           <FormControlLabel
             control={
               <Checkbox
@@ -2066,23 +2194,47 @@ function SupplierOrderForm(
             </FormControl>
           ) : null}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmOpen(false)}>Cancelar</Button>
-          <Button
-            variant="contained"
-            disabled={!confirmReceived && !confirmPaid}
-            onClick={() => {
-              settleRef.current = {
-                receive: confirmReceived,
-                pay: confirmPaid,
-                payMethod: confirmPayMethod,
-              };
-              setConfirmOpen(false);
-              handleSubmit(submitOrder)();
-            }}
-          >
-            Confirmar y guardar
+        <DialogActions sx={{ flexWrap: "wrap", gap: 0.5, px: 2, pb: 1.5 }}>
+          <Button onClick={() => setConfirmOpen(false)} color="inherit">
+            Cancelar
           </Button>
+          <Box sx={{ flex: 1 }} />
+          {confirmReceived ? (
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<LocalShippingIcon />}
+              disabled={storesLoading || (multiStockEnabled && !confirmReceiveStoreId && !receiveStoreId)}
+              onClick={() => handleConfirmSettle(true, false)}
+            >
+              Solo recibir
+            </Button>
+          ) : null}
+          {confirmPaid && !confirmReceived ? (
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={<PaymentsIcon />}
+              onClick={() => handleConfirmSettle(false, true)}
+            >
+              Solo pagar
+            </Button>
+          ) : null}
+          {confirmReceived && confirmPaid ? (
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<LocalShippingIcon />}
+              disabled={storesLoading || (multiStockEnabled && !confirmReceiveStoreId && !receiveStoreId)}
+              onClick={() => handleConfirmSettle(true, true)}
+            >
+              Recibir y pagar
+            </Button>
+          ) : confirmReceived ? null : confirmPaid ? null : (
+            <Button variant="contained" disabled>
+              Marcá recibido y/o pagado
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 

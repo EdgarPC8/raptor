@@ -37,6 +37,10 @@ import {
   updateGroupPaymentRequest,
   deleteGroupPaymentRequest,
 } from "../../../../api/ordersRequest";
+import {
+  fetchCustomerOrderForEdit,
+  mergeCustomerOrderForEdit,
+} from "./collectionsOrderEditHelpers.js";
 import { useAuth } from "../../../../context/AuthContext";
 import {
   safeFileName,
@@ -472,39 +476,30 @@ export default function CollectionsWorkbench() {
   };
 
 
-  const openEditOrder = (orderId) => {
+  const openEditOrder = async (orderId) => {
     const id = Number(orderId);
     if (!Number.isFinite(id)) return;
-    const full =
+    const stub =
       orders.find((o) => Number(o.id) === id) ||
       customerOrders.find((o) => Number(o.id) === id);
-    if (!full) return;
-    setOrderToEdit({
-      id: full.id,
-      customerId: full.customerId,
-      date: full.date,
-      notes: full.notes || "",
-      status: full.status,
-      paidAt: full.paidAt || null,
-      deliveredAt: full.deliveredAt || null,
-      ERP_order_items: (full.items || []).map((it) => ({
-        id: it.id,
-        productId: it.productId,
-        quantity: it.qty ?? it.quantity,
-        soldQty: it.soldQty,
-        damagedQty: it.damagedQty,
-        giftQty: it.giftQty,
-        replacedQty: it.replacedQty,
-        price: it.price,
-        deliveredAt: it.deliveredAt || null,
-        paidAt: it.paidAt || null,
-        ERP_inventory_product: {
-          id: it.productId,
-          name: it.product || it.productName || it.name || "(sin nombre)",
-        },
-      })),
-    });
-    setEditOrderOpen(true);
+    try {
+      setLoading(true);
+      const fetched = await fetchCustomerOrderForEdit(id, stub?.date);
+      const mapped = mergeCustomerOrderForEdit(fetched, stub);
+      if (!mapped) {
+        setUiMsg({ type: "error", text: "No se pudo cargar el pedido para editar" });
+        return;
+      }
+      setOrderToEdit(mapped);
+      setEditOrderOpen(true);
+    } catch (err) {
+      setUiMsg({
+        type: "error",
+        text: err?.response?.data?.message || "Error al abrir el pedido",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const closeEditOrder = () => {
@@ -1633,6 +1628,7 @@ export default function CollectionsWorkbench() {
             reload={() => loadWorkbench(true)}
             isEditing
             datos={orderToEdit}
+            active={editOrderOpen}
           />
         ) : null}
       </SimpleDialog>

@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import EditNoteIcon from "@mui/icons-material/EditNote";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
   getBillableQty,
   getItemGroupId,
@@ -32,6 +33,7 @@ import {
   formatCreditDueLabel,
   pickNextCredit,
 } from "./creditHelpers.js";
+import OrderItemsPackBreakdown from "./OrderItemsPackBreakdown.jsx";
 
 const VIEW_TABS = [
   { id: "orders", label: "Por pedidos" },
@@ -62,6 +64,7 @@ export default function CollectionsPendingViewTab({
   onTxtReport,
 }) {
   const [sub, setSub] = useState(0);
+  const [expandedOrders, setExpandedOrders] = useState(() => new Set());
   const view = VIEW_TABS[sub]?.id || "orders";
 
   const orderMetaById = useMemo(() => {
@@ -114,6 +117,18 @@ export default function CollectionsPendingViewTab({
     ids.length > 0 &&
     ids.some((id) => selectedItemIds.includes(id)) &&
     !idsAllSelected(ids);
+
+  const toggleOrderExpanded = (orderId) => {
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      const key = Number(orderId);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleSingleItem = (id) => onToggleItemIds?.([id]);
 
   return (
     <Box sx={{ p: { xs: 1.25, sm: 1.5 } }}>
@@ -205,6 +220,7 @@ export default function CollectionsPendingViewTab({
             <TableHead>
               <TableRow>
                 <TableCell padding="checkbox" sx={{ width: 40 }} />
+                <TableCell sx={{ width: 36, py: 0.75 }} />
                 <TableCell sx={{ fontWeight: 800, py: 0.75 }}>Pedido</TableCell>
                 <TableCell sx={{ fontWeight: 800, py: 0.75 }}>Fecha</TableCell>
                 <TableCell sx={{ fontWeight: 800, py: 0.75 }}>Crédito</TableCell>
@@ -214,7 +230,7 @@ export default function CollectionsPendingViewTab({
                 <TableCell align="right" sx={{ fontWeight: 800, py: 0.75 }}>
                   Total
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800, py: 0.75, width: 90 }}>
+                <TableCell align="right" sx={{ fontWeight: 800, py: 0.75, width: 130 }}>
                   Acción
                 </TableCell>
               </TableRow>
@@ -223,8 +239,10 @@ export default function CollectionsPendingViewTab({
               {byOrders.map((ord) => {
                 const ids = ord.items.map((it) => it.id);
                 const credit = pickNextCredit(ord);
+                const expanded = expandedOrders.has(Number(ord.orderId));
                 return (
-                  <TableRow key={ord.orderId} hover sx={{ "& td": { py: 0.5 } }}>
+                  <React.Fragment key={ord.orderId}>
+                  <TableRow hover sx={{ "& td": { py: 0.5 } }}>
                     <TableCell padding="checkbox">
                       <Checkbox
                         size="small"
@@ -236,6 +254,21 @@ export default function CollectionsPendingViewTab({
                           "aria-label": `Seleccionar pedido ${ord.orderId}`,
                         }}
                       />
+                    </TableCell>
+                    <TableCell sx={{ width: 36, py: 0.25 }}>
+                      <IconButton
+                        size="small"
+                        onClick={() => toggleOrderExpanded(ord.orderId)}
+                        aria-label={expanded ? "Ocultar productos" : "Ver productos"}
+                      >
+                        <ExpandMoreIcon
+                          fontSize="small"
+                          sx={{
+                            transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
+                            transition: "transform 0.15s",
+                          }}
+                        />
+                      </IconButton>
                     </TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>#{ord.orderId}</TableCell>
                     <TableCell>{ord.date || "—"}</TableCell>
@@ -313,6 +346,21 @@ export default function CollectionsPendingViewTab({
                       </Stack>
                     </TableCell>
                   </TableRow>
+                  {expanded ? (
+                    <TableRow>
+                      <TableCell colSpan={8} sx={{ py: 1, bgcolor: "action.hover" }}>
+                        <OrderItemsPackBreakdown
+                          items={ord.items}
+                          variant="customer"
+                          canSelect
+                          selectedItemIds={selectedItemIds}
+                          onToggleItem={toggleSingleItem}
+                          busy={busy}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  </React.Fragment>
                 );
               })}
             </TableBody>

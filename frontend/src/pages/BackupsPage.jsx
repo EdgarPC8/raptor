@@ -33,6 +33,7 @@ import {
   getBackupsWorkbenchRequest,
   uploadBackup,
   saveBackup,
+  reloadBD,
   downloadMainBackupFile,
   downloadStoredBackupFile,
   setMainBackupFromStoredRequest,
@@ -112,7 +113,7 @@ function MainBackupCard({ main, onUpload, onDownload, uploading }) {
   );
 }
 
-export default function BackupsPage() {
+export default function BackupsPage({ embedded = false }) {
   const { user, toast } = useAuth();
   const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -122,6 +123,7 @@ export default function BackupsPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [setMainTarget, setSetMainTarget] = useState(null);
   const [pruneOpen, setPruneOpen] = useState(false);
+  const [reloadOpen, setReloadOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -223,6 +225,20 @@ export default function BackupsPage() {
     }
   };
 
+  const confirmReloadBd = async () => {
+    setSaving(true);
+    try {
+      await runMutationReload(toast, {
+        promise: reloadBD(),
+        reload: load,
+        onClose: () => setReloadOpen(false),
+        successMessage: "Base recargada desde backup.json",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const confirmPruneStored = async () => {
     setSaving(true);
     try {
@@ -303,12 +319,12 @@ export default function BackupsPage() {
     []
   );
 
-  if (user?.loginRol !== "Programador") {
+  if (!embedded && user?.loginRol !== "Programador") {
     return <Navigate to="/" replace />;
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
+    <Box component={embedded ? "div" : Container} {...(embedded ? {} : { maxWidth: "lg", sx: { py: 3 } })}>
       <input
         ref={fileInputRef}
         type="file"
@@ -317,6 +333,36 @@ export default function BackupsPage() {
         onChange={handleFileChange}
       />
 
+      {embedded ? (
+        <Stack
+          data-tour="config-backups-actions"
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1}
+          flexWrap="wrap"
+          sx={{ mb: 2 }}
+        >
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={load} disabled={loading}>
+            Actualizar lista
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<SaveIcon />}
+            onClick={handleSaveFromDb}
+            disabled={saving || loading}
+          >
+            Guardar desde BD
+          </Button>
+          <Button
+            variant="outlined"
+            color="warning"
+            startIcon={<BackupIcon />}
+            onClick={() => setReloadOpen(true)}
+            disabled={saving || loading || !main?.exists}
+          >
+            Recargar BD
+          </Button>
+        </Stack>
+      ) : (
       <Stack
         direction={{ xs: "column", sm: "row" }}
         alignItems={{ xs: "stretch", sm: "center" }}
@@ -349,16 +395,23 @@ export default function BackupsPage() {
           </Button>
         </Stack>
       </Stack>
+      )}
 
       <Alert severity="info" sx={{ mb: 2 }}>
-        Subir o cambiar <strong>backup.json</strong> no modifica la base de datos hasta que uses{" "}
-        <Button component={RouterLink} to={APP_ROUTES.developer.commands} size="small" sx={{ verticalAlign: "baseline" }}>
-          Comandos → Recargar BD
-        </Button>
-        .
+        Subir o cambiar <strong>backup.json</strong> no modifica la base hasta que recargues.
+        {embedded ? (
+          " Usá Recargar BD en esta pestaña."
+        ) : (
+          <>
+            {" "}
+            <Button component={RouterLink} to={APP_ROUTES.developer.commands} size="small" sx={{ verticalAlign: "baseline" }}>
+              Comandos → Recargar BD
+            </Button>
+          </>
+        )}
       </Alert>
 
-      <Grid container spacing={2} sx={{ mb: 3 }}>
+      <Grid container spacing={2} sx={{ mb: 3 }} data-tour="config-backups-main">
         <Grid item xs={12}>
           <MainBackupCard
             main={main}
@@ -419,7 +472,7 @@ export default function BackupsPage() {
         open={Boolean(setMainTarget)}
         onClose={() => !saving && setSetMainTarget(null)}
         title="¿Usar como backup fijo?"
-        message={`«${setMainTarget}» reemplazará backup.json. Luego puedes recargar la BD desde Comandos.`}
+        message={`«${setMainTarget}» reemplazará backup.json. Luego recargá la BD para aplicarlo.`}
         onClickAccept={confirmSetMain}
       />
 
@@ -434,6 +487,14 @@ export default function BackupsPage() {
         }
         onClickAccept={confirmPruneStored}
       />
-    </Container>
+
+      <SimpleDialog
+        open={reloadOpen}
+        onClose={() => !saving && setReloadOpen(false)}
+        title="¿Recargar la base de datos?"
+        message="Se borrarán los datos actuales y se restaurarán desde backup.json. Esta acción no se puede deshacer."
+        onClickAccept={confirmReloadBd}
+      />
+    </Box>
   );
 }
