@@ -14,7 +14,7 @@ export const reloadBD = () =>
 export const saveBackup = () =>
   isGuestDataMode()
     ? guestDenied()
-    : axios.get("/comands/saveBackup", { ...auth(), timeout: 60000 });
+    : axios.get("/comands/saveBackup", { ...auth(), timeout: 180000 });
 
 export const getPanelStats = () =>
   isGuestDataMode() ? guestFrom("panelStats") : axios.get("/comands/panel-stats", auth());
