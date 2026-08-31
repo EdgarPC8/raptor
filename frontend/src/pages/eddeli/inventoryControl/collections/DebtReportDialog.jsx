@@ -17,6 +17,8 @@ import {
   Divider,
   TextField,
   Paper,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ImageIcon from "@mui/icons-material/Image";
@@ -196,6 +198,10 @@ export default function DebtReportDialog({
   const [busy, setBusy] = useState(false);
   const [format, setFormat] = useState(settingsFormat);
   const [viewMode, setViewMode] = useState("resumen"); // resumen | acta
+  const [showByProduct, setShowByProduct] = useState(true);
+  const [showByDate, setShowByDate] = useState(true);
+  const [showByOrders, setShowByOrders] = useState(true);
+  const [asTable, setAsTable] = useState(false);
   const [copied, setCopied] = useState(false);
   /** Monto editable en constancia (solo Programador). */
   const [amountInput, setAmountInput] = useState("");
@@ -248,8 +254,30 @@ export default function DebtReportDialog({
       agg.total = Number((agg.total + line).toFixed(2));
 
       const dKey = String(it.orderDate || "—");
-      if (!byDate.has(dKey)) byDate.set(dKey, []);
-      byDate.get(dKey).push({ product: pKey, qty, price, line });
+      if (!byDate.has(dKey)) {
+        byDate.set(dKey, { products: new Map(), orders: new Map(), total: 0, qty: 0 });
+      }
+      const day = byDate.get(dKey);
+      day.total = Number((day.total + line).toFixed(2));
+      day.qty = Number((day.qty + qty).toFixed(2));
+
+      const dayProdKey = `${pKey}\0${price}`;
+      if (!day.products.has(dayProdKey)) {
+        day.products.set(dayProdKey, { product: pKey, qty: 0, price, line: 0 });
+      }
+      const dayProd = day.products.get(dayProdKey);
+      dayProd.qty = Number((dayProd.qty + qty).toFixed(2));
+      dayProd.line = Number((dayProd.line + line).toFixed(2));
+
+      const oid = it.orderId != null && it.orderId !== "" ? Number(it.orderId) : 0;
+      const orderKey = oid > 0 ? `o:${oid}` : `i:${it.id ?? `${pKey}-${dKey}`}`;
+      if (!day.orders.has(orderKey)) {
+        day.orders.set(orderKey, { orderId: oid > 0 ? oid : null, lines: [], total: 0, qty: 0 });
+      }
+      const ord = day.orders.get(orderKey);
+      ord.total = Number((ord.total + line).toFixed(2));
+      ord.qty = Number((ord.qty + qty).toFixed(2));
+      ord.lines.push({ product: pKey, qty, price, line });
     }
 
     const completedPays = (payments || []).filter(
@@ -273,9 +301,24 @@ export default function DebtReportDialog({
       }));
 
     const products = Array.from(byProduct.values()).sort((a, b) => b.total - a.total);
-    const dates = Array.from(byDate.entries()).sort((a, b) =>
-      String(a[0]).localeCompare(String(b[0])),
-    );
+    const dates = Array.from(byDate.entries())
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+      .map(([date, day]) => ({
+        date,
+        total: day.total,
+        qty: day.qty,
+        products: Array.from(day.products.values()).sort((a, b) => b.line - a.line),
+        orders: Array.from(day.orders.values())
+          .sort((a, b) => {
+            const ai = a.orderId || 0;
+            const bi = b.orderId || 0;
+            return ai - bi;
+          })
+          .map((ord) => ({
+            ...ord,
+            lines: ord.lines.slice().sort((a, b) => b.line - a.line),
+          })),
+      }));
 
     // Acta = dinero entregado: abonos del grupo, o saldo/total de la cuenta
     const delivered =
@@ -328,17 +371,17 @@ export default function DebtReportDialog({
 
   const resumenHtml = useMemo(() => {
     const F = getFontConfig(format);
-    const BORDER = "#000";
-    const ROW = "#ccc";
     const FONT = "'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+    const ink = "#000";
 
     const sectionHeader = (label) =>
-      `<div style="font-size:${F.sub}px;font-weight:800;color:#000;border-bottom:2px solid ${BORDER};padding-bottom:3px;margin:14px 0 6px">${label}</div>`;
+      `<div style="font-size:${F.sub}px;font-weight:800;color:${ink};border-bottom:2px solid #000;padding-bottom:3px;margin:14px 0 6px">${label}</div>`;
 
-    const productRows = report.products.length
+    // Estilo simple (como al inicio): sin check Tabla
+    const simpleProductRows = report.products.length
       ? report.products
           .map(
-            (p) => `<tr style="border-bottom:1px solid ${ROW}">
+            (p) => `<tr style="border-bottom:1px solid #ccc">
               <td style="font-size:${F.cell}px;padding:${F.pad}">${escapeHtml(p.product)}</td>
               <td style="font-size:${F.cell}px;padding:${F.pad};text-align:center">${p.qty}</td>
               <td style="font-size:${F.cell}px;padding:${F.pad};text-align:right;font-weight:700">${money(p.total)}</td>
@@ -347,15 +390,18 @@ export default function DebtReportDialog({
           .join("")
       : `<tr><td colspan="3" style="font-size:${F.cell}px;padding:${F.pad};text-align:center">Sin ítems en este resumen</td></tr>`;
 
-    const dateBlocks = report.dates.length
+    const simpleDateBlocks = report.dates.length
       ? report.dates
           .map(
-            ([date, rows]) => `
-            <div style="font-weight:800;font-size:${F.cell}px;color:#000;border-bottom:1px solid ${BORDER};padding:3px 0;margin-top:8px">${escapeHtml(formatDateLong(date))}</div>
+            (day) => `
+            <div style="font-weight:800;font-size:${F.cell}px;color:#000;border-bottom:1px solid #000;padding:3px 0;margin-top:8px;display:flex;justify-content:space-between;gap:8px">
+              <span>${escapeHtml(formatDateLong(day.date))}</span>
+              <span>${money(day.total)}</span>
+            </div>
             <table style="width:100%;border-collapse:collapse"><tbody>
-              ${rows
+              ${day.products
                 .map(
-                  (r) => `<tr style="border-bottom:1px solid ${ROW}">
+                  (r) => `<tr style="border-bottom:1px solid #ccc">
                     <td style="font-size:${F.cell}px;padding:${F.pad}">${escapeHtml(r.product)}</td>
                     <td style="font-size:${F.cell}px;padding:${F.pad};text-align:center">${r.qty}</td>
                     <td style="font-size:${F.cell}px;padding:${F.pad};text-align:right">${moneyUnitPrice(r.price)}</td>
@@ -363,8 +409,185 @@ export default function DebtReportDialog({
                   </tr>`,
                 )
                 .join("")}
+              <tr>
+                <td colspan="3" style="font-size:${F.cell}px;padding:${F.pad};font-weight:800">Total del día</td>
+                <td style="font-size:${F.cell}px;padding:${F.pad};text-align:right;font-weight:800">${money(day.total)}</td>
+              </tr>
             </tbody></table>`,
           )
+          .join("")
+      : `<div style="font-size:${F.cell}px">Sin datos.</div>`;
+
+    const simpleOrderBlocks = report.dates.length
+      ? report.dates
+          .map((day) => {
+            const ordersHtml = day.orders
+              .map((ord) => {
+                const label =
+                  ord.orderId != null ? `Pedido #${ord.orderId}` : "Pedido (sin número)";
+                return `
+                <div style="font-weight:800;font-size:${F.cell}px;color:#000;padding:3px 0;margin-top:6px;display:flex;justify-content:space-between;gap:8px">
+                  <span>${escapeHtml(label)}</span>
+                  <span>${money(ord.total)}</span>
+                </div>
+                <table style="width:100%;border-collapse:collapse"><tbody>
+                  ${ord.lines
+                    .map(
+                      (r) => `<tr style="border-bottom:1px solid #ccc">
+                        <td style="font-size:${F.cell}px;padding:${F.pad}">${escapeHtml(r.product)}</td>
+                        <td style="font-size:${F.cell}px;padding:${F.pad};text-align:center">${r.qty}</td>
+                        <td style="font-size:${F.cell}px;padding:${F.pad};text-align:right">${moneyUnitPrice(r.price)}</td>
+                        <td style="font-size:${F.cell}px;padding:${F.pad};text-align:right;font-weight:700">${money(r.line)}</td>
+                      </tr>`,
+                    )
+                    .join("")}
+                  <tr>
+                    <td colspan="3" style="font-size:${F.cell}px;padding:${F.pad};font-weight:800">Total pedido</td>
+                    <td style="font-size:${F.cell}px;padding:${F.pad};text-align:right;font-weight:800">${money(ord.total)}</td>
+                  </tr>
+                </tbody></table>`;
+              })
+              .join("");
+            return `
+              <div style="font-weight:800;font-size:${F.cell}px;color:#000;border-bottom:1px solid #000;padding:3px 0;margin-top:10px;display:flex;justify-content:space-between;gap:8px">
+                <span>${escapeHtml(formatDateLong(day.date))}</span>
+                <span>${money(day.total)}</span>
+              </div>
+              ${ordersHtml}
+              <div style="font-size:${F.cell}px;font-weight:800;padding:6px 0;margin-top:4px;display:flex;justify-content:space-between">
+                <span>Total del día</span>
+                <span>${money(day.total)}</span>
+              </div>`;
+          })
+          .join("")
+      : `<div style="font-size:${F.cell}px">Sin datos.</div>`;
+
+    // Estilo tabla completa + color en celdas (con check Tabla)
+    const border = "#94a3b8";
+    const cellPad = F.pad;
+    const thBg = "#e2e8f0";
+    const dateBg = "#bfdbfe";
+    const orderBg = "#fde68a";
+    const totalBg = "#bbf7d0";
+    const altBg = "#f8fafc";
+
+    const cell = (content, { align, weight, bg, colspan, tag = "td" } = {}) => {
+      const styles = [
+        `font-size:${F.cell}px`,
+        `padding:${cellPad}`,
+        `border:1px solid ${border}`,
+        `color:${ink}`,
+        align ? `text-align:${align}` : null,
+        weight ? `font-weight:${weight}` : null,
+        bg ? `background:${bg}` : null,
+      ]
+        .filter(Boolean)
+        .join(";");
+      return `<${tag}${colspan ? ` colspan="${colspan}"` : ""} style="${styles}">${content}</${tag}>`;
+    };
+    const th = (content, opts = {}) =>
+      cell(content, { bg: thBg, weight: 800, tag: "th", ...opts });
+    const td = (content, opts = {}) => cell(content, opts);
+
+    const tableProductRows = report.products.length
+      ? report.products
+          .map(
+            (p, i) => `<tr style="background:${i % 2 ? altBg : "transparent"}">
+              ${td(escapeHtml(p.product))}
+              ${td(String(p.qty), { align: "center" })}
+              ${td(money(p.total), { align: "right", weight: 700 })}
+            </tr>`,
+          )
+          .join("")
+      : `<tr>${td("Sin ítems en este resumen", { align: "center", colspan: 3 })}</tr>`;
+
+    const tableDateBlocks = report.dates.length
+      ? report.dates
+          .map((day) => {
+            const body = day.products
+              .map(
+                (r, i) => `<tr style="background:${i % 2 ? altBg : "transparent"}">
+                  ${td(escapeHtml(r.product))}
+                  ${td(String(r.qty), { align: "center" })}
+                  ${td(moneyUnitPrice(r.price), { align: "right" })}
+                  ${td(money(r.line), { align: "right", weight: 700 })}
+                </tr>`,
+              )
+              .join("");
+            return `
+            <table style="width:100%;border-collapse:collapse;margin-top:8px">
+              <thead>
+                <tr>
+                  ${th(escapeHtml(formatDateLong(day.date)), { align: "left", bg: dateBg })}
+                  ${th("Cant", { align: "center", bg: dateBg })}
+                  ${th("P.unit", { align: "right", bg: dateBg })}
+                  ${th(money(day.total), { align: "right", bg: dateBg })}
+                </tr>
+              </thead>
+              <tbody>
+                ${body}
+                <tr>
+                  ${td("Total del día", { colspan: 3, weight: 800, bg: totalBg })}
+                  ${td(money(day.total), { align: "right", weight: 800, bg: totalBg })}
+                </tr>
+              </tbody>
+            </table>`;
+          })
+          .join("")
+      : `<div style="font-size:${F.cell}px">Sin datos.</div>`;
+
+    const tableOrderBlocks = report.dates.length
+      ? report.dates
+          .map((day) => {
+            const ordersHtml = day.orders
+              .map((ord) => {
+                const label =
+                  ord.orderId != null ? `Pedido #${ord.orderId}` : "Pedido (sin número)";
+                const lines = ord.lines
+                  .map(
+                    (r, i) => `<tr style="background:${i % 2 ? altBg : "transparent"}">
+                      ${td(escapeHtml(r.product))}
+                      ${td(String(r.qty), { align: "center" })}
+                      ${td(moneyUnitPrice(r.price), { align: "right" })}
+                      ${td(money(r.line), { align: "right", weight: 700 })}
+                    </tr>`,
+                  )
+                  .join("");
+                return `
+                <table style="width:100%;border-collapse:collapse;margin-top:6px">
+                  <thead>
+                    <tr>
+                      ${th(escapeHtml(label), { align: "left", bg: orderBg })}
+                      ${th("Cant", { align: "center", bg: orderBg })}
+                      ${th("P.unit", { align: "right", bg: orderBg })}
+                      ${th(money(ord.total), { align: "right", bg: orderBg })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${lines}
+                    <tr>
+                      ${td("Total pedido", { colspan: 3, weight: 800, bg: totalBg })}
+                      ${td(money(ord.total), { align: "right", weight: 800, bg: totalBg })}
+                    </tr>
+                  </tbody>
+                </table>`;
+              })
+              .join("");
+            return `
+              <table style="width:100%;border-collapse:collapse;margin-top:10px">
+                <tr>
+                  ${th(escapeHtml(formatDateLong(day.date)), { align: "left", bg: dateBg })}
+                  ${th(money(day.total), { align: "right", bg: dateBg })}
+                </tr>
+              </table>
+              ${ordersHtml}
+              <table style="width:100%;border-collapse:collapse;margin-top:4px">
+                <tr>
+                  ${td("Total del día", { weight: 800, bg: totalBg })}
+                  ${td(money(day.total), { align: "right", weight: 800, bg: totalBg })}
+                </tr>
+              </table>`;
+          })
           .join("")
       : `<div style="font-size:${F.cell}px">Sin datos.</div>`;
 
@@ -372,8 +595,27 @@ export default function DebtReportDialog({
       ? `${sectionHeader("Abonos del grupo")}
         ${
           report.payRows.length
-            ? `<table style="width:100%;border-collapse:collapse">
-                <thead><tr style="border-bottom:2px solid ${BORDER}">
+            ? asTable
+              ? `<table style="width:100%;border-collapse:collapse">
+                <thead><tr>
+                  ${th("Fecha", { align: "left" })}
+                  ${th("Nota", { align: "left" })}
+                  ${th("Monto", { align: "right" })}
+                </tr></thead>
+                <tbody>
+                  ${report.payRows
+                    .map(
+                      (p, i) => `<tr style="background:${i % 2 ? altBg : "transparent"}">
+                        ${td(escapeHtml(formatDateLong(p.date)))}
+                        ${td(escapeHtml(p.note || p.method || "—"))}
+                        ${td(money(p.amount), { align: "right", weight: 700 })}
+                      </tr>`,
+                    )
+                    .join("")}
+                </tbody>
+              </table>`
+              : `<table style="width:100%;border-collapse:collapse">
+                <thead><tr style="border-bottom:2px solid #000">
                   <th style="text-align:left;font-size:${F.cell}px;padding:${F.pad};font-weight:800">Fecha</th>
                   <th style="text-align:left;font-size:${F.cell}px;padding:${F.pad};font-weight:800">Nota</th>
                   <th style="text-align:right;font-size:${F.cell}px;padding:${F.pad};font-weight:800">Monto</th>
@@ -381,7 +623,7 @@ export default function DebtReportDialog({
                 <tbody>
                   ${report.payRows
                     .map(
-                      (p) => `<tr style="border-bottom:1px solid ${ROW}">
+                      (p) => `<tr style="border-bottom:1px solid #ccc">
                         <td style="font-size:${F.cell}px;padding:${F.pad}">${escapeHtml(formatDateLong(p.date))}</td>
                         <td style="font-size:${F.cell}px;padding:${F.pad}">${escapeHtml(p.note || p.method || "—")}</td>
                         <td style="font-size:${F.cell}px;padding:${F.pad};text-align:right;font-weight:700">${money(p.amount)}</td>
@@ -394,64 +636,108 @@ export default function DebtReportDialog({
         }`
       : "";
 
-    const totalsBlock = isGroup
-      ? `<div style="margin-top:16px;border:2px solid ${BORDER};border-radius:6px;padding:10px 14px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <span style="font-size:${F.cell}px">Total del grupo</span>
-            <span style="font-size:${F.cell}px;font-weight:700">${money(report.total)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <span style="font-size:${F.cell}px">Abonado</span>
-            <span style="font-size:${F.cell}px;font-weight:700">${money(report.paid)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;border-top:2px solid ${BORDER};padding-top:6px;margin-top:4px">
+    const totalsBlock = asTable
+      ? isGroup
+        ? `<table style="width:100%;border-collapse:collapse;margin-top:16px">
+            <tr>${td("Total del grupo")}${td(money(report.total), { align: "right", weight: 700 })}</tr>
+            <tr>${td("Abonado")}${td(money(report.paid), { align: "right", weight: 700 })}</tr>
+            <tr>${td("Saldo pendiente", { weight: 800, bg: totalBg })}${td(money(report.remaining), { align: "right", weight: 800, bg: totalBg })}</tr>
+          </table>`
+        : `<table style="width:100%;border-collapse:collapse;margin-top:16px">
+            <tr>${td("Saldo pendiente", { weight: 800, bg: totalBg })}${td(money(report.remaining), { align: "right", weight: 800, bg: totalBg })}</tr>
+          </table>`
+      : isGroup
+        ? `<div style="margin-top:16px;border:2px solid #000;border-radius:6px;padding:10px 14px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span style="font-size:${F.cell}px">Total del grupo</span>
+              <span style="font-size:${F.cell}px;font-weight:700">${money(report.total)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span style="font-size:${F.cell}px">Abonado</span>
+              <span style="font-size:${F.cell}px;font-weight:700">${money(report.paid)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;border-top:2px solid #000;padding-top:6px;margin-top:4px">
+              <span style="font-size:${F.sub}px;font-weight:800;color:#000">Saldo pendiente</span>
+              <span style="font-size:${F.total}px;font-weight:800;color:#000">${money(report.remaining)}</span>
+            </div>
+          </div>`
+        : `<div style="margin-top:16px;border:2px solid #000;border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
             <span style="font-size:${F.sub}px;font-weight:800;color:#000">Saldo pendiente</span>
             <span style="font-size:${F.total}px;font-weight:800;color:#000">${money(report.remaining)}</span>
-          </div>
-        </div>`
-      : `<div style="margin-top:16px;border:2px solid ${BORDER};border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:${F.sub}px;font-weight:800;color:#000">Saldo pendiente</span>
-          <span style="font-size:${F.total}px;font-weight:800;color:#000">${money(report.remaining)}</span>
-        </div>`;
+          </div>`;
 
     const resumenTitle = isGroup
       ? `Resumen del grupo${group?.id != null ? ` #${group.id}` : ""}`
       : "Resumen de tu cuenta";
 
-    return `<div style="font-family:${FONT};color:#000">
-      <div style="text-align:center;font-weight:800;font-size:${F.title}px">${escapeHtml(resumenTitle)}</div>
-      <div style="text-align:center;font-size:${F.cell}px;margin-top:2px;margin-bottom:12px">${escapeHtml(formatDateLong(todayISO()))}</div>
-
-      <div style="font-size:${F.sub}px;font-weight:800;color:#000">${escapeHtml(customer?.name || "—")}</div>
-      ${customer?.phone ? `<div style="font-size:${F.cell}px">Tel: ${escapeHtml(customer.phone)}</div>` : ""}
-      ${
-        isGroup
-          ? `<div style="font-size:${F.cell}px;margin-top:4px"><b>Grupo:</b> ${escapeHtml(groupLabel)}</div>`
-          : ""
-      }
-
-      ${sectionHeader("Resumen por producto")}
+    const productSection = showByProduct
+      ? asTable
+        ? `${sectionHeader("Resumen por producto")}
       <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="border-bottom:2px solid ${BORDER}">
+        <thead><tr>
+          ${th("Producto", { align: "left" })}
+          ${th("Cant", { align: "center" })}
+          ${th("Total", { align: "right" })}
+        </tr></thead>
+        <tbody>${tableProductRows}</tbody>
+      </table>`
+        : `${sectionHeader("Resumen por producto")}
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="border-bottom:2px solid #000">
           <th style="text-align:left;font-size:${F.cell}px;padding:${F.pad};font-weight:800">Producto</th>
           <th style="text-align:center;font-size:${F.cell}px;padding:${F.pad};font-weight:800">Cant</th>
           <th style="text-align:right;font-size:${F.cell}px;padding:${F.pad};font-weight:800">Total</th>
         </tr></thead>
-        <tbody>${productRows}</tbody>
-      </table>
+        <tbody>${simpleProductRows}</tbody>
+      </table>`
+      : "";
 
-      ${sectionHeader("Detalle por fecha")}
-      ${dateBlocks}
+    const dateSection = showByDate
+      ? `${sectionHeader("Detalle por fecha")}
+      ${asTable ? tableDateBlocks : simpleDateBlocks}`
+      : "";
+
+    const ordersSection = showByOrders
+      ? `${sectionHeader("Detalle por pedidos")}
+      ${asTable ? tableOrderBlocks : simpleOrderBlocks}`
+      : "";
+
+    return `<div style="font-family:${FONT};color:${ink}">
+      <div style="text-align:center;font-weight:800;font-size:${F.title}px;color:${ink}">${escapeHtml(resumenTitle)}</div>
+      <div style="text-align:center;font-size:${F.cell}px;margin-top:2px;margin-bottom:12px;color:${ink}">${escapeHtml(formatDateLong(todayISO()))}</div>
+
+      <div style="font-size:${F.sub}px;font-weight:800;color:${ink}">${escapeHtml(customer?.name || "—")}</div>
+      ${customer?.phone ? `<div style="font-size:${F.cell}px;color:${ink}">Tel: ${escapeHtml(customer.phone)}</div>` : ""}
+      ${
+        isGroup
+          ? `<div style="font-size:${F.cell}px;margin-top:4px;color:${ink}"><b>Grupo:</b> ${escapeHtml(groupLabel)}</div>`
+          : ""
+      }
+
+      ${productSection}
+      ${dateSection}
+      ${ordersSection}
 
       ${paymentsBlock}
 
       ${totalsBlock}
 
-      <div style="text-align:center;font-size:${F.cell}px;margin-top:16px;line-height:1.5">
+      <div style="text-align:center;font-size:${F.cell}px;margin-top:16px;line-height:1.5;color:${ink}">
         Gracias por su preferencia y confianza.
       </div>
     </div>`;
-  }, [report, format, customer, isGroup, groupLabel, group?.id]);
+  }, [
+    report,
+    format,
+    customer,
+    isGroup,
+    groupLabel,
+    group?.id,
+    showByProduct,
+    showByDate,
+    showByOrders,
+    asTable,
+  ]);
 
   const actaHtml = useMemo(() => {
     const F = getFontConfig(format === "a4" ? "a4" : format);
@@ -767,6 +1053,54 @@ export default function DebtReportDialog({
                 <ToggleButton value="ticket80">80 mm</ToggleButton>
                 <ToggleButton value="ticket55">55 mm</ToggleButton>
               </ToggleButtonGroup>
+            ) : null}
+            {viewMode === "resumen" ? (
+              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap alignItems="center">
+                <FormControlLabel
+                  sx={{ mr: 0.5, color: "#111" }}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={showByProduct}
+                      onChange={(e) => setShowByProduct(e.target.checked)}
+                    />
+                  }
+                  label="Por producto"
+                />
+                <FormControlLabel
+                  sx={{ mr: 0.5, color: "#111" }}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={showByDate}
+                      onChange={(e) => setShowByDate(e.target.checked)}
+                    />
+                  }
+                  label="Por fecha"
+                />
+                <FormControlLabel
+                  sx={{ mr: 0.5, color: "#111" }}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={showByOrders}
+                      onChange={(e) => setShowByOrders(e.target.checked)}
+                    />
+                  }
+                  label="Por pedidos"
+                />
+                <FormControlLabel
+                  sx={{ mr: 0, color: "#111" }}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={asTable}
+                      onChange={(e) => setAsTable(e.target.checked)}
+                    />
+                  }
+                  label="Tabla"
+                />
+              </Stack>
             ) : null}
             {viewMode === "acta" && isProgrammer ? (
               <Stack direction="row" spacing={1.5} alignItems="flex-start" flexWrap="wrap" useFlexGap>
