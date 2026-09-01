@@ -372,9 +372,7 @@ export default function TurnoPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const storesQuery = multiStockEnabled
-        ? { isActive: true, kind: "propia" }
-        : { isActive: true };
+      const storesQuery = { isActive: true, kind: "propia" };
       const [activeRes, histRes, storesRes, sriRes] = await Promise.all([
         getActiveShift(),
         getShifts({ limit: 12 }),
@@ -384,14 +382,14 @@ export default function TurnoPage() {
       setActiveShift(activeRes.data || null);
       setHistory(Array.isArray(histRes.data) ? histRes.data : []);
       const rawStores = Array.isArray(storesRes.data) ? storesRes.data : [];
+      // Solo sucursales propias. Sin multistock → un local; con multistock → varias propias.
       const usable = rawStores.filter((s) => {
         const active =
           s?.isActive === true || s?.isActive === 1 || s?.isActive === "1";
         if (!active) return false;
-        if (!multiStockEnabled) return true;
         return String(s?.locationKind || "").toLowerCase() === "propia";
       });
-      setStores(usable);
+      setStores(multiStockEnabled ? usable : usable.slice(0, 1));
       setSriSettings(sriRes);
     } catch (e) {
       void toast?.({
@@ -592,8 +590,8 @@ export default function TurnoPage() {
       });
       return;
     }
-    // Un solo local activo → abrir directo. Varios → elegir.
-    if (stores.length === 1) {
+    // Un solo local (Tienda/Store): abrir directo. Multistock: modal solo si hay varias propias.
+    if (!multiStockEnabled || stores.length === 1) {
       await doOpenShift(String(stores[0].id));
       return;
     }
@@ -1320,7 +1318,7 @@ export default function TurnoPage() {
       />
 
       <OpenShiftStoreDialog
-        open={storeModalOpen}
+        open={storeModalOpen && multiStockEnabled}
         stores={stores}
         sri={sriSettings}
         selectedId={pendingStoreId}
