@@ -54,8 +54,18 @@ const EMPTY_FILTERS = {
   environment: "",
   seller: "",
   paymentState: "",
+  paymentMethod: "",
   productId: "",
 };
+
+const PAYMENT_METHOD_FILTER_OPTIONS = [
+  { id: "", label: "Todos los métodos" },
+  { id: "efectivo", label: "Efectivo" },
+  { id: "transferencia", label: "Transferencia" },
+  { id: "tarjeta", label: "Tarjeta" },
+  { id: "credito", label: "Crédito" },
+  { id: "contado", label: "Contado (efectivo / transfer. / tarjeta)" },
+];
 
 const MONEY_COL = {
   align: "right",
@@ -118,6 +128,22 @@ function paymentStateOf(sale) {
   if (method === "credito" || status === "pendiente") return "pendiente";
   if (sale?.paidAt || status === "pagado") return "pagado";
   return "pendiente";
+}
+
+function normalizePaymentMethodKey(method) {
+  return String(method || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function matchesPaymentMethodFilter(row, filterKey) {
+  const key = String(filterKey || "").trim();
+  if (!key) return true;
+  const method = normalizePaymentMethodKey(row?.paymentMethod);
+  if (key === "contado") return method !== "credito";
+  return method === key;
 }
 
 function saleItems(sale) {
@@ -325,6 +351,7 @@ export default function FacturacionPage() {
       if (filters.environment && row.environment !== filters.environment) return false;
       if (filters.seller && row.sellerLabel !== filters.seller) return false;
       if (filters.paymentState && row.paymentState !== filters.paymentState) return false;
+      if (!matchesPaymentMethodFilter(row, filters.paymentMethod)) return false;
       if (productKey) {
         const items = saleItems(row);
         const hit = items.some((it) => {
@@ -522,6 +549,23 @@ export default function FacturacionPage() {
               <MenuItem value="pendiente">Pendiente</MenuItem>
             </TextField>
           </Grid>
+          <Grid item xs={12} md={3} data-tour="pos-payment-filter">
+            <SearchableSelect
+              label="Forma de pago"
+              placeholder="Efectivo, transferencia, contado…"
+              items={PAYMENT_METHOD_FILTER_OPTIONS}
+              value={filters.paymentMethod}
+              onChange={(v) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  paymentMethod: v == null ? "" : String(v),
+                }))
+              }
+              getOptionLabel={(item) => item?.label || ""}
+              getOptionValue={(item) => item?.id}
+              emptyOptionLabel="Todos los métodos"
+            />
+          </Grid>
           <Grid item xs={12} md={4} data-tour="pos-product-filter">
             <SearchableSelect
               label="Producto"
@@ -553,7 +597,7 @@ export default function FacturacionPage() {
           sx={{ display: "block", mt: 1 }}
         >
           Mostrando {filteredRows.length} de {mappedSales.length} comprobantes · buscá en la
-          tabla, ordená por columna o filtrá por producto
+          tabla, ordená por columna o filtrá por producto y forma de pago
         </Typography>
       </Paper>
 
@@ -620,6 +664,7 @@ export default function FacturacionPage() {
             getSortValue: (r) => Number(r.total || 0),
           },
           { id: "sriStatusLabel", label: "Estado", minWidth: 80, ...TEXT_COL(90) },
+          { id: "paymentMethodLabel", label: "Forma pago", minWidth: 88, ...TEXT_COL(96) },
           { id: "paymentStateLabel", label: "Pago", minWidth: 72 },
           {
             id: "print",

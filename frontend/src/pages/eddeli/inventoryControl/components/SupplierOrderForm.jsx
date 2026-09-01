@@ -1306,13 +1306,16 @@ function SupplierOrderForm(
         orderId = result?.data?.id || orderId;
       }
 
+      let receiveOk = Boolean(datos?.receivedAt);
       if (orderId && settle.receive && !datos?.receivedAt) {
         try {
           const receivePayload = { receivedAt: payload.date };
           const sid = settle.storeId || (receiveStoreId ? Number(receiveStoreId) : null);
           if (sid) receivePayload.storeId = sid;
           await markSupplierOrderReceivedRequest(orderId, receivePayload);
+          receiveOk = true;
         } catch (err) {
+          receiveOk = false;
           toast({
             message:
               err?.response?.data?.message ||
@@ -1322,13 +1325,16 @@ function SupplierOrderForm(
         }
       }
 
+      let payOk = Boolean(datos?.paidAt);
       if (orderId && settle.pay && !datos?.paidAt) {
         try {
           await markSupplierOrderPaidRequest(orderId, {
             paymentMethod: settle.payMethod || "efectivo",
             paidAt: payload.date,
           });
+          payOk = true;
         } catch (err) {
+          payOk = false;
           toast({
             message:
               err?.response?.data?.message ||
@@ -1342,8 +1348,10 @@ function SupplierOrderForm(
         await onSettled({
           orderId,
           total: orderTotalNow,
-          received: Boolean(settle.receive),
-          paid: Boolean(settle.pay),
+          received: receiveOk,
+          receiveAttempted: Boolean(settle.receive),
+          paid: payOk,
+          payAttempted: Boolean(settle.pay),
           payMethod: settle.payMethod || "efectivo",
           supplierName,
           fromShift,
@@ -1537,7 +1545,9 @@ function SupplierOrderForm(
       <Alert severity={fromShift ? "warning" : "info"} sx={{ mb: 1, py: 0.25 }}>
         <strong>Pedido a proveedor</strong>
         {isEditing ? ` · #${datos?.id ?? ""}` : " · nuevo"}
-        {fromShift ? " · sale de la caja del turno si pagás en efectivo" : ""}
+        {fromShift
+          ? " · Usá «Recibir y pagar» para que entre al stock y, si es efectivo, salga en la caja del turno."
+          : ""}
       </Alert>
       <Grid container spacing={1.25}>
         <Grid item xs={12} md={5}>
@@ -2064,50 +2074,113 @@ function SupplierOrderForm(
           >
             Tomar foto
           </Button>
-          <Button
-            data-tour="pedido-prov-save"
-            type="submit"
-            variant={fromShift ? "outlined" : "contained"}
-            size="small"
-            sx={{ minWidth: 150, px: 2 }}
-            onClick={() => {
-              settleRef.current = { receive: false, pay: false, payMethod: "efectivo", storeId: null };
-            }}
-          >
-            {isEditing ? "Guardar pedido" : "Guardar pedido"}
-          </Button>
-          <Button
-            type="button"
-            variant="outlined"
-            size="small"
-            color="warning"
-            startIcon={<LocalShippingIcon />}
-            sx={{ minWidth: 140, px: 2 }}
-            onClick={() => openConfirmDialog({ receive: true, pay: false })}
-          >
-            Solo recibir
-          </Button>
-          <Button
-            type="button"
-            variant="outlined"
-            size="small"
-            color="secondary"
-            startIcon={<PaymentsIcon />}
-            sx={{ minWidth: 130, px: 2 }}
-            onClick={() => openConfirmDialog({ receive: false, pay: true })}
-          >
-            Solo pagar
-          </Button>
-          <Button
-            type="button"
-            variant="contained"
-            size="small"
-            color={fromShift ? "primary" : "secondary"}
-            sx={{ minWidth: 160, px: 2 }}
-            onClick={() => openConfirmDialog({ receive: true, pay: true })}
-          >
-            Recibir y pagar
-          </Button>
+          {fromShift ? (
+            <>
+              <Button
+                type="button"
+                variant="contained"
+                size="small"
+                color="primary"
+                startIcon={<PaymentsIcon />}
+                sx={{ minWidth: 180, px: 2.5, fontWeight: 700 }}
+                onClick={() => openConfirmDialog({ receive: true, pay: true })}
+              >
+                Recibir y pagar
+              </Button>
+              <Button
+                data-tour="pedido-prov-save"
+                type="submit"
+                variant="outlined"
+                size="small"
+                color="inherit"
+                sx={{ minWidth: 130, px: 2 }}
+                onClick={() => {
+                  settleRef.current = {
+                    receive: false,
+                    pay: false,
+                    payMethod: "efectivo",
+                    storeId: null,
+                  };
+                }}
+              >
+                Solo guardar
+              </Button>
+              <Button
+                type="button"
+                variant="outlined"
+                size="small"
+                color="warning"
+                startIcon={<LocalShippingIcon />}
+                sx={{ minWidth: 130, px: 2 }}
+                onClick={() => openConfirmDialog({ receive: true, pay: false })}
+              >
+                Solo recibir
+              </Button>
+              <Button
+                type="button"
+                variant="outlined"
+                size="small"
+                color="secondary"
+                startIcon={<PaymentsIcon />}
+                sx={{ minWidth: 120, px: 2 }}
+                onClick={() => openConfirmDialog({ receive: false, pay: true })}
+              >
+                Solo pagar
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                data-tour="pedido-prov-save"
+                type="submit"
+                variant="contained"
+                size="small"
+                sx={{ minWidth: 150, px: 2 }}
+                onClick={() => {
+                  settleRef.current = {
+                    receive: false,
+                    pay: false,
+                    payMethod: "efectivo",
+                    storeId: null,
+                  };
+                }}
+              >
+                {isEditing ? "Guardar pedido" : "Guardar pedido"}
+              </Button>
+              <Button
+                type="button"
+                variant="outlined"
+                size="small"
+                color="warning"
+                startIcon={<LocalShippingIcon />}
+                sx={{ minWidth: 140, px: 2 }}
+                onClick={() => openConfirmDialog({ receive: true, pay: false })}
+              >
+                Solo recibir
+              </Button>
+              <Button
+                type="button"
+                variant="outlined"
+                size="small"
+                color="secondary"
+                startIcon={<PaymentsIcon />}
+                sx={{ minWidth: 130, px: 2 }}
+                onClick={() => openConfirmDialog({ receive: false, pay: true })}
+              >
+                Solo pagar
+              </Button>
+              <Button
+                type="button"
+                variant="contained"
+                size="small"
+                color="secondary"
+                sx={{ minWidth: 160, px: 2 }}
+                onClick={() => openConfirmDialog({ receive: true, pay: true })}
+              >
+                Recibir y pagar
+              </Button>
+            </>
+          )}
         </Box>
       </Box>
 
@@ -2223,8 +2296,8 @@ function SupplierOrderForm(
           {confirmReceived && confirmPaid ? (
             <Button
               variant="contained"
-              color="secondary"
-              startIcon={<LocalShippingIcon />}
+              color={fromShift ? "primary" : "secondary"}
+              startIcon={<PaymentsIcon />}
               disabled={storesLoading || (multiStockEnabled && !confirmReceiveStoreId && !receiveStoreId)}
               onClick={() => handleConfirmSettle(true, true)}
             >

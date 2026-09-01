@@ -380,6 +380,7 @@ export default function CajaPage() {
   const allowEditFromCart = Boolean(activeApp?.cajaAllowEditProductFromCart);
   const allowSuggestPriceUpdate = Boolean(activeApp?.cajaSuggestUpdateProductPrice);
   const allowPercentDiscount = Boolean(activeApp?.cajaAllowPercentDiscount);
+  const multiStockEnabled = Boolean(activeApp?.multiStockEnabled);
   const draftUserId = user?.userId != null ? String(user.userId) : null;
   const [products, setProducts] = useState([]);
   const [tierGroups, setTierGroups] = useState([]);
@@ -551,8 +552,8 @@ export default function CajaPage() {
       customersRes.status === "fulfilled" ? customersRes.value.data || [] : [];
     const nextShift = shiftRes.status === "fulfilled" ? shiftRes.value.data : null;
 
-    // Stock visible en caja = cantidad del local del turno (no el total general).
-    if (nextShift?.storeId && nextProducts.length) {
+    // Con multistock: stock del local del turno. Sin multistock: stock general del producto.
+    if (multiStockEnabled && nextShift?.storeId && nextProducts.length) {
       try {
         const { data: stockBody } = await getStoreStocksRequest(nextShift.storeId);
         const byId = stockBody?.byProductId || {};

@@ -7,6 +7,7 @@ import {
   Chip,
   CircularProgress,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
@@ -256,6 +257,8 @@ export default function TurnoPage() {
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
   const [movementSaving, setMovementSaving] = useState(false);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [cashPurchaseConfirm, setCashPurchaseConfirm] = useState(null);
+  const cashPurchaseConfirmRef = useRef(null);
   const [editShiftId, setEditShiftId] = useState(null);
   const [stores, setStores] = useState([]);
   const [sriSettings, setSriSettings] = useState(null);
@@ -506,32 +509,97 @@ export default function TurnoPage() {
     orderId,
     total,
     paid,
+    payAttempted,
+    received,
+    receiveAttempted,
     payMethod,
     supplierName,
   }) => {
-    if (paid && payMethod === "efectivo" && activeShift?.id && Number(total) > 0) {
-      try {
-        await createShiftMovement(activeShift.id, {
-          direction: "out",
-          category: "compra_mercancia",
-          amount: Number(total),
-          concept: `Compra a ${supplierName || "proveedor"} · pedido #${orderId}`,
-          notes: `supplier_order:${orderId}`,
-          skipExpense: true,
+    if (!payAttempted) {
+      void toast?.({
+        message: receiveAttempted
+          ? "Mercancía recibida. No hay salida en caja porque no se registró pago."
+          : "Pedido guardado. Usá «Recibir y pagar» para que entre stock y salga en el turno.",
+        variant: receiveAttempted ? "info" : "warning",
+      });
+      return;
+    }
+
+    if (!paid) {
+      void toast?.({
+        message:
+          "No se pudo registrar el pago. Revisá Finanzas; no se descontó de la caja del turno.",
+        variant: "error",
+      });
+      return;
+    }
+
+    const method = String(payMethod || "efectivo").toLowerCase();
+    if (method !== "efectivo") {
+      void toast?.({
+        message:
+          method === "transferencia"
+            ? "Pago por transferencia registrado en Finanzas. No suma a las salidas de efectivo del turno."
+            : "Pago registrado en Finanzas. Solo las compras en efectivo aparecen como salida en este turno.",
+        variant: "success",
+      });
+      return;
+    }
+
+    const shift = activeShiftRef.current;
+    const amt = Number(total);
+    if (!shift?.id || !Number.isFinite(amt) || amt <= 0) return;
+
+    const expected = Number(shift.expectedCashTotal ?? 0);
+    if (amt > expected + 0.009) {
+      const proceed = await new Promise((resolve) => {
+        cashPurchaseConfirmRef.current = resolve;
+        setCashPurchaseConfirm({
+          orderId,
+          total: amt,
+          expected,
+          deficit: to2(amt - expected),
+          supplierName: supplierName || "proveedor",
         });
-        void toast?.({
-          message: "Compra registrada y descontada de caja.",
-          variant: "success",
-        });
-      } catch (e) {
+      });
+      if (!proceed) {
         void toast?.({
           message:
-            e?.response?.data?.message ||
-            "Pedido guardado, pero no se pudo descontar de caja.",
-          variant: "warning",
+            "Pedido pagado en Finanzas. No se registró salida de efectivo en este turno.",
+          variant: "info",
         });
+        return;
       }
     }
+
+    try {
+      await createShiftMovement(shift.id, {
+        direction: "out",
+        category: "compra_mercancia",
+        amount: amt,
+        concept: `Compra a ${supplierName || "proveedor"} · pedido #${orderId}`,
+        notes: `supplier_order:${orderId}`,
+        skipExpense: true,
+      });
+      void toast?.({
+        message: "Compra registrada: salida de efectivo en el turno y gasto en Finanzas.",
+        variant: "success",
+      });
+    } catch (e) {
+      void toast?.({
+        message:
+          e?.response?.data?.message ||
+          "Pedido pagado en Finanzas, pero no se pudo descontar de la caja del turno.",
+        variant: "warning",
+      });
+    }
+  };
+
+  const closeCashPurchaseConfirm = (proceed) => {
+    setCashPurchaseConfirm(null);
+    const resolve = cashPurchaseConfirmRef.current;
+    cashPurchaseConfirmRef.current = null;
+    resolve?.(proceed);
   };
 
   const doOpenShift = async (storeId) => {
@@ -1052,7 +1120,8 @@ export default function TurnoPage() {
 
           {movementForm.category === "compra_mercancia" && (
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-              Se abre el mismo pedido a proveedor. Si lo pagás en efectivo, sale de esta caja para que cuadre al cierre.
+              Se abre el pedido a proveedor. Usá <strong>Recibir y pagar</strong> para que entre al
+              stock y, si pagás en efectivo, salga en esta caja al cierre.
             </Typography>
           )}
 
@@ -1394,6 +1463,39 @@ export default function TurnoPage() {
             </Stack>
           </Stack>
         </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(cashPurchaseConfirm)}
+        onClose={() => closeCashPurchaseConfirm(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>Efectivo insuficiente en caja</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Efectivo esperado en caja:{" "}
+            <strong>{formatMoney(cashPurchaseConfirm?.expected)}</strong>
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Compra a pagar: <strong>{formatMoney(cashPurchaseConfirm?.total)}</strong>
+          </Typography>
+          <Typography variant="body2" color="warning.main" fontWeight={700} sx={{ mb: 1.5 }}>
+            Faltarían {formatMoney(cashPurchaseConfirm?.deficit)} para cuadrar el arqueo.
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block">
+            El pedido ya quedó pagado en Finanzas. ¿Querés registrar la salida de efectivo en este
+            turno igualmente?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 1.5 }}>
+          <Button onClick={() => closeCashPurchaseConfirm(false)} color="inherit">
+            No, solo Finanzas
+          </Button>
+          <Button variant="contained" onClick={() => closeCashPurchaseConfirm(true)}>
+            Sí, registrar salida
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Dialog
