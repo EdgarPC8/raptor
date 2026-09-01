@@ -74,6 +74,13 @@ import {
   formatMoney,
   parseQty,
 } from "../../utils/turnoCashUtils.js";
+import {
+  cajaDraftAppNamespace,
+  clearOpenShiftDraft,
+  hasOpenShiftDraftContent,
+  readOpenShiftDraft,
+  writeOpenShiftDraft,
+} from "../../utils/openShiftDraftStorage.js";
 
 const to2 = (n) => Number(Number(n || 0).toFixed(2));
 
@@ -261,7 +268,11 @@ export default function TurnoPage() {
   const [registerSaving, setRegisterSaving] = useState(false);
   const tourDemoGenRef = useRef(0);
   const activeShiftRef = useRef(null);
+  const openDraftRestoredRef = useRef(false);
   activeShiftRef.current = activeShift;
+
+  const openDraftNs = cajaDraftAppNamespace(activeApp);
+  const openDraftUserId = user?.id;
 
   const resetTourDemo = useCallback(({ keepClose = false } = {}) => {
     tourDemoGenRef.current += 1;
@@ -396,6 +407,44 @@ export default function TurnoPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (loading) return;
+    if (activeShift) {
+      openDraftRestoredRef.current = false;
+      return;
+    }
+    if (openDraftRestoredRef.current) return;
+    const draft = readOpenShiftDraft(openDraftNs, openDraftUserId);
+    if (!draft || !hasOpenShiftDraftContent(draft)) {
+      openDraftRestoredRef.current = true;
+      return;
+    }
+    openDraftRestoredRef.current = true;
+    setOpenCounts(draft.openCounts);
+    setOpenCashTotal(draft.openCashTotal);
+    setOpenNotes(draft.openNotes);
+    setOpenAt(draft.openAt);
+  }, [loading, activeShift, openDraftNs, openDraftUserId]);
+
+  useEffect(() => {
+    if (loading || activeShift) return;
+    writeOpenShiftDraft(openDraftNs, openDraftUserId, {
+      openCounts,
+      openCashTotal,
+      openNotes,
+      openAt,
+    });
+  }, [
+    loading,
+    activeShift,
+    openCounts,
+    openCashTotal,
+    openNotes,
+    openAt,
+    openDraftNs,
+    openDraftUserId,
+  ]);
+
   const movementCategories =
     movementForm.direction === "out" ? OUT_CATEGORIES : IN_CATEGORIES;
 
@@ -504,6 +553,7 @@ export default function TurnoPage() {
       };
       await openShift(payload);
       void toast?.({ message: "Turno abierto. Ya puedes vender en caja.", variant: "success" });
+      clearOpenShiftDraft(openDraftNs, openDraftUserId);
       setOpenCounts(emptyCashCounts());
       setOpenCashTotal("");
       setOpenAt("");
