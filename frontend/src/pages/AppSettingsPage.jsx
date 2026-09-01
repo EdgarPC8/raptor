@@ -29,6 +29,7 @@ import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import BackupOutlinedIcon from "@mui/icons-material/BackupOutlined";
+import KeyboardIcon from "@mui/icons-material/Keyboard";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
 import { useSubscriptions } from "../hooks/useSubscriptions.js";
@@ -46,6 +47,7 @@ import SriBillingSettingsPanel from "../components/SriBillingSettingsPanel.jsx";
 import BackupsPage from "./BackupsPage.jsx";
 import ReceiptDetailPreviewDialog from "../components/settings/ReceiptDetailPreviewDialog.jsx";
 import ThemePaletteEditor from "../components/settings/ThemePaletteEditor.jsx";
+import KeyboardShortcutsEditor from "../components/settings/KeyboardShortcutsEditor.jsx";
 import PrintFormatToggle from "../components/saleReceipt/PrintFormatToggle.jsx";
 import { PageSkeleton } from "../components/ContentSkeleton.jsx";
 import TourHelpButton from "../components/TourHelpButton.jsx";
@@ -65,6 +67,7 @@ import {
   DEFAULT_THEME_PALETTE,
   normalizeThemePalette,
 } from "../theme/themePalette.js";
+import { normalizeKeyboardShortcuts } from "../utils/keyboardShortcuts.js";
 
 const ALLOWED = new Set(["Administrador", "Programador"]);
 
@@ -85,6 +88,12 @@ const SETTINGS_TABS = [
     id: "comprobantes",
     label: "Comprobantes",
     icon: <ReceiptLongOutlinedIcon fontSize="small" />,
+    saveKind: "app",
+  },
+  {
+    id: "teclado",
+    label: "Teclado",
+    icon: <KeyboardIcon fontSize="small" />,
     saveKind: "app",
   },
   {
@@ -279,6 +288,7 @@ export default function AppSettingsPage() {
         themePalette: normalizeThemePalette(
           settings.themePalette || DEFAULT_THEME_PALETTE,
         ),
+        keyboardShortcuts: normalizeKeyboardShortcuts(settings.keyboardShortcuts),
       });
     }
   }, [settings]);
@@ -1110,6 +1120,19 @@ export default function AppSettingsPage() {
                 />
               </Box>
             ) : null}
+            </SettingsSection>
+          )}
+
+          {tab === "teclado" && (
+            <SettingsSection
+              title="Atajos de teclado"
+              hint="Comandos rápidos por módulo. Por ahora: Caja (ventas en mostrador)."
+              tourId="config-teclado"
+            >
+              <KeyboardShortcutsEditor
+                value={form.keyboardShortcuts}
+                onChange={(next) => setForm((f) => ({ ...f, keyboardShortcuts: next }))}
+              />
             </SettingsSection>
           )}
 

@@ -44,6 +44,8 @@ export default function SearchableSelect({
   disabled = false,
   /** Tras elegir una opción, vacía el campo (útil en caja: agregar y seguir buscando). */
   clearInputOnSelect = false,
+  /** Ref al input interno (focus programático). */
+  inputRef,
   /**
    * Muestra stock + precio con colores junto al nombre (listas de productos).
    * Si no pasás getOptionLabel/renderOption, usa el formato de producto.
@@ -187,12 +189,22 @@ export default function SearchableSelect({
               }
             : undefined
         }
-        renderInput={(params) => (
+        renderInput={(params) => {
+          const { ref: inputPropsRef, ...inputPropsRest } = params.inputProps || {};
+          return (
           <TextField
             {...params}
             label={label}
             placeholder={placeholder}
             variant="outlined"
+            inputProps={{
+              ...inputPropsRest,
+              ref: (node) => {
+                if (inputRef) inputRef.current = node;
+                if (typeof inputPropsRef === "function") inputPropsRef(node);
+                else if (inputPropsRef) inputPropsRef.current = node;
+              },
+            }}
             onKeyDown={(e) => {
               params.inputProps?.onKeyDown?.(e);
               if (e.key === "Enter" && onEnterWithInput) {
@@ -222,7 +234,8 @@ export default function SearchableSelect({
               ),
             }}
           />
-        )}
+          );
+        }}
         ListboxProps={{ style: { maxHeight: 360 } }}
         clearOnBlur
         handleHomeEndKeys

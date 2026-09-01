@@ -25,6 +25,7 @@ import {
   TableHead,
   TableRow,
   TableContainer,
+  TableSortLabel,
   TextField,
   Typography,
   Tooltip,
@@ -63,6 +64,7 @@ import CajaQuickProductsDialog from "./CajaQuickProductsDialog.jsx";
 import CajaScanCreateProductDialog from "./CajaScanCreateProductDialog.jsx";
 import ProductForm from "./inventoryControl/components/ProductForm.jsx";
 import SearchableSelect from "../../components/SearchableSelect.jsx";
+import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useAppSettings } from "../../context/AppSettingsContext.jsx";
 import { buildCajaOrderNotes, findConsumidorFinalCustomer } from "../../utils/eddeliPosOrderUtils.js";
@@ -320,6 +322,44 @@ const lineBreakdown = (row, ticketDiscountPercent = 0) => {
   return { total, base, iva, gross, discountAmount, linePct };
 };
 
+function compareCartSortValues(a, b, field, direction) {
+  const mul = direction === "desc" ? -1 : 1;
+  if (field === "barcode") {
+    const sa = String(a?.barcode || "").trim().toLowerCase();
+    const sb = String(b?.barcode || "").trim().toLowerCase();
+    const rank = (s) => (s ? 0 : 1);
+    if (rank(sa) !== rank(sb)) return mul * (rank(sa) - rank(sb));
+    return mul * sa.localeCompare(sb, "es", { numeric: true, sensitivity: "base" });
+  }
+  if (field === "name") {
+    const sa = String(a?.name || "").trim().toLowerCase();
+    const sb = String(b?.name || "").trim().toLowerCase();
+    return mul * sa.localeCompare(sb, "es", { numeric: true, sensitivity: "base" });
+  }
+  if (field === "price") {
+    return mul * (Number(a?.price || 0) - Number(b?.price || 0));
+  }
+  return 0;
+}
+
+function sortCartDisplayGroups(groups, sort) {
+  if (!sort?.field) return groups;
+  const sorted = [...groups].sort((ga, gb) => {
+    const rowA = ga.type === "single" ? ga.row : ga.rows?.[0] || { name: ga.label };
+    const rowB = gb.type === "single" ? gb.row : gb.rows?.[0] || { name: gb.label };
+    return compareCartSortValues(rowA, rowB, sort.field, sort.direction);
+  });
+  return sorted.map((g) => {
+    if (g.type !== "mix" || !g.rows?.length) return g;
+    return {
+      ...g,
+      rows: [...g.rows].sort((a, b) =>
+        compareCartSortValues(a, b, sort.field, sort.direction),
+      ),
+    };
+  });
+}
+
 export default function CajaPage() {
   const { toast, user } = useAuth();
   const { activeApp, loading: appSettingsLoading } = useAppSettings();
@@ -389,6 +429,7 @@ export default function CajaPage() {
   const [activeShift, setActiveShift] = useState(undefined);
   const [showOpenShiftBanner, setShowOpenShiftBanner] = useState(false);
   const [showCartStock, setShowCartStock] = useState(false);
+  const [cartSort, setCartSort] = useState({ field: null, direction: "asc" });
   const [printOpen, setPrintOpen] = useState(false);
   const [printReceipt, setPrintReceipt] = useState(null);
   const [lastSaleReceipt, setLastSaleReceipt] = useState(null);
@@ -403,6 +444,8 @@ export default function CajaPage() {
   const draftChoicesOpenRef = useRef(false);
   const skipDefaultCustomerRef = useRef(false);
   const savingRef = useRef(false);
+  const productSearchInputRef = useRef(null);
+  const customerSearchInputRef = useRef(null);
 
   useEffect(() => {
     draftChoicesOpenRef.current = Boolean(draftChoices?.length);
@@ -1034,6 +1077,15 @@ export default function CajaPage() {
     ? clampPercent(ticketDiscountPercent)
     : 0;
 
+  const handleCartSort = (field) => {
+    setCartSort((prev) => {
+      if (prev.field === field) {
+        return { field, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      return { field, direction: "asc" };
+    });
+  };
+
   const cartDisplayGroups = useMemo(() => {
     const groups = [];
     const mixSeen = new Set();
@@ -1062,8 +1114,8 @@ export default function CajaPage() {
         groupTotal,
       });
     }
-    return groups;
-  }, [pricedCart, allowPercentDiscount, ticketPctActive]);
+    return sortCartDisplayGroups(groups, cartSort);
+  }, [pricedCart, allowPercentDiscount, ticketPctActive, cartSort]);
 
   const summary = useMemo(() => {
     return pricedCart.reduce(
@@ -1760,6 +1812,99 @@ export default function CajaPage() {
     await runCheckoutSale(checkoutCtx);
   };
 
+  const clearCartShortcut = useCallback(() => {
+    setCart([]);
+    setTicketDiscountPercent("");
+  }, []);
+
+  const startNewSaleShortcut = useCallback(() => {
+    setCart([]);
+    setTicketDiscountPercent("");
+    setNotes("");
+    setSelectedProductId("");
+    setAmountReceived("");
+    setDocumentType("documento");
+    setSaleType("contado");
+    setPaymentMethod("efectivo");
+    setUseCustomerData(false);
+    setPaymentDueDate("");
+    setSplitCreditPayments(false);
+    setCreditInstallmentCount(2);
+    setCreditInstallments([]);
+    setCreditScheduleOpen(false);
+    const consumidorFinal = findConsumidorFinalCustomer(customers);
+    if (consumidorFinal) setCustomerId(String(consumidorFinal.id));
+  }, [customers]);
+
+  const removeLastCartLineShortcut = useCallback(() => {
+    setCart((prev) => (prev.length ? prev.slice(0, -1) : prev));
+  }, []);
+
+  const printLastSaleShortcut = useCallback(() => {
+    if (!lastSaleReceipt) {
+      void toast?.({ message: "Aún no hay una venta cobrada para imprimir.", variant: "info" });
+      return;
+    }
+    setPrintReceipt(lastSaleReceipt);
+    setPrintOpen(true);
+  }, [lastSaleReceipt, toast]);
+
+  const receivedEqualsTotalShortcut = useCallback(() => {
+    setAmountReceived(String(total.toFixed(2)));
+  }, [total]);
+
+  const focusProductSearchShortcut = useCallback(() => {
+    productSearchInputRef.current?.focus?.();
+  }, []);
+
+  const focusCustomerSearchShortcut = useCallback(() => {
+    customerSearchInputRef.current?.focus?.();
+  }, []);
+
+  const shortcutsPaused =
+    saving ||
+    quickProductsOpen ||
+    stockDialogOpen ||
+    priceDialogOpen ||
+    productDialogOpen ||
+    scanCreateOpen ||
+    printOpen ||
+    creditScheduleOpen ||
+    quickDownOpen ||
+    addCustomerOpen ||
+    openPackDialogOpen ||
+    Boolean(draftChoices?.length);
+
+  const cajaShortcutHandlers = useMemo(
+    () => ({
+      "caja.checkout": () => {
+        void onCheckout();
+      },
+      "caja.clearCart": clearCartShortcut,
+      "caja.focusProduct": focusProductSearchShortcut,
+      "caja.quickAccess": () => setQuickProductsOpen(true),
+      "caja.focusCustomer": focusCustomerSearchShortcut,
+      "caja.receivedEqualsTotal": receivedEqualsTotalShortcut,
+      "caja.printLast": printLastSaleShortcut,
+      "caja.newSale": startNewSaleShortcut,
+      "caja.removeLastLine": removeLastCartLineShortcut,
+    }),
+    [
+      onCheckout,
+      clearCartShortcut,
+      focusProductSearchShortcut,
+      focusCustomerSearchShortcut,
+      receivedEqualsTotalShortcut,
+      printLastSaleShortcut,
+      startNewSaleShortcut,
+      removeLastCartLineShortcut,
+    ],
+  );
+
+  useKeyboardShortcuts(activeApp?.keyboardShortcuts, cajaShortcutHandlers, {
+    enabled: !shortcutsPaused,
+  });
+
   return (
     <Box sx={{ pt: 0, pb: 1.5, px: 0 }}>
       <Stack
@@ -1960,6 +2105,7 @@ export default function CajaPage() {
                     value={selectedProductId}
                     onChange={handleProductPick}
                     clearInputOnSelect
+                    inputRef={productSearchInputRef}
                     getOptionLabel={formatProductSearchLabel}
                     getOptionValue={(item) => String(item.id)}
                     getSearchText={(item) =>
@@ -2053,13 +2199,40 @@ export default function CajaPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Código</TableCell>
-                    <TableCell>Producto</TableCell>
+                    <TableCell sortDirection={cartSort.field === "barcode" ? cartSort.direction : false}>
+                      <TableSortLabel
+                        active={cartSort.field === "barcode"}
+                        direction={cartSort.field === "barcode" ? cartSort.direction : "asc"}
+                        onClick={() => handleCartSort("barcode")}
+                      >
+                        Código
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sortDirection={cartSort.field === "name" ? cartSort.direction : false}>
+                      <TableSortLabel
+                        active={cartSort.field === "name"}
+                        direction={cartSort.field === "name" ? cartSort.direction : "asc"}
+                        onClick={() => handleCartSort("name")}
+                      >
+                        Producto
+                      </TableSortLabel>
+                    </TableCell>
                     {showCartStock ? (
                       <TableCell align="center">Stock</TableCell>
                     ) : null}
                     <TableCell align="center">Cantidad</TableCell>
-                    <TableCell align="right">Precio</TableCell>
+                    <TableCell
+                      align="right"
+                      sortDirection={cartSort.field === "price" ? cartSort.direction : false}
+                    >
+                      <TableSortLabel
+                        active={cartSort.field === "price"}
+                        direction={cartSort.field === "price" ? cartSort.direction : "asc"}
+                        onClick={() => handleCartSort("price")}
+                      >
+                        Precio
+                      </TableSortLabel>
+                    </TableCell>
                     {allowPercentDiscount ? (
                       <TableCell align="center">Desc. %</TableCell>
                     ) : null}
@@ -2471,6 +2644,7 @@ export default function CajaPage() {
                         value={customerId}
                         onChange={setCustomerId}
                         items={customers}
+                        inputRef={customerSearchInputRef}
                         getOptionLabel={(customer) => {
                           const name = buildCustomerDisplayName(customer);
                           const cedula = String(customer?.cedula || "").trim();

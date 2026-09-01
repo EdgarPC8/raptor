@@ -21,6 +21,7 @@ import {
   normalizeThemePalette,
   writeThemePaletteCache,
 } from "../theme/themePalette.js";
+import { normalizeKeyboardShortcuts } from "../utils/keyboardShortcuts.js";
 
 const AppSettingsContext = createContext(null);
 
@@ -190,6 +191,11 @@ function toActiveApp(settings, { offline = false } = {}) {
     themePalette: unconfigured
       ? normalizeThemePalette(DEFAULT_THEME_PALETTE)
       : normalizeThemePalette(settings?.themePalette ?? resolved.themePalette),
+    keyboardShortcuts: unconfigured
+      ? normalizeKeyboardShortcuts(null)
+      : normalizeKeyboardShortcuts(
+          settings?.keyboardShortcuts ?? resolved.keyboardShortcuts,
+        ),
     year: new Date().getFullYear(),
     background: "#F0F9FB",
   };
