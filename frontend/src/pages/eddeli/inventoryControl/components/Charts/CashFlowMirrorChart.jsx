@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Chip,
@@ -55,10 +55,17 @@ const compactToggleSx = {
   minWidth: 0,
 };
 
-export default function CashFlowMirrorChart({ focus = null, onClearFocus }) {
+export default function CashFlowMirrorChart({
+  focus = null,
+  onClearFocus,
+  startDate = '',
+  endDate = '',
+}) {
   const theme = useTheme();
   const [granularity, setGranularity] = useState('day');
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [payload, setPayload] = useState(null);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -68,6 +75,7 @@ export default function CashFlowMirrorChart({ focus = null, onClearFocus }) {
   const [modalMirrorSummary, setModalMirrorSummary] = useState(null);
 
   const activeGranularity = focus?.granularity ?? granularity;
+  const hasPanelRange = Boolean(startDate || endDate);
 
   const cIncome = theme.palette.success.main;
   const cExpense = theme.palette.error.main;
@@ -88,12 +96,15 @@ export default function CashFlowMirrorChart({ focus = null, onClearFocus }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      setLoading(true);
+      if (!hasLoadedOnceRef.current) setLoading(true);
       try {
         const params = { granularity: activeGranularity };
         if (focus) {
           params.startDate = focus.startDate;
           params.endDate = focus.endDate;
+        } else if (hasPanelRange) {
+          if (startDate) params.startDate = startDate;
+          if (endDate) params.endDate = endDate;
         }
         const { data } = await getCashFlowMirrorRequest(params);
         if (!cancelled) setPayload(data);
@@ -101,13 +112,17 @@ export default function CashFlowMirrorChart({ focus = null, onClearFocus }) {
         console.error('CashFlowMirrorChart:', e);
         if (!cancelled) setPayload(null);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          hasLoadedOnceRef.current = true;
+          setHasLoadedOnce(true);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [activeGranularity, focus]);
+  }, [activeGranularity, focus, hasPanelRange, startDate, endDate]);
 
   const dataset = useMemo(() => {
     const buckets = payload?.buckets ?? [];
@@ -297,7 +312,7 @@ export default function CashFlowMirrorChart({ focus = null, onClearFocus }) {
           minHeight: 160,
         }}
       >
-        {loading ? (
+        {loading && !hasLoadedOnce ? (
           <ChartSkeleton height={160} />
         ) : dataset.length === 0 ? (
           <Typography variant="caption" color="text.secondary" sx={{ py: 3, display: 'block', textAlign: 'center' }}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Grid, Paper, Box, Stack } from "@mui/material";
 import {
   getFinanceDashboardHeroRequest,
@@ -62,6 +62,16 @@ const defaultRecurring = {
   overdue: [],
 };
 
+const EMPTY_DATE_FILTERS = { startDate: "", endDate: "" };
+
+function buildDashboardDateParams(filters) {
+  if (!filters?.startDate && !filters?.endDate) return {};
+  const params = {};
+  if (filters.startDate) params.startDate = filters.startDate;
+  if (filters.endDate) params.endDate = filters.endDate;
+  return params;
+}
+
 export const DashBoardPage = () => {
   const { user } = useAuth();
   const { subscription } = useSubscriptions();
@@ -85,6 +95,21 @@ export const DashBoardPage = () => {
   const [heavyWave, setHeavyWave] = useState(0);
   const calendarSectionRef = useRef(null);
   const [calendarNavigate, setCalendarNavigate] = useState(null);
+  const [dateFilters, setDateFilters] = useState(EMPTY_DATE_FILTERS);
+  const [appliedDateFilters, setAppliedDateFilters] = useState(EMPTY_DATE_FILTERS);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
+  const dashboardDateParams = useMemo(
+    () => buildDashboardDateParams(appliedDateFilters),
+    [appliedDateFilters],
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setAppliedDateFilters(dateFilters);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [dateFilters]);
 
   const handleYearMonthSelect = useCallback((date) => {
     setCalendarNavigate({ date, requestId: Date.now() });
@@ -105,15 +130,18 @@ export const DashBoardPage = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const isRefresh = hasLoadedOnceRef.current;
 
-    const load = async () => {
+    if (!isRefresh) {
       setLoadingHero(true);
       setLoadingRest(true);
       setAllowHeavy(false);
       setHeavyWave(0);
+    }
 
+    const load = async () => {
       try {
-        const { data } = await getFinanceDashboardHeroRequest();
+        const { data } = await getFinanceDashboardHeroRequest(dashboardDateParams);
         if (cancelled) return;
         setSummary(data.summary ?? {});
         setObligations(data.obligations ?? defaultObligations);
@@ -124,7 +152,7 @@ export const DashBoardPage = () => {
       }
 
       try {
-        const { data } = await getFinanceDashboardRestRequest();
+        const { data } = await getFinanceDashboardRestRequest(dashboardDateParams);
         if (cancelled) return;
         setOverView(data.overView ?? []);
         setIncomeExpenseBreakdown(data.incomeExpenseBreakdown ?? {});
@@ -136,7 +164,9 @@ export const DashBoardPage = () => {
       } finally {
         if (!cancelled) {
           setLoadingRest(false);
-          setAllowHeavy(true);
+          hasLoadedOnceRef.current = true;
+          setHasLoadedOnce(true);
+          if (!isRefresh) setAllowHeavy(true);
         }
       }
     };
@@ -145,7 +175,9 @@ export const DashBoardPage = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dashboardDateParams]);
+
+  const showInitialSkeleton = !hasLoadedOnce;
 
   useEffect(() => {
     if (!allowHeavy) return undefined;
@@ -167,7 +199,10 @@ export const DashBoardPage = () => {
           summary={summary}
           pendingTotal={pendingTotal}
           obligationsSummary={obligations.summary}
-          loading={loadingHero}
+          loading={showInitialSkeleton && loadingHero}
+          dateFilters={dateFilters}
+          onDateFiltersChange={setDateFilters}
+          appliedDateFilters={appliedDateFilters}
         />
       </Box>
 
@@ -175,7 +210,7 @@ export const DashBoardPage = () => {
         <Grid item xs={12} lg={8}>
           <Grid container spacing={{ xs: 1.5, sm: 2 }} alignItems="flex-start">
             <Grid item xs={12} md={batchesUiEnabled ? 6 : 12} sx={{ minWidth: 0 }}>
-              {loadingRest ? (
+              {showInitialSkeleton && loadingRest ? (
                 <PanelSkeleton height={260} />
               ) : (
                 <DashboardStockPanel
@@ -186,7 +221,7 @@ export const DashBoardPage = () => {
             </Grid>
             {batchesUiEnabled && (
               <Grid item xs={12} md={6} sx={{ minWidth: 0 }}>
-                {loadingRest ? (
+                {showInitialSkeleton && loadingRest ? (
                   <PanelSkeleton height={260} />
                 ) : (
                   <DashboardBatchesPanel batchesAlerts={batchesAlerts} />
@@ -198,7 +233,7 @@ export const DashBoardPage = () => {
 
         <Grid item xs={12} lg={4}>
           <Stack spacing={{ xs: 1.5, sm: 2 }} sx={{ minWidth: 0 }}>
-            {loadingRest ? (
+            {showInitialSkeleton && loadingRest ? (
               <>
                 <PanelSkeleton height={180} />
                 <PanelSkeleton height={180} />
@@ -209,7 +244,7 @@ export const DashBoardPage = () => {
                 <RecurringExpensesSummaryPanel recurring={recurring} />
               </>
             )}
-            {loadingHero ? (
+            {showInitialSkeleton && loadingHero ? (
               <PanelSkeleton height={180} />
             ) : (
               <ObligationsSummaryPanel obligations={obligations} />
@@ -220,7 +255,7 @@ export const DashBoardPage = () => {
         <Grid item xs={12}>
           <Grid container spacing={{ xs: 1.5, sm: 2 }} alignItems="stretch">
             <Grid item xs={12} md={5} lg={4} sx={{ minWidth: 0, display: "flex" }}>
-              {loadingRest ? (
+              {showInitialSkeleton && loadingRest ? (
                 <Box sx={{ width: "100%" }}>
                   <PanelSkeleton height={260} />
                 </Box>
@@ -236,7 +271,11 @@ export const DashBoardPage = () => {
                 sx={{ ...paperSx, overflowX: "auto", width: "100%", height: "100%" }}
               >
                 {heavyWave >= 1 ? (
-                  <YearFinanceOverviewChart onMonthSelect={handleYearMonthSelect} />
+                  <YearFinanceOverviewChart
+                    onMonthSelect={handleYearMonthSelect}
+                    startDate={appliedDateFilters.startDate}
+                    endDate={appliedDateFilters.endDate}
+                  />
                 ) : (
                   <PanelSkeleton height={260} />
                 )}
@@ -248,7 +287,12 @@ export const DashBoardPage = () => {
         <Grid item xs={12} md={6}>
           <Paper variant="panel" sx={{ ...paperSx, overflowX: "auto", height: "100%" }}>
             {heavyWave >= 2 ? (
-              <CashFlowMirrorChart focus={mirrorFocus} onClearFocus={handleClearMirrorFocus} />
+              <CashFlowMirrorChart
+                focus={mirrorFocus}
+                onClearFocus={handleClearMirrorFocus}
+                startDate={appliedDateFilters.startDate}
+                endDate={appliedDateFilters.endDate}
+              />
             ) : (
               <PanelSkeleton height={280} />
             )}
@@ -260,6 +304,8 @@ export const DashBoardPage = () => {
               onCandleSelect={handleCandleSelect}
               onDrillReset={handleClearMirrorFocus}
               selectedKey={mirrorFocus?.highlightKey ?? null}
+              startDate={appliedDateFilters.startDate}
+              endDate={appliedDateFilters.endDate}
             />
           ) : (
             <PanelSkeleton height={280} />

@@ -94,17 +94,19 @@ export const getProductSeriesDetailRequest = async (productId) => {
 };
 
 /** Cards superiores del dashboard (rápido). */
-export const getFinanceDashboardHeroRequest = async () => {
+export const getFinanceDashboardHeroRequest = async (params = {}) => {
   if (isGuestDataMode()) return guestFrom("dashboardHero");
   return await axios.get("/finance/dashboard/hero", {
+    params: params?.startDate || params?.endDate ? params : undefined,
     headers: { Authorization: jwt() },
   });
 };
 
 /** Paneles inferiores del dashboard (carga diferida). */
-export const getFinanceDashboardRestRequest = async () => {
+export const getFinanceDashboardRestRequest = async (params = {}) => {
   if (isGuestDataMode()) return guestFrom("dashboardRest");
   return await axios.get("/finance/dashboard/rest", {
+    params: params?.startDate || params?.endDate ? params : undefined,
     headers: { Authorization: jwt() },
   });
 };
@@ -131,6 +133,18 @@ export const getCalendarYearSummaryRequest = async (year) => {
   if (isGuestDataMode()) return guestFrom("calendarYear", { year });
   return axios.get("/finance/calendar-year", {
     params: { year },
+    headers: { Authorization: jwt() },
+  });
+};
+
+/** Resumen por mes dentro de un rango de fechas. */
+export const getCalendarRangeSummaryRequest = async ({ startDate, endDate } = {}) => {
+  if (isGuestDataMode()) return guestFrom("calendarRange", { startDate, endDate });
+  const params = {};
+  if (startDate) params.startDate = startDate;
+  if (endDate) params.endDate = endDate;
+  return axios.get("/finance/calendar-range", {
+    params,
     headers: { Authorization: jwt() },
   });
 };
@@ -187,10 +201,26 @@ export const getIncomeExpenseBreakdown = async () => {
 };
 
 /** Desglose por categoría con líneas de detalle (modal). */
-export const getIncomeExpenseBreakdownDetail = async () => {
+export const getIncomeExpenseBreakdownDetail = async (params = {}) => {
   if (isGuestDataMode()) return guestFrom("incomeExpenseBreakdown");
+  const query = { detail: "1" };
+  if (params.startDate) query.startDate = params.startDate;
+  if (params.endDate) query.endDate = params.endDate;
   return await axios.get("/finance/getIncomeExpenseBreakdown", {
-    params: { detail: "1" },
+    params: query,
+    headers: { Authorization: jwt() },
+  });
+};
+
+/** Por cobrar del período + inventario de locales (modal rentabilidad). */
+export const getFinancialProfitabilityReportRequest = async (params = {}) => {
+  if (isGuestDataMode()) return guestFrom("financeSummary");
+  const query = {};
+  if (params.startDate) query.startDate = params.startDate;
+  if (params.endDate) query.endDate = params.endDate;
+  if (params.storeIds) query.storeIds = params.storeIds;
+  return axios.get("/finance/profitability-report", {
+    params: query,
     headers: { Authorization: jwt() },
   });
 };
@@ -234,10 +264,15 @@ export const getCashFlowCandlesRequest = async ({
   granularity = "day",
   limit = 25,
   offset = 0,
+  startDate,
+  endDate,
 } = {}) => {
   if (isGuestDataMode()) return guestFrom("cashFlowCandles", { granularity, limit, offset });
+  const params = { granularity, limit, offset };
+  if (startDate) params.startDate = startDate;
+  if (endDate) params.endDate = endDate;
   return axios.get("/finance/cash-flow-candles", {
-    params: { granularity, limit, offset },
+    params,
     headers: { Authorization: jwt() },
   });
 };

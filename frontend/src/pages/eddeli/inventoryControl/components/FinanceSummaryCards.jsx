@@ -8,7 +8,13 @@ import {
   Skeleton,
   alpha,
   useTheme,
+  TextField,
+  Button,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import AssessmentIcon from "@mui/icons-material/Assessment";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
@@ -22,6 +28,7 @@ import BalanceIcon from "@mui/icons-material/Balance";
 import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
 import { money } from "../collections/helpers.js";
 import AnimatedNumber from "../../../../components/AnimatedNumber.jsx";
+import FinancialReportDialog from "./FinancialReportDialog.jsx";
 
 const ROTATE_MS = 3000;
 const CARD_MIN_HEIGHT = 132;
@@ -234,12 +241,19 @@ function RotatingMetricCard({ slides }) {
   );
 }
 
+const EMPTY_DATE_FILTERS = { startDate: "", endDate: "" };
+
 export default function FinanceSummaryCards({
   summary,
   pendingTotal,
   obligationsSummary,
   loading = false,
+  dateFilters = EMPTY_DATE_FILTERS,
+  appliedDateFilters = EMPTY_DATE_FILTERS,
+  onDateFiltersChange,
 }) {
+  const hasDateFilter = Boolean(dateFilters.startDate || dateFilters.endDate);
+  const [reportOpen, setReportOpen] = useState(false);
   const balance = Number(summary?.balance ?? 0);
   const totalIncome = Number(summary?.totalIncome ?? 0);
   const totalExpense = Number(summary?.totalExpense ?? 0);
@@ -498,14 +512,79 @@ export default function FinanceSummaryCards({
         }}
       >
         <Stack
-          direction="row"
-          spacing={1}
-          alignItems="center"
-          justifyContent="center"
-          flexWrap="wrap"
-          useFlexGap
-          sx={{ width: "100%" }}
+          direction={{ xs: "column", lg: "row" }}
+          spacing={{ xs: 1.5, lg: 2 }}
+          alignItems={{ xs: "stretch", lg: "center" }}
+          justifyContent="space-between"
         >
+          {onDateFiltersChange && (
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              flexWrap="wrap"
+              useFlexGap
+              sx={{ flexShrink: 0 }}
+            >
+              <Tooltip title="Reporte">
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => setReportOpen(true)}
+                  aria-label="Reporte financiero"
+                  sx={{
+                    border: 1,
+                    borderColor: "divider",
+                    borderRadius: 1.5,
+                  }}
+                >
+                  <AssessmentIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <TextField
+                size="small"
+                label="Desde"
+                type="date"
+                InputLabelProps={{ shrink: true }}
+                value={dateFilters.startDate}
+                onChange={(e) =>
+                  onDateFiltersChange((prev) => ({ ...prev, startDate: e.target.value }))
+                }
+                sx={{ width: { xs: "100%", sm: 150 } }}
+              />
+              <TextField
+                size="small"
+                label="Hasta"
+                type="date"
+                InputLabelProps={{ shrink: true }}
+                value={dateFilters.endDate}
+                onChange={(e) =>
+                  onDateFiltersChange((prev) => ({ ...prev, endDate: e.target.value }))
+                }
+                sx={{ width: { xs: "100%", sm: 150 } }}
+              />
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<RestartAltIcon />}
+                onClick={() => onDateFiltersChange(EMPTY_DATE_FILTERS)}
+                disabled={!hasDateFilter}
+                sx={{ whiteSpace: "nowrap" }}
+              >
+                Todo el tiempo
+              </Button>
+            </Stack>
+          )}
+
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            justifyContent={{ xs: "flex-start", lg: "flex-end" }}
+            flexWrap="wrap"
+            useFlexGap
+            sx={{ width: { xs: "100%", lg: "auto" }, ml: { lg: "auto" } }}
+          >
           <Chip
             label={
               <>
@@ -577,8 +656,15 @@ export default function FinanceSummaryCards({
             size="small"
             sx={{ fontWeight: 800, maxWidth: "100%" }}
           />
+          </Stack>
         </Stack>
       </Paper>
+
+      <FinancialReportDialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        dateFilters={appliedDateFilters}
+      />
     </Box>
   );
 }

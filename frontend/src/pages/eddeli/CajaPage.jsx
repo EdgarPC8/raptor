@@ -818,14 +818,14 @@ export default function CajaPage() {
     return () => window.clearTimeout(timer);
   }, [activeShift?.id]);
 
-  const findProductByQuery = (query) => {
+  const findProductByQuery = (query, list = products) => {
+    const byCode = findEddeliProductByCode(list, query);
+    if (byCode) return byCode;
     const q = String(query || "").trim().toLowerCase();
     if (!q) return null;
     return (
-      products.find((p) => String(p.barcode || "").trim().toLowerCase() === q) ||
-      products.find((p) => String(p.sku || "").trim().toLowerCase() === q) ||
-      products.find((p) => String(p.name || "").trim().toLowerCase() === q) ||
-      products.find((p) => String(p.name || "").toLowerCase().includes(q)) ||
+      list.find((p) => String(p.name || "").trim().toLowerCase() === q) ||
+      list.find((p) => String(p.name || "").toLowerCase().includes(q)) ||
       null
     );
   };
@@ -982,29 +982,37 @@ export default function CajaPage() {
     setCart((prev) => applyCatalogProductToCart(prev, product));
   };
 
+  const resolveProductFromScan = (query, list) => {
+    const trimmed = String(query || "").trim();
+    if (!trimmed) return null;
+    return findEddeliProductByCode(list, trimmed) || findProductByQuery(trimmed, list);
+  };
+
   const handleProductSearchEnter = useCallback(
-    (query) => {
+    async (query) => {
       const trimmed = String(query || "").trim();
       if (!trimmed) return;
-      const byCode = findEddeliProductByCode(products, trimmed);
-      if (byCode) {
-        addToCart(byCode);
-        setSelectedProductId("");
-        return;
+
+      let found = resolveProductFromScan(trimmed, products);
+      if (!found) {
+        const loaded = await loadData();
+        const fresh = loaded?.products || [];
+        found = resolveProductFromScan(trimmed, fresh);
       }
-      const found = findProductByQuery(trimmed);
+
       if (found) {
         addToCart(found);
         setSelectedProductId("");
         return;
       }
+
       if (allowCreateFromScan) {
         setScanCreateBarcode(trimmed);
         setScanCreateOpen(true);
         return;
       }
       void toast?.({
-        message: `No se encontró "${trimmed}" en productos.`,
+        message: `No se encontró "${trimmed}" en productos de caja (solo finales activos).`,
         variant: "warning",
       });
     },

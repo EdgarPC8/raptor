@@ -161,12 +161,23 @@ export default function SearchableSelect({
           return String(getOptionValue(a)) === String(getOptionValue(b));
         }}
         filterOptions={(opts, params) => {
-          const q = (params.inputValue || "").toLowerCase().trim();
+          const rawQ = String(params.inputValue || "").trim();
+          const q = rawQ.toLowerCase();
           if (!q) return opts;
+          const qDigits = rawQ.replace(/\D/g, "");
+          const isCodeQuery =
+            qDigits.length >= 4 && qDigits.length === rawQ.replace(/\s/g, "").length;
           return opts.filter((opt) => {
             if (opt[EMPTY_MARKER]) return true;
             const label = resolveLabel(opt) || "";
             const extra = (getSearchText ? getSearchText(opt) : "") || "";
+            if (isCodeQuery) {
+              for (const part of extra.split(/\s+/).filter(Boolean)) {
+                if (part.replace(/\D/g, "") === qDigits) return true;
+                if (part.toLowerCase() === q) return true;
+              }
+              if (extra.replace(/\D/g, "") === qDigits) return true;
+            }
             return textMatchesQuery(`${label} ${extra}`, q);
           });
         }}
@@ -209,10 +220,13 @@ export default function SearchableSelect({
               params.inputProps?.onKeyDown?.(e);
               if (e.key === "Enter" && onEnterWithInput) {
                 const input = e.currentTarget;
+                const val = String(input.value ?? "").trim();
+                const valDigits = val.replace(/\D/g, "");
+                const isBarcodeEnter =
+                  valDigits.length >= 4 && valDigits.length === val.replace(/\s/g, "").length;
                 const listboxOpen = input.getAttribute("aria-expanded") === "true";
                 const hasHighlighted = Boolean(input.getAttribute("aria-activedescendant"));
-                if (listboxOpen && hasHighlighted) return;
-                const val = String(input.value ?? "").trim();
+                if (!isBarcodeEnter && listboxOpen && hasHighlighted) return;
                 if (val) {
                   e.preventDefault();
                   e.stopPropagation();

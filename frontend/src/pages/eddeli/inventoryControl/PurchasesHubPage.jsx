@@ -3,9 +3,13 @@ import { useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
+  FormControl,
   Grid,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   TextField,
   Tooltip,
@@ -36,7 +40,7 @@ import SupplierOrderForm, {
   SUPPLIER_ORDER_DIALOG_PAPER_SX,
 } from "./components/SupplierOrderForm.jsx";
 import { exportPurchasesInvoicesExcel } from "../../../utils/exportInvoiceReportExcel.js";
-import { getPurchaseHubStatus, InvoiceHubStatusIcon } from "./components/invoiceHubStatus.jsx";
+import { getPurchaseHubStatus, InvoiceHubStatusIcon, PURCHASE_HUB_FILTER_OPTIONS, purchaseHubStatusByKey } from "./components/invoiceHubStatus.jsx";
 
 const MONEY_COL = {
   align: "right",
@@ -275,6 +279,7 @@ export default function PurchasesHubPage() {
   const [filters, setFilters] = useState({
     dateFrom: monthStartIso(),
     dateTo: todayIso(),
+    status: "all",
   });
 
   const load = async (from, to) => {
@@ -338,10 +343,14 @@ export default function PurchasesHubPage() {
   }, [filters.dateFrom, filters.dateTo]);
 
   const rows = useMemo(() => {
-    return orders
+    let list = orders
       .map((o) => mapPurchaseRow(o))
       .sort((a, b) => String(b.dateIso).localeCompare(String(a.dateIso)));
-  }, [orders]);
+    if (filters.status && filters.status !== "all") {
+      list = list.filter((r) => r.hubStatus?.key === filters.status);
+    }
+    return list;
+  }, [orders, filters.status]);
 
   const totals = useMemo(() => {
     const sum = (key) => rows.reduce((a, r) => a + Number(r[key] || 0), 0);
@@ -478,7 +487,42 @@ export default function PurchasesHubPage() {
               onChange={(e) => setFilters((p) => ({ ...p, dateTo: e.target.value }))}
             />
           </Grid>
-          <Grid item xs={12} md={8}>
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="compras-status-filter-label">Estado</InputLabel>
+              <Select
+                labelId="compras-status-filter-label"
+                label="Estado"
+                value={filters.status}
+                onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}
+                renderValue={(value) => {
+                  const opt = PURCHASE_HUB_FILTER_OPTIONS.find((o) => o.value === value);
+                  if (!opt || value === "all") return opt?.label || "Todos los estados";
+                  const status = purchaseHubStatusByKey(value);
+                  return (
+                    <Stack direction="row" spacing={0.75} alignItems="center">
+                      {status ? <InvoiceHubStatusIcon status={status} /> : null}
+                      <span>{opt.label}</span>
+                    </Stack>
+                  );
+                }}
+              >
+                {PURCHASE_HUB_FILTER_OPTIONS.map((opt) => {
+                  const status =
+                    opt.value === "all" ? null : purchaseHubStatusByKey(opt.value);
+                  return (
+                    <MenuItem key={opt.value} value={opt.value}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        {status ? <InvoiceHubStatusIcon status={status} /> : null}
+                        <span>{opt.label}</span>
+                      </Stack>
+                    </MenuItem>
+                  );
+                })}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={5}>
             <Button
               variant="outlined"
               startIcon={<RestartAltIcon />}
@@ -486,6 +530,7 @@ export default function PurchasesHubPage() {
                 setFilters({
                   dateFrom: monthStartIso(),
                   dateTo: todayIso(),
+                  status: "all",
                 })
               }
             >

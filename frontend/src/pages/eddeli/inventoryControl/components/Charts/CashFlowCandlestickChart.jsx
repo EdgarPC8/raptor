@@ -49,7 +49,13 @@ const moneyFmt = (v) =>
     maximumFractionDigits: 0,
   }).format(Number(v || 0));
 
-export default function CashFlowCandlestickChart({ onCandleSelect, onDrillReset, selectedKey = null }) {
+export default function CashFlowCandlestickChart({
+  onCandleSelect,
+  onDrillReset,
+  selectedKey = null,
+  startDate = '',
+  endDate = '',
+}) {
   const theme = useTheme();
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
@@ -62,6 +68,8 @@ export default function CashFlowCandlestickChart({ onCandleSelect, onDrillReset,
   const [granularity, setGranularity] = useState("day");
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [payload, setPayload] = useState(null);
   const [hoverInfo, setHoverInfo] = useState(null);
 
@@ -69,21 +77,26 @@ export default function CashFlowCandlestickChart({ onCandleSelect, onDrillReset,
   const downColor = theme.palette.error.main;
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoadedOnceRef.current) setLoading(true);
     try {
-      const { data } = await getCashFlowCandlesRequest({
+      const params = {
         granularity,
         limit: CANDLE_LIMIT,
         offset,
-      });
+      };
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+      const { data } = await getCashFlowCandlesRequest(params);
       setPayload(data);
     } catch (e) {
       console.error("CashFlowCandlestickChart:", e);
       setPayload(null);
     } finally {
       setLoading(false);
+      hasLoadedOnceRef.current = true;
+      setHasLoadedOnce(true);
     }
-  }, [granularity, offset]);
+  }, [granularity, offset, startDate, endDate]);
 
   useEffect(() => {
     loadData();
@@ -92,7 +105,7 @@ export default function CashFlowCandlestickChart({ onCandleSelect, onDrillReset,
   useEffect(() => {
     setOffset(0);
     onDrillResetRef.current?.();
-  }, [granularity]);
+  }, [granularity, startDate, endDate]);
 
   useEffect(() => {
     const container = chartContainerRef.current;
@@ -284,7 +297,7 @@ export default function CashFlowCandlestickChart({ onCandleSelect, onDrillReset,
       )}
 
       <Box sx={{ position: "relative", minHeight: 220 }}>
-        {loading && (
+        {loading && !hasLoadedOnce && (
           <Box
             sx={{
               position: "absolute",
@@ -298,7 +311,7 @@ export default function CashFlowCandlestickChart({ onCandleSelect, onDrillReset,
             <ChartSkeleton height={220} />
           </Box>
         )}
-        {!loading && !payload?.candles?.length && (
+        {hasLoadedOnce && !loading && !payload?.candles?.length && (
           <Box
             sx={{
               minHeight: 220,

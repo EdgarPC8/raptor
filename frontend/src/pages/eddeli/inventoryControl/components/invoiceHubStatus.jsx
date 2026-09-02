@@ -59,6 +59,52 @@ function creditStatus({ delivered, partyKind }) {
   });
 }
 
+export const PURCHASE_HUB_FILTER_OPTIONS = [
+  { value: "all", label: "Todos los estados" },
+  { value: "complete", label: "Entregado y pagado" },
+  { value: "delivered_unpaid", label: "Recibido · no pagado" },
+  { value: "paid_undelivered", label: "Pagado · no recibido" },
+  { value: "none", label: "No recibido / no pagado" },
+  { value: "credit", label: "Crédito" },
+];
+
+/** Estado fijo para iconos del filtro (sin fila real). */
+export function purchaseHubStatusByKey(key) {
+  const map = {
+    complete: statusShape({
+      key: "complete",
+      label: "Entregado y pagado",
+      toneKey: "success",
+      sortOrder: 4,
+    }),
+    paid_undelivered: statusShape({
+      key: "paid_undelivered",
+      label: "Pagado · no recibido",
+      toneKey: "info",
+      sortOrder: 3,
+    }),
+    delivered_unpaid: statusShape({
+      key: "delivered_unpaid",
+      label: "Recibido · no pagado",
+      toneKey: "gold",
+      sortOrder: 2,
+    }),
+    none: statusShape({
+      key: "none",
+      label: "No recibido / no pagado",
+      toneKey: "error",
+      sortOrder: 1,
+    }),
+    credit: statusShape({
+      key: "credit",
+      label: "Crédito",
+      toneKey: "credit",
+      sortOrder: 0,
+    }),
+  };
+  return map[key] || null;
+}
+
 /** Compra / pedido a proveedor: recibido + pagado + crédito. */
 export function getPurchaseHubStatus(row) {
   const received = Boolean(row?.receivedAt);

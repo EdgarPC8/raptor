@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -19,12 +19,13 @@ import { useTheme, alpha } from '@mui/material/styles';
 import {
   format,
   isSameMonth,
+  parse,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import ChartBlockHeader from '../../../../../components/Charts/ChartBlockHeader';
 import { ChartSkeleton } from '../../../../../components/ContentSkeleton.jsx';
 import { getChartSeriesColors, CHART_SEMANTIC_INDEX } from '../../../../../theme/chartPalette';
-import { getCalendarYearSummaryRequest } from '../../../../../api/financeRequest';
+import { getCalendarYearSummaryRequest, getCalendarRangeSummaryRequest } from '../../../../../api/financeRequest';
 
 const VIEW_ALL = 'all';
 const VIEW_INCOME = 'income';
@@ -155,12 +156,17 @@ function YearTotalItem({ label, value, color, moneyFmt }) {
 export default function YearFinanceOverviewChart({
   initialYear = new Date().getFullYear(),
   onMonthSelect,
+  startDate = '',
+  endDate = '',
 }) {
   const theme = useTheme();
+  const hasRangeFilter = Boolean(startDate || endDate);
   const [year, setYear] = useState(initialYear);
   const [months, setMonths] = useState({});
   const [totals, setTotals] = useState({ orders: 0, posSales: 0, posIncome: 0, collected: 0, expenses: 0 });
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [viewMode, setViewMode] = useState(VIEW_ALL);
 
   const isIncomeView = viewMode === VIEW_INCOME;
@@ -199,10 +205,14 @@ export default function YearFinanceOverviewChart({
     []
   );
 
-  const monthDates = useMemo(
-    () => Array.from({ length: 12 }, (_, i) => new Date(year, i, 1)),
-    [year]
-  );
+  const monthDates = useMemo(() => {
+    if (hasRangeFilter) {
+      return Object.keys(months)
+        .sort()
+        .map((key) => parse(key, 'yyyy-MM', new Date()));
+    }
+    return Array.from({ length: 12 }, (_, i) => new Date(year, i, 1));
+  }, [hasRangeFilter, months, year]);
 
   const metricsList = useMemo(
     () =>
@@ -227,9 +237,11 @@ export default function YearFinanceOverviewChart({
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      setLoading(true);
+      if (!hasLoadedOnceRef.current) setLoading(true);
       try {
-        const { data } = await getCalendarYearSummaryRequest(year);
+        const { data } = hasRangeFilter
+          ? await getCalendarRangeSummaryRequest({ startDate, endDate })
+          : await getCalendarYearSummaryRequest(year);
         if (!cancelled) {
           setMonths(data?.months ?? {});
           setTotals(data?.totals ?? { orders: 0, posSales: 0, posIncome: 0, collected: 0, expenses: 0 });
@@ -241,12 +253,16 @@ export default function YearFinanceOverviewChart({
           setTotals({ orders: 0, posSales: 0, posIncome: 0, collected: 0, expenses: 0 });
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          hasLoadedOnceRef.current = true;
+          setHasLoadedOnce(true);
+        }
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [year]);
+  }, [year, hasRangeFilter, startDate, endDate]);
 
   const handleMonthClick = useCallback(
     (date) => {
@@ -259,7 +275,7 @@ export default function YearFinanceOverviewChart({
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 2 }, position: 'relative', minWidth: 0 }}>
-      {loading && (
+      {loading && !hasLoadedOnce && (
         <Box
           sx={{
             position: 'absolute',
@@ -280,11 +296,13 @@ export default function YearFinanceOverviewChart({
       )}
 
       <ChartBlockHeader
-        title="Resumen anual por mes"
+        title={hasRangeFilter ? 'Resumen por mes (período)' : 'Resumen anual por mes'}
         subtitle={
-          isIncomeView
-            ? 'Caja y cobros por mes según fecha en que entró el dinero (Income). Misma fecha; solo cambia el origen.'
-            : 'Pedidos/caja por fecha de pedido; ingresos y gastos por Income/Expense. Clic en un mes para el calendario.'
+          hasRangeFilter
+            ? `Meses con movimiento entre ${startDate || '…'} y ${endDate || '…'}. Clic en un mes para el calendario.`
+            : isIncomeView
+              ? 'Caja y cobros por mes según fecha en que entró el dinero (Income). Misma fecha; solo cambia el origen.'
+              : 'Pedidos/caja por fecha de pedido; ingresos y gastos por Income/Expense. Clic en un mes para el calendario.'
         }
         sx={{ mb: 0.75 }}
       />
@@ -296,17 +314,23 @@ export default function YearFinanceOverviewChart({
         spacing={1}
         sx={{ mb: 1.25 }}
       >
-        <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ flexShrink: 0 }}>
-          <IconButton size="small" disabled={loading} onClick={() => setYear((y) => y - 1)} aria-label="Año anterior">
-            <ChevronLeftIcon fontSize="small" />
-          </IconButton>
-          <Typography variant="subtitle1" sx={{ minWidth: 56, textAlign: 'center', fontWeight: 800 }}>
-            {year}
+        {hasRangeFilter ? (
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.secondary', textAlign: { xs: 'center', sm: 'left' } }}>
+            {startDate || '…'} → {endDate || '…'}
           </Typography>
-          <IconButton size="small" disabled={loading} onClick={() => setYear((y) => y + 1)} aria-label="Año siguiente">
-            <ChevronRightIcon fontSize="small" />
-          </IconButton>
-        </Stack>
+        ) : (
+          <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ flexShrink: 0 }}>
+            <IconButton size="small" disabled={loading} onClick={() => setYear((y) => y - 1)} aria-label="Año anterior">
+              <ChevronLeftIcon fontSize="small" />
+            </IconButton>
+            <Typography variant="subtitle1" sx={{ minWidth: 56, textAlign: 'center', fontWeight: 800 }}>
+              {year}
+            </Typography>
+            <IconButton size="small" disabled={loading} onClick={() => setYear((y) => y + 1)} aria-label="Año siguiente">
+              <ChevronRightIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+        )}
 
         <ToggleButtonGroup
           exclusive

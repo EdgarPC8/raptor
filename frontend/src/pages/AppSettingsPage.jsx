@@ -17,8 +17,15 @@ import {
   FormControlLabel,
   Switch,
   alpha,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  CircularProgress,
 } from "@mui/material";
 import SaveIcon from "@mui/icons-material/Save";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import UploadIcon from "@mui/icons-material/Upload";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import StorefrontIcon from "@mui/icons-material/Storefront";
@@ -39,6 +46,7 @@ import {
   isFeatureUnlocked,
 } from "../utils/entitlementFeatures.js";
 import { updateAppSettings } from "../api/appSettingsRequest.js";
+import { getStoresRequest } from "../api/inventoryControlRequest.js";
 import { uploadImageRequest, deleteImageRequest } from "../api/imgRequest.js";
 import { buildImageUrl } from "../api/axios.js";
 import AppTimeClockPanel from "../components/AppTimeClockPanel.jsx";
@@ -68,6 +76,11 @@ import {
   normalizeThemePalette,
 } from "../theme/themePalette.js";
 import { normalizeKeyboardShortcuts } from "../utils/keyboardShortcuts.js";
+import {
+  locationKindLabel,
+  sortStoresByKind,
+  storeHoldsInventory,
+} from "../utils/storeLocationKind.js";
 
 const ALLOWED = new Set(["Administrador", "Programador"]);
 
@@ -221,6 +234,11 @@ export default function AppSettingsPage() {
   const [logoBusy, setLogoBusy] = useState(false);
   const [iconBusy, setIconBusy] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [multiStockConfirmOpen, setMultiStockConfirmOpen] = useState(false);
+  const [multiStockPrincipalId, setMultiStockPrincipalId] = useState("");
+  const [multiStockStores, setMultiStockStores] = useState([]);
+  const [multiStockStoresLoading, setMultiStockStoresLoading] = useState(false);
+  const [multiStockUnifying, setMultiStockUnifying] = useState(false);
   const fileRef = useRef(null);
   const iconFileRef = useRef(null);
 
@@ -305,10 +323,25 @@ export default function AppSettingsPage() {
     [multiStockFeatureStatus, user?.loginRol],
   );
   const multiStockAlreadyOn = Boolean(form?.multiStockEnabled);
-  const multiStockCanToggleOff =
-    multiStockAlreadyOn && user?.loginRol === "Programador";
-  const multiStockSwitchDisabled =
-    !multiStockUnlocked || (multiStockAlreadyOn && !multiStockCanToggleOff);
+  const multiStockCanToggleOff = multiStockAlreadyOn && ALLOWED.has(user?.loginRol);
+  const multiStockSwitchDisabled = multiStockAlreadyOn
+    ? !multiStockCanToggleOff
+    : !multiStockUnlocked;
+
+  const loadMultiStockPrincipalStores = useCallback(async () => {
+    setMultiStockStoresLoading(true);
+    try {
+      const { data } = await getStoresRequest();
+      const list = (Array.isArray(data) ? data : []).filter(
+        (s) => s.isActive !== false && storeHoldsInventory(s.locationKind),
+      );
+      setMultiStockStores(sortStoresByKind(list));
+    } catch {
+      setMultiStockStores([]);
+    } finally {
+      setMultiStockStoresLoading(false);
+    }
+  }, []);
 
   const tabIndex = useMemo(
     () => visibleTabs.findIndex((t) => t.id === tab),
@@ -351,15 +384,19 @@ export default function AppSettingsPage() {
   };
 
   const persistSettings = async (patch, successMsg = "Configuración guardada") => {
-    const payload = { ...form, ...patch };
+    const { principalStoreId, ...settingsPatch } = patch || {};
+    const payload = { ...form, ...settingsPatch };
+    if (principalStoreId != null && principalStoreId !== "") {
+      payload.principalStoreId = principalStoreId;
+    }
     await toast({
       promise: (async () => {
         const { settings: next } = await updateAppSettings(payload);
         setForm((f) => ({
           ...f,
-          ...patch,
-          logoPath: next.logoPath ?? patch.logoPath ?? f.logoPath,
-          iconPath: next.iconPath ?? patch.iconPath ?? f.iconPath,
+          ...settingsPatch,
+          logoPath: next.logoPath ?? settingsPatch.logoPath ?? f.logoPath,
+          iconPath: next.iconPath ?? settingsPatch.iconPath ?? f.iconPath,
         }));
         setSettings(next);
         await reload();
@@ -367,6 +404,35 @@ export default function AppSettingsPage() {
       successMessage: successMsg,
       errorMessage: "No se pudo guardar la configuración",
     });
+  };
+
+  const onMultiStockToggle = (e) => {
+    const next = e.target.checked;
+    if (!next && form?.multiStockEnabled) {
+      setMultiStockPrincipalId("");
+      setMultiStockConfirmOpen(true);
+      loadMultiStockPrincipalStores();
+      return;
+    }
+    onToggle("multiStockEnabled")(e);
+  };
+
+  const confirmDisableMultiStock = async () => {
+    setMultiStockUnifying(true);
+    try {
+      await persistSettings(
+        {
+          multiStockEnabled: false,
+          ...(multiStockPrincipalId ? { principalStoreId: multiStockPrincipalId } : {}),
+        },
+        "Stock unificado en un solo local",
+      );
+      setMultiStockConfirmOpen(false);
+    } catch {
+      /* toast */
+    } finally {
+      setMultiStockUnifying(false);
+    }
   };
 
   const onSave = async () => {
@@ -1098,10 +1164,8 @@ export default function AppSettingsPage() {
                       ? FEATURE_STATUS_HINT[multiStockFeatureStatus] ||
                         "Aún no disponible para tu instalación."
                       : multiStockAlreadyOn
-                        ? multiStockCanToggleOff
-                          ? "Activo. Programador puede desactivar."
-                          : "Activo. No se puede desactivar."
-                        : "Modo clásico: stock en Productos. Activá solo con varios locales."
+                        ? "Activo: stock separado por local. Al desactivar se unifica en un solo stock por producto."
+                        : "Desactivado: un stock general por producto (modo clásico)."
                   }
                   control={
                     <FormControlLabel
@@ -1111,7 +1175,7 @@ export default function AppSettingsPage() {
                           size="small"
                           checked={Boolean(form.multiStockEnabled)}
                           disabled={multiStockSwitchDisabled}
-                          onChange={onToggle("multiStockEnabled")}
+                          onChange={onMultiStockToggle}
                         />
                       }
                       label={form.multiStockEnabled ? "Activado" : "Desactivado"}
@@ -1312,6 +1376,69 @@ export default function AppSettingsPage() {
           ) : null}
         </Box>
       </Paper>
+
+      <Dialog
+        open={multiStockConfirmOpen}
+        onClose={() => !multiStockUnifying && setMultiStockConfirmOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <WarningAmberIcon color="warning" />
+          ¿Unificar en un solo stock?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            El stock de todas las <strong>sucursales y bodegas</strong> del negocio se sumará en
+            un único stock por producto. Las <strong>vitrinas no se modifican</strong> (no llevan
+            inventario).
+          </DialogContentText>
+          <DialogContentText sx={{ mb: 2 }}>
+            Podés elegir un local principal donde quedará todo el stock, o dejar en automático
+            para usar el local de operación actual.
+          </DialogContentText>
+          <TextField
+            select
+            fullWidth
+            size="small"
+            label="Local principal (opcional)"
+            value={multiStockPrincipalId}
+            onChange={(e) => setMultiStockPrincipalId(e.target.value)}
+            disabled={multiStockStoresLoading || multiStockUnifying}
+            helperText={
+              multiStockStoresLoading
+                ? "Cargando locales…"
+                : "Vacío = automático (local de operación actual)"
+            }
+          >
+            <MenuItem value="">Automático (local de operación actual)</MenuItem>
+            {multiStockStores.map((s) => (
+              <MenuItem key={s.id} value={String(s.id)}>
+                {s.name} — {locationKindLabel(s.locationKind)}
+              </MenuItem>
+            ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setMultiStockConfirmOpen(false)}
+            disabled={multiStockUnifying}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => void confirmDisableMultiStock()}
+            disabled={multiStockUnifying || multiStockStoresLoading}
+            startIcon={
+              multiStockUnifying ? <CircularProgress size={18} color="inherit" /> : null
+            }
+          >
+            {multiStockUnifying ? "Unificando…" : "Sí, unificar stock"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <ReceiptDetailPreviewDialog
         open={previewOpen}
