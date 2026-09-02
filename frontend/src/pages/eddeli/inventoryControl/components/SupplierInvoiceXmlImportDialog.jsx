@@ -63,7 +63,9 @@ function pickDefaultUnitId(units) {
 }
 
 /** Datos semilla para ProductForm / createProduct desde línea XML.
- * Si el código del proveedor parece EAN, se guarda también como barcode para caja.
+ * Compra a proveedor = producto final (para vender en caja). Insumo/raw solo
+ * se crea a mano cuando se use en recetas (harina suelta, genéricos, etc.).
+ * Si el código del proveedor parece EAN, se guarda también como barcode.
  * El vínculo con el proveedor se confirma al registrar el pedido (supplier product codes).
  */
 export function xmlLineToProductSeed(line) {
@@ -76,7 +78,7 @@ export function xmlLineToProductSeed(line) {
   return {
     name: String(line?.description || "Producto XML").trim().slice(0, 150),
     barcode: barcodeFromCode || "",
-    type: "raw",
+    type: "final",
     supplierPrice: Number(line?.unitPrice) || 0,
     taxRate: Number(line?.taxRate) || 0,
     supplierCode,
@@ -94,7 +96,7 @@ function buildCreateFormData(seed, unitId) {
   const fd = new FormData();
   fd.append("subfolder", mediaStoragePath("products"));
   fd.append("name", seed.name);
-  fd.append("type", seed.type || "raw");
+  fd.append("type", seed.type || "final");
   fd.append("unitId", String(unitId));
   if (seed.barcode) fd.append("barcode", String(seed.barcode).replace(/\D/g, ""));
   if (seed.desc) fd.append("desc", seed.desc);
@@ -118,7 +120,7 @@ function buildProductUpdateFormData(product, overrides = {}) {
   const fd = new FormData();
   fd.append("subfolder", mediaStoragePath("products"));
   fd.append("name", String(merged.name || "").trim());
-  fd.append("type", merged.type || "raw");
+  fd.append("type", merged.type || "final");
   fd.append("unitId", String(merged.unitId || ""));
   if (merged.desc) fd.append("desc", String(merged.desc));
   if (merged.categoryId) fd.append("categoryId", String(merged.categoryId));
