@@ -7,6 +7,7 @@
 const SESSION_DRAFT_ID_KEY = "caja.draft.sessionDraftId.v1";
 const SESSION_TOKEN_KEY = "caja.draft.sessionToken.v1";
 const MAX_DRAFTS = 8;
+const MAX_HISTORY = 30;
 /** Tiempo sin heartbeat para considerar liberado un borrador. */
 export const CAJA_DRAFT_LIVE_MS = 8000;
 
@@ -41,6 +42,24 @@ function presenceKey(ns, userId) {
 /** Clave antigua (un solo borrador). Solo se usa para migrar. */
 function legacySingleKey(ns, userId) {
   return `${ns}.cajaDraft.v1.${uidOf(userId)}`;
+}
+
+function historyIndexKey(ns, userId) {
+  return `${ns}.cajaDrafts.history.v1.${uidOf(userId)}`;
+}
+
+function historyEntryKey(ns, userId, entryId) {
+  return `${ns}.cajaDrafts.history.v1.${uidOf(userId)}.${entryId}`;
+}
+
+function readHistoryIndex(ns, userId) {
+  const data = readJson(historyIndexKey(ns, userId));
+  if (Array.isArray(data?.ids)) return data.ids.map(String).filter(Boolean);
+  return [];
+}
+
+function writeHistoryIndex(ns, userId, ids) {
+  writeJson(historyIndexKey(ns, userId), { ids: [...new Set(ids.map(String))] });
 }
 
 function newId() {
@@ -339,6 +358,137 @@ export function clearAllCajaDrafts(activeApp, userId) {
     localStorage.removeItem(indexKey(ns, userId));
     localStorage.removeItem(legacySingleKey(ns, userId));
     localStorage.removeItem(presenceKey(ns, userId));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Copia un borrador activo al historial (no lo quita del índice activo). */
+export function archiveCajaDraft(activeApp, userId, draftId, meta = {}) {
+  const draft = readCajaDraft(activeApp, userId, draftId);
+  if (!draft || !isCajaDraftWorthRestoring(draft)) return null;
+  const ns = cajaDraftAppNamespace(activeApp);
+  const entryId = newId();
+  writeJson(historyEntryKey(ns, userId, entryId), {
+    ...draft,
+    historyId: entryId,
+    archivedAt: new Date().toISOString(),
+    archivedFrom: String(draftId),
+    archiveReason: meta.reason || "discarded",
+  });
+  let ids = readHistoryIndex(ns, userId);
+  ids = [entryId, ...ids.filter((id) => id !== entryId)].slice(0, MAX_HISTORY);
+  writeHistoryIndex(ns, userId, ids);
+  return entryId;
+}
+
+/** Archiva y quita del índice activo (venta completada o descarte explícito). */
+export function discardCajaDraft(activeApp, userId, draftId, meta = {}) {
+  archiveCajaDraft(activeApp, userId, draftId, meta);
+  clearCajaDraft(activeApp, userId, draftId);
+}
+
+/** Descarta solo borradores libres; no toca los que otra pestaña tiene en uso. */
+export function discardAvailableCajaDrafts(activeApp, userId, { myToken, myDraftId } = {}) {
+  const annotated = annotateCajaDrafts(activeApp, userId, { myToken, myDraftId });
+  let discarded = 0;
+  for (const d of annotated) {
+    if (d.status !== "available") continue;
+    discardCajaDraft(activeApp, userId, d.id, { reason: "discarded_bulk" });
+    discarded += 1;
+  }
+  const remaining = annotateCajaDrafts(activeApp, userId, { myToken, myDraftId });
+  return { discarded, remaining };
+}
+
+export function listCajaDraftHistory(activeApp, userId) {
+  const ns = cajaDraftAppNamespace(activeApp);
+  const ids = readHistoryIndex(ns, userId);
+  const out = [];
+  const keepIds = [];
+  for (const id of ids) {
+    const data = readJson(historyEntryKey(ns, userId, id));
+    if (!data || !isCajaDraftWorthRestoring(data)) {
+      try {
+        localStorage.removeItem(historyEntryKey(ns, userId, id));
+      } catch {
+        /* ignore */
+      }
+      continue;
+    }
+    keepIds.push(id);
+    out.push({ ...data, historyId: String(id) });
+  }
+  if (keepIds.length !== ids.length) writeHistoryIndex(ns, userId, keepIds);
+  out.sort((a, b) =>
+    String(b.archivedAt || b.savedAt || "").localeCompare(String(a.archivedAt || a.savedAt || "")),
+  );
+  return out;
+}
+
+export function countCajaDraftHistory(activeApp, userId) {
+  return listCajaDraftHistory(activeApp, userId).length;
+}
+
+/**
+ * Restaura una entrada del historial como borrador activo nuevo.
+ * @returns {{ ok: true, id: string } | { ok: false, reason: 'missing' }}
+ */
+export function restoreCajaDraftFromHistory(activeApp, userId, historyId, sessionToken) {
+  if (!historyId) return { ok: false, reason: "missing" };
+  const ns = cajaDraftAppNamespace(activeApp);
+  const entry = readJson(historyEntryKey(ns, userId, historyId));
+  if (!entry || !isCajaDraftWorthRestoring(entry)) return { ok: false, reason: "missing" };
+
+  const newDraftId = newId();
+  const {
+    historyId: _historyId,
+    archivedAt: _archivedAt,
+    archivedFrom: _archivedFrom,
+    archiveReason: _archiveReason,
+    ...draftData
+  } = entry;
+
+  writeJson(draftKey(ns, userId, newDraftId), {
+    ...draftData,
+    id: newDraftId,
+    savedAt: new Date().toISOString(),
+    claimToken: sessionToken || null,
+    restoredFromHistory: String(historyId),
+  });
+
+  let ids = readIndex(ns, userId);
+  if (!ids.includes(newDraftId)) ids = [...ids, newDraftId];
+  if (ids.length > MAX_DRAFTS) {
+    const drop = ids.slice(0, ids.length - MAX_DRAFTS);
+    ids = ids.slice(ids.length - MAX_DRAFTS);
+    for (const oldId of drop) {
+      try {
+        localStorage.removeItem(draftKey(ns, userId, oldId));
+      } catch {
+        /* ignore */
+      }
+      clearCajaDraftPresence(activeApp, userId, oldId);
+    }
+  }
+  writeIndex(ns, userId, ids);
+  setTabDraftId(newDraftId);
+  if (sessionToken) touchCajaDraftPresence(activeApp, userId, newDraftId, sessionToken);
+  return { ok: true, id: newDraftId };
+}
+
+export function clearCajaDraftHistory(activeApp, userId) {
+  const ns = cajaDraftAppNamespace(activeApp);
+  const ids = readHistoryIndex(ns, userId);
+  for (const id of ids) {
+    try {
+      localStorage.removeItem(historyEntryKey(ns, userId, id));
+    } catch {
+      /* ignore */
+    }
+  }
+  try {
+    localStorage.removeItem(historyIndexKey(ns, userId));
   } catch {
     /* ignore */
   }

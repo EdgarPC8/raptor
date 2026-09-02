@@ -87,13 +87,18 @@ import {
 } from "../../utils/saleReceiptUtils.js";
 import {
   annotateCajaDrafts,
-  clearAllCajaDrafts,
+  clearCajaDraftHistory,
+  countCajaDraftHistory,
   clearCajaDraft,
   countAvailableCajaDrafts,
   createTabDraftId,
+  discardAvailableCajaDrafts,
+  discardCajaDraft,
   getTabDraftSession,
   isCajaDraftWorthRestoring,
+  listCajaDraftHistory,
   readCajaDraft,
+  restoreCajaDraftFromHistory,
   subscribeCajaDraftSync,
   summarizeCajaDraft,
   touchCajaDraftPresence,
@@ -103,6 +108,7 @@ import {
 import { buildSriInvoicePayloadFromCaja } from "../../utils/cajaSriEmit.js";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import RestoreIcon from "@mui/icons-material/Restore";
+import HistoryIcon from "@mui/icons-material/History";
 import TourHelpButton from "../../components/TourHelpButton.jsx";
 import { usePageTour } from "../../hooks/usePageTour.js";
 import { CAJA_TOUR_ID, getCajaTourSteps } from "../../tours/cajaTour.js";
@@ -441,6 +447,9 @@ export default function CajaPage() {
   const [draftReady, setDraftReady] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState(null);
   const [pendingDraftCount, setPendingDraftCount] = useState(0);
+  const [draftHistoryOpen, setDraftHistoryOpen] = useState(false);
+  const [draftHistoryList, setDraftHistoryList] = useState([]);
+  const [draftHistoryCount, setDraftHistoryCount] = useState(0);
   const draftTokenRef = useRef(null);
   const draftChoicesOpenRef = useRef(false);
   const skipDefaultCustomerRef = useRef(false);
@@ -451,6 +460,25 @@ export default function CajaPage() {
   useEffect(() => {
     draftChoicesOpenRef.current = Boolean(draftChoices?.length);
   }, [draftChoices]);
+
+  const refreshDraftHistoryCount = useCallback(() => {
+    if (draftUserId == null) {
+      setDraftHistoryCount(0);
+      return;
+    }
+    setDraftHistoryCount(countCajaDraftHistory(activeApp, draftUserId));
+  }, [activeApp, draftUserId]);
+
+  const openDraftHistoryModal = () => {
+    if (draftUserId == null) return;
+    setDraftHistoryList(listCajaDraftHistory(activeApp, draftUserId));
+    setDraftHistoryOpen(true);
+    refreshDraftHistoryCount();
+  };
+
+  useEffect(() => {
+    refreshDraftHistoryCount();
+  }, [refreshDraftHistoryCount]);
 
   const refreshPendingDraftCount = useCallback(() => {
     if (draftUserId == null) {
@@ -769,7 +797,22 @@ export default function CajaPage() {
 
   const discardOneCajaDraft = (draftId) => {
     if (draftUserId == null || !draftId) return;
-    clearCajaDraft(activeApp, draftUserId, draftId);
+    const target = (draftChoices || []).find((d) => String(d.id) === String(draftId));
+    if (target?.status === "in_use") {
+      void toast?.({
+        message:
+          "Esa caja está en uso en otra pestaña. Abrí una caja nueva aquí o recuperala desde esa pestaña.",
+        variant: "warning",
+      });
+      return;
+    }
+    const summary = summarizeCajaDraft(target);
+    const ok = window.confirm(
+      `¿Descartar la caja del ${summary.whenLabel}? Se guardará en el historial por si la necesitás después.`,
+    );
+    if (!ok) return;
+    discardCajaDraft(activeApp, draftUserId, draftId, { reason: "discarded" });
+    refreshDraftHistoryCount();
     const annotated = annotateCajaDrafts(activeApp, draftUserId, {
       myToken: draftTokenRef.current,
       myDraftId: activeDraftId,
@@ -777,7 +820,7 @@ export default function CajaPage() {
     const available = annotated.filter((d) => d.status === "available");
     setPendingDraftCount(available.length);
     if (!draftReady) {
-      if (available.length === 0) {
+      if (annotated.length === 0) {
         startFreshCajaDraft();
         return;
       }
@@ -792,15 +835,92 @@ export default function CajaPage() {
     setDraftChoices(annotated);
   };
 
-  const discardAllCajaDrafts = () => {
-    if (draftUserId != null) clearAllCajaDrafts(activeApp, draftUserId);
-    if (!draftReady) {
-      startFreshCajaDraft();
+  const discardAllAvailableCajaDrafts = () => {
+    if (draftUserId == null) return;
+    const annotated = annotateCajaDrafts(activeApp, draftUserId, {
+      myToken: draftTokenRef.current,
+      myDraftId: activeDraftId,
+    });
+    const available = annotated.filter((d) => d.status === "available");
+    if (available.length === 0) {
+      void toast?.({
+        message: "No hay cajas disponibles para descartar. Las que están en otra pestaña no se tocan.",
+        variant: "info",
+      });
       return;
     }
+    const ok = window.confirm(
+      `¿Descartar ${available.length} caja${available.length === 1 ? "" : "s"} disponible${
+        available.length === 1 ? "" : "s"
+      }? Se guardarán en el historial. Las cajas en uso en otras pestañas no se borran.`,
+    );
+    if (!ok) return;
+    const { remaining } = discardAvailableCajaDrafts(activeApp, draftUserId, {
+      myToken: draftTokenRef.current,
+      myDraftId: activeDraftId,
+    });
+    refreshDraftHistoryCount();
+    if (!draftReady) {
+      if (remaining.length === 0) {
+        startFreshCajaDraft();
+        return;
+      }
+      setDraftChoices(remaining);
+      setPendingDraftCount(remaining.filter((d) => d.status === "available").length);
+      return;
+    }
+    if (remaining.length === 0) {
+      setDraftChoices(null);
+      setDraftModalLocked(false);
+      setPendingDraftCount(0);
+      return;
+    }
+    setDraftChoices(remaining);
+    setPendingDraftCount(remaining.filter((d) => d.status === "available").length);
+  };
+
+  const restoreHistoryDraft = (entry) => {
+    if (!entry?.historyId || draftUserId == null) return;
+    const result = restoreCajaDraftFromHistory(
+      activeApp,
+      draftUserId,
+      entry.historyId,
+      draftTokenRef.current,
+    );
+    if (!result.ok) {
+      void toast?.({ message: "Esa entrada del historial ya no existe.", variant: "warning" });
+      setDraftHistoryList(listCajaDraftHistory(activeApp, draftUserId));
+      refreshDraftHistoryCount();
+      return;
+    }
+    const restored = readCajaDraft(activeApp, draftUserId, result.id);
+    applyDraftState(restored, customers);
+    skipDefaultCustomerRef.current = false;
+    setActiveDraftId(result.id);
     setDraftChoices(null);
     setDraftModalLocked(false);
-    setPendingDraftCount(0);
+    setDraftReady(true);
+    setDraftHistoryOpen(false);
+    refreshPendingDraftCount();
+    refreshDraftHistoryCount();
+    void toast?.({ message: "Caja restaurada desde el historial.", variant: "success" });
+  };
+
+  const emptyDraftHistory = () => {
+    if (draftUserId == null) return;
+    if (draftHistoryCount === 0) return;
+    const ok1 = window.confirm(
+      `¿Vaciar el historial de ${draftHistoryCount} caja${draftHistoryCount === 1 ? "" : "s"}? Esta acción no se puede deshacer.`,
+    );
+    if (!ok1) return;
+    const ok2 = window.confirm(
+      "Confirmación final: se borrarán todas las cajas guardadas en el historial. ¿Continuar?",
+    );
+    if (!ok2) return;
+    clearCajaDraftHistory(activeApp, draftUserId);
+    setDraftHistoryList([]);
+    refreshDraftHistoryCount();
+    void toast?.({ message: "Historial de cajas vaciado.", variant: "info" });
   };
 
   const closeDraftModalIfAllowed = () => {
@@ -1961,6 +2081,19 @@ export default function CajaPage() {
               />
             </Tooltip>
           ) : null}
+          {draftHistoryCount > 0 ? (
+            <Tooltip title="Cajas archivadas que podés restaurar">
+              <Chip
+                size="small"
+                color="default"
+                variant="outlined"
+                icon={<HistoryIcon />}
+                label={`Historial (${draftHistoryCount})`}
+                onClick={openDraftHistoryModal}
+                clickable
+              />
+            </Tooltip>
+          ) : null}
           {sriSettings?.readyForInvoicing ? (
             <Chip
               size="small"
@@ -2807,7 +2940,8 @@ export default function CajaPage() {
         </DialogTitle>
         <DialogContent dividers sx={{ pt: 1.5 }}>
           <Typography variant="body2" sx={{ mb: 1.5 }}>
-            Elige un borrador libre para esta pestaña. Si está “En uso”, ya lo tomó otra caja.
+            Elegí un borrador libre para esta pestaña. Si está “En uso”, otra caja lo tiene abierto y
+            no se puede borrar desde aquí. Podés abrir una caja nueva aquí sin afectar las otras.
           </Typography>
           <Stack spacing={1.25}>
             {(draftChoices || []).map((draft) => {
@@ -2879,7 +3013,7 @@ export default function CajaPage() {
                       ) : null}
                     </Box>
                     <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
-                      {!mine ? (
+                      {!mine && !busy ? (
                         <Button
                           size="small"
                           color="inherit"
@@ -2904,16 +3038,120 @@ export default function CajaPage() {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 2, py: 1.5, flexWrap: "wrap", gap: 1 }}>
-          <Button onClick={discardAllCajaDrafts} color="inherit" size="small">
-            Descartar todas
+          <Button
+            onClick={openDraftHistoryModal}
+            color="inherit"
+            size="small"
+            startIcon={<HistoryIcon />}
+          >
+            Historial{draftHistoryCount > 0 ? ` (${draftHistoryCount})` : ""}
+          </Button>
+          <Button onClick={discardAllAvailableCajaDrafts} color="inherit" size="small">
+            Descartar disponibles
           </Button>
           {!draftModalLocked ? (
             <Button onClick={closeDraftModalIfAllowed} size="small">
               Cerrar
             </Button>
           ) : null}
-          <Button onClick={startFreshCajaDraft} size="small" variant={draftModalLocked ? "outlined" : "text"}>
-            Empezar limpia
+          <Button
+            onClick={startFreshCajaDraft}
+            size="small"
+            variant={draftModalLocked ? "contained" : "text"}
+          >
+            Nueva caja aquí (sin borrar las otras)
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={draftHistoryOpen}
+        onClose={() => setDraftHistoryOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontSize: "1rem", py: 1.5 }}>
+          Historial de cajas
+        </DialogTitle>
+        <DialogContent dividers sx={{ pt: 1.5 }}>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            Cajas descartadas o archivadas. Podés restaurar una aquí; vaciar el historial requiere
+            doble confirmación.
+          </Typography>
+          {draftHistoryList.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No hay cajas en el historial.
+            </Typography>
+          ) : (
+            <Stack spacing={1.25}>
+              {draftHistoryList.map((entry) => {
+                const summary = summarizeCajaDraft(entry);
+                const archivedWhen = entry.archivedAt
+                  ? new Date(entry.archivedAt).toLocaleString("es-EC", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })
+                  : summary.whenLabel;
+                return (
+                  <Paper key={entry.historyId} variant="outlined" sx={{ p: 1.25 }}>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1}
+                      alignItems={{ sm: "flex-start" }}
+                    >
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" fontWeight={600}>
+                          Guardada: {archivedWhen}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Venta original: {summary.whenLabel}
+                          {summary.lines > 0
+                            ? ` · ${summary.lines} línea${summary.lines === 1 ? "" : "s"} · ${summary.units} unidad${
+                                summary.units === 1 ? "" : "es"
+                              }`
+                            : ""}
+                        </Typography>
+                        {summary.products.items.length > 0 ? (
+                          <Box component="ul" sx={{ m: 0, mt: 0.75, pl: 2, maxHeight: 100, overflow: "auto" }}>
+                            {summary.products.items.map((item, idx) => (
+                              <Typography
+                                key={`${entry.historyId}-${idx}`}
+                                component="li"
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {item.name} × {item.quantity}
+                              </Typography>
+                            ))}
+                            {summary.products.more > 0 ? (
+                              <Typography component="li" variant="caption" color="text.secondary">
+                                … y {summary.products.more} más
+                              </Typography>
+                            ) : null}
+                          </Box>
+                        ) : null}
+                      </Box>
+                      <Button size="small" variant="contained" onClick={() => restoreHistoryDraft(entry)}>
+                        Restaurar
+                      </Button>
+                    </Stack>
+                  </Paper>
+                );
+              })}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5, flexWrap: "wrap", gap: 1 }}>
+          <Button
+            onClick={emptyDraftHistory}
+            color="inherit"
+            size="small"
+            disabled={draftHistoryCount === 0}
+          >
+            Vaciar historial
+          </Button>
+          <Button onClick={() => setDraftHistoryOpen(false)} size="small">
+            Cerrar
           </Button>
         </DialogActions>
       </Dialog>
