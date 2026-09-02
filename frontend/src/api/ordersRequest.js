@@ -184,6 +184,14 @@ export const getSupplierProductCodesRequest = async (supplierId) => {
   });
 };
 
+/** Todos los códigos de proveedor (para escáner en caja). */
+export const getAllSupplierProductCodesRequest = async () => {
+  if (isGuestDataMode()) return { data: { codes: [] } };
+  return await axios.get("/orders/supplier-product-codes/all", {
+    headers: { Authorization: jwt() },
+  });
+};
+
 export const upsertSupplierProductCodesRequest = async (payload) => {
   if (isGuestDataMode()) return guestDenied();
   return await axios.post("/orders/supplier-product-codes/upsert", payload, {

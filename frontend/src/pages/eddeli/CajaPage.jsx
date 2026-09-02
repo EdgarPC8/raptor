@@ -53,7 +53,7 @@ import {
   openPresentationMovementRequest,
   updateProduct,
 } from "../../api/inventoryControlRequest.js";
-import { getAllCustomersRequest, posCheckoutRequest } from "../../api/ordersRequest.js";
+import { getAllCustomersRequest, getAllSupplierProductCodesRequest, posCheckoutRequest } from "../../api/ordersRequest.js";
 import { getActiveShift, setActiveCashRegister } from "../../api/shiftRequest.js";
 import { fetchSriBillingSettings } from "../../api/sriBillingRequest.js";
 import { emitSriInvoice } from "../../api/sriInvoicesRequest.js";
@@ -72,14 +72,17 @@ import { buildCustomerDisplayName } from "./cajaCustomerUtils.js";
 import { formatMoney } from "../../utils/turnoCashUtils.js";
 import { useBarcodeScanner } from "../../hooks/useBarcodeScanner.js";
 import {
-  resolveEddeliLinePricing,
-  findEddeliProductByCode,
   applyTierGroupPricing,
   buildEffectiveTierGroups,
+  buildGlobalSupplierCodeIndex,
+  findProductByAnyCode,
+  findProductByLooseCode,
   getCartRowTierVisualKind,
   getProductTierVisualKind,
   getTierGroupLabel,
   isPanTierGroup,
+  isSellableInCaja,
+  resolveEddeliLinePricing,
 } from "../../utils/productLookup.js";
 import {
   buildReceiptFromCheckout,
@@ -389,6 +392,8 @@ export default function CajaPage() {
   const multiStockEnabled = Boolean(activeApp?.multiStockEnabled);
   const draftUserId = user?.userId != null ? String(user.userId) : null;
   const [products, setProducts] = useState([]);
+  const [allProductsCatalog, setAllProductsCatalog] = useState([]);
+  const supplierCodeIndexRef = useRef(new Map());
   const [tierGroups, setTierGroups] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [customerId, setCustomerId] = useState("");
@@ -559,14 +564,11 @@ export default function CajaPage() {
         nextProducts = body;
       }
     }
-    // Caja solo vende productos finales (no insumos raw ni intermedios).
-    // Además deduplica por id por si la API repite filas.
+    // Catálogo activo completo (lookup escáner) + lista vendible en caja.
     {
       const seen = new Set();
       nextProducts = nextProducts.filter((p) => {
         if (!p || p.isActive === false || p.isActive === 0) return false;
-        const type = String(p.type || "final").toLowerCase();
-        if (type === "raw" || type === "intermediate") return false;
         const id = String(p.id);
         if (seen.has(id)) return false;
         seen.add(id);
@@ -595,10 +597,12 @@ export default function CajaPage() {
       }
     }
 
-    setProducts(nextProducts);
+    setAllProductsCatalog(nextProducts);
+    const sellableProducts = nextProducts.filter(isSellableInCaja);
+    setProducts(sellableProducts);
     setCart((prev) =>
       prev.map((row) => {
-        const p = nextProducts.find((x) => Number(x.id) === Number(row.productId));
+        const p = sellableProducts.find((x) => Number(x.id) === Number(row.productId));
         if (!p) return row;
         return { ...row, stock: Number(p.stock || 0) };
       }),
@@ -613,8 +617,25 @@ export default function CajaPage() {
       const consumidorFinal = findConsumidorFinalCustomer(nextCustomers);
       if (consumidorFinal) setCustomerId(String(consumidorFinal.id));
     }
-    return { products: nextProducts, customers: nextCustomers };
+    return { products: sellableProducts, catalog: nextProducts, customers: nextCustomers };
   };
+
+  useEffect(() => {
+    if (appSettingsLoading) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await getAllSupplierProductCodesRequest();
+        if (cancelled) return;
+        supplierCodeIndexRef.current = buildGlobalSupplierCodeIndex(data?.codes || []);
+      } catch {
+        if (!cancelled) supplierCodeIndexRef.current = new Map();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [appSettingsLoading, activeApp?.alias, activeApp?.mediaFolderPrefix]);
 
   useEffect(() => {
     if (draftUserId == null || appSettingsLoading) return;
@@ -938,8 +959,8 @@ export default function CajaPage() {
     return () => window.clearTimeout(timer);
   }, [activeShift?.id]);
 
-  const findProductByQuery = (query, list = products) => {
-    const byCode = findEddeliProductByCode(list, query);
+  const findProductByQuery = (query, list = allProductsCatalog) => {
+    const byCode = findProductByAnyCode(list, query, supplierCodeIndexRef.current);
     if (byCode) return byCode;
     const q = String(query || "").trim().toLowerCase();
     if (!q) return null;
@@ -1102,10 +1123,13 @@ export default function CajaPage() {
     setCart((prev) => applyCatalogProductToCart(prev, product));
   };
 
-  const resolveProductFromScan = (query, list) => {
+  const resolveProductFromScan = (query, catalog = allProductsCatalog) => {
     const trimmed = String(query || "").trim();
     if (!trimmed) return null;
-    return findEddeliProductByCode(list, trimmed) || findProductByQuery(trimmed, list);
+    return (
+      findProductByAnyCode(catalog, trimmed, supplierCodeIndexRef.current) ||
+      findProductByQuery(trimmed, catalog)
+    );
   };
 
   const handleProductSearchEnter = useCallback(
@@ -1113,11 +1137,19 @@ export default function CajaPage() {
       const trimmed = String(query || "").trim();
       if (!trimmed) return;
 
-      let found = resolveProductFromScan(trimmed, products);
+      let found = resolveProductFromScan(trimmed, allProductsCatalog);
       if (!found) {
         const loaded = await loadData();
-        const fresh = loaded?.products || [];
-        found = resolveProductFromScan(trimmed, fresh);
+        const freshCatalog = loaded?.catalog || loaded?.products || [];
+        found = resolveProductFromScan(trimmed, freshCatalog);
+      }
+
+      if (found && !isSellableInCaja(found)) {
+        void toast?.({
+          message: `“${found.name}” está como insumo (${found.type || "raw"}). Asignale código de barras y tipo “final” en Productos para venderlo en caja.`,
+          variant: "warning",
+        });
+        return;
       }
 
       if (found) {
@@ -1132,11 +1164,11 @@ export default function CajaPage() {
         return;
       }
       void toast?.({
-        message: `No se encontró "${trimmed}" en productos de caja (solo finales activos).`,
+        message: `No se encontró "${trimmed}" en productos de caja. Revisa barcode, SKU o código de proveedor en Productos.`,
         variant: "warning",
       });
     },
-    [products, toast, allowCreateFromScan],
+    [allProductsCatalog, toast, allowCreateFromScan],
   );
 
   const scannerUiBlocked =

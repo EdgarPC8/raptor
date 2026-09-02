@@ -63,19 +63,23 @@ function pickDefaultUnitId(units) {
 }
 
 /** Datos semilla para ProductForm / createProduct desde línea XML.
- * El código del proveedor NO va al barcode: queda en la descripción y
- * se vincula al proveedor al confirmar el pedido (supplier product codes).
+ * Si el código del proveedor parece EAN, se guarda también como barcode para caja.
+ * El vínculo con el proveedor se confirma al registrar el pedido (supplier product codes).
  */
 export function xmlLineToProductSeed(line) {
   const code = String(line?.code || "").trim();
   const aux = String(line?.auxCode || "").trim();
+  const supplierCode = code || aux || "";
+  const barcodeFromCode = [code, aux]
+    .map((c) => String(c || "").replace(/\D/g, "").trim())
+    .find((d) => d.length >= 8 && d.length <= 14);
   return {
     name: String(line?.description || "Producto XML").trim().slice(0, 150),
-    barcode: "",
+    barcode: barcodeFromCode || "",
     type: "raw",
     supplierPrice: Number(line?.unitPrice) || 0,
     taxRate: Number(line?.taxRate) || 0,
-    supplierCode: code || aux || "",
+    supplierCode,
     desc: [
       code ? `Código proveedor: ${code}` : null,
       aux && aux !== code ? `Código auxiliar: ${aux}` : null,
@@ -92,7 +96,7 @@ function buildCreateFormData(seed, unitId) {
   fd.append("name", seed.name);
   fd.append("type", seed.type || "raw");
   fd.append("unitId", String(unitId));
-  // Nunca poner el código del proveedor como barcode
+  if (seed.barcode) fd.append("barcode", String(seed.barcode).replace(/\D/g, ""));
   if (seed.desc) fd.append("desc", seed.desc);
   fd.append("price", "0");
   fd.append("supplierPrice", String(Number(seed.supplierPrice) || 0));

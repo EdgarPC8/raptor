@@ -3,6 +3,8 @@
  * Acepta factura suelta o envoltorio <autorizacion><comprobante><![CDATA[...]]>.
  */
 
+import { findProductByLooseCode } from "./productLookup.js";
+
 const IVA_PCT_BY_CODIGO = {
   0: 0,
   2: 12,
@@ -351,32 +353,6 @@ export function buildSupplierCodeMap(codes = []) {
   return map;
 }
 
-function findProductByLooseCode(products, rawCode) {
-  const raw = String(rawCode || "").trim();
-  if (!raw) return null;
-  const low = raw.toLowerCase();
-  const digits = raw.replace(/\D/g, "");
-
-  const bySku = products.find((p) => String(p.sku || "").trim().toLowerCase() === low);
-  if (bySku) return bySku;
-
-  const byBarcodeExact = products.find(
-    (p) => String(p.barcode || "").trim().toLowerCase() === low,
-  );
-  if (byBarcodeExact) return byBarcodeExact;
-
-  if (digits) {
-    const byBarcodeDigits = products.find(
-      (p) => String(p.barcode || "").replace(/\D/g, "") === digits,
-    );
-    if (byBarcodeDigits) return byBarcodeDigits;
-    const bySkuDigits = products.find(
-      (p) => String(p.sku || "").replace(/\D/g, "") === digits && digits.length >= 3,
-    );
-    if (bySkuDigits) return bySkuDigits;
-  }
-  return null;
-}
 
 export function findSupplierByRuc(suppliers, ruc) {
   const want = String(ruc || "").replace(/\D/g, "");

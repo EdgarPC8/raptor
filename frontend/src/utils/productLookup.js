@@ -222,14 +222,91 @@ export function resolveEddeliLinePricing(product, quantity, tierGroups) {
 }
 
 export function findEddeliProductByCode(products, rawCode) {
-  const code = normalizeProductBarcode(rawCode);
-  if (!code) return null;
-  const low = code.toLowerCase();
-  return (
-    products.find((p) => normalizeProductBarcode(p.barcode).toLowerCase() === low) ||
-    products.find((p) => String(p.sku || "").trim().toLowerCase() === low) ||
-    null
+  return findProductByLooseCode(products, rawCode);
+}
+
+/** ¿Parece código EAN/GTIN escaneable? */
+export function isLikelyRetailBarcode(raw) {
+  const digits = normalizeProductBarcode(raw);
+  return digits.length >= 8 && digits.length <= 14;
+}
+
+/**
+ * Búsqueda flexible por barcode, sku o variantes numéricas (compras / inventario / caja).
+ */
+export function findProductByLooseCode(products, rawCode) {
+  const raw = String(rawCode || "").trim();
+  if (!raw) return null;
+  const low = raw.toLowerCase();
+  const digits = normalizeProductBarcode(raw);
+
+  const bySku = products.find((p) => String(p.sku || "").trim().toLowerCase() === low);
+  if (bySku) return bySku;
+
+  const byBarcodeExact = products.find(
+    (p) => String(p.barcode || "").trim().toLowerCase() === low,
   );
+  if (byBarcodeExact) return byBarcodeExact;
+
+  if (digits) {
+    const byBarcodeDigits = products.find(
+      (p) => normalizeProductBarcode(p.barcode) === digits,
+    );
+    if (byBarcodeDigits) return byBarcodeDigits;
+    const bySkuDigits = products.find(
+      (p) => String(p.sku || "").replace(/\D/g, "") === digits && digits.length >= 3,
+    );
+    if (bySkuDigits) return bySkuDigits;
+  }
+  return null;
+}
+
+/** Índice global supplierCode → productId (claves en minúsculas y solo dígitos). */
+export function buildGlobalSupplierCodeIndex(codes = []) {
+  const map = new Map();
+  for (const row of codes || []) {
+    const pid = Number(row.productId);
+    if (!pid) continue;
+    const raw = String(row.supplierCode || "").trim();
+    if (!raw) continue;
+    map.set(raw.toLowerCase(), pid);
+    const digits = normalizeProductBarcode(raw);
+    if (digits) map.set(digits, pid);
+  }
+  return map;
+}
+
+export function findProductBySupplierCodeIndex(products, rawCode, index) {
+  if (!index?.size) return null;
+  const raw = String(rawCode || "").trim();
+  if (!raw) return null;
+  const keys = [raw.toLowerCase(), normalizeProductBarcode(raw)].filter(Boolean);
+  for (const key of keys) {
+    const pid = index.get(key);
+    if (!pid) continue;
+    const hit = products.find((p) => Number(p.id) === Number(pid));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** barcode / sku / código de proveedor aprendido en compras. */
+export function findProductByAnyCode(products, rawCode, supplierCodeIndex = null) {
+  return (
+    findProductByLooseCode(products, rawCode) ||
+    findProductBySupplierCodeIndex(products, rawCode, supplierCodeIndex)
+  );
+}
+
+/** Productos que se pueden vender en caja (final o insumo con barcode escaneable). */
+export function isSellableInCaja(product) {
+  if (!product || product.isActive === false || product.isActive === 0) return false;
+  const type = String(product.type || "final").toLowerCase();
+  if (type === "final") return true;
+  if (type === "raw" || type === "intermediate") {
+    return normalizeProductBarcode(product.barcode).length >= 4;
+  }
+  return false;
 }
 
 export function getProductCategory(product) {
