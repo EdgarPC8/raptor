@@ -3,12 +3,21 @@ const GRAM_FACTORS = {
   g: 1,
   kg: 1000,
   lb: 453.592,
-  q: 100_000,
-  qq: 100_000,
+  libra: 453.592,
+  q: 45_360,
+  qq: 45_360,
+  quintal: 45_360,
   arroba: 11_339.8,
+  arb: 11_339.8,
   l: 1000,
   ml: 1,
 };
+
+export const WEIGHT_UNIT_ABBREVS = ["gr", "g", "kg", "lb", "libra"];
+
+export function isWeightUnitAbbr(abbr) {
+  return WEIGHT_UNIT_ABBREVS.includes(String(abbr || "").trim().toLowerCase());
+}
 
 export const MOVEMENT_TYPES = [
   {
@@ -67,10 +76,10 @@ export function getUnitAbbr(product) {
 }
 
 function resolveGramFactor(unitAbbr, unitObj) {
-  const abbr = String(unitAbbr || "").trim().toLowerCase();
-  if (GRAM_FACTORS[abbr] != null) return GRAM_FACTORS[abbr];
   const factor = Number(unitObj?.factor);
   if (Number.isFinite(factor) && factor > 0) return factor;
+  const abbr = String(unitAbbr || "").trim().toLowerCase();
+  if (GRAM_FACTORS[abbr] != null) return GRAM_FACTORS[abbr];
   return 1;
 }
 
@@ -101,6 +110,22 @@ export function gramsToGenericDisplay(genericProduct, grams) {
   }
   const factor = resolveGramFactor(abbr, unit);
   return { value: grams / factor, label: abbr || "g" };
+}
+
+/** Cantidad sugerida del destino al abrir 1 empaque (según factores). */
+export function suggestUnitsPerPack(presentation, target) {
+  if (!presentation || !target) return null;
+  const fromGrams = estimateGramsPerPack(presentation);
+  if (!(fromGrams > 0)) return null;
+  const abbr = getUnitAbbr(target);
+  const unit = target.unit || target.InventoryUnit || target.ERP_inventory_unit;
+  if (isCountUnit(abbr)) {
+    const sw = Number(target.standardWeightGrams ?? 0) || 1;
+    return Number((fromGrams / sw).toFixed(4));
+  }
+  const factor = resolveGramFactor(abbr, unit);
+  if (!(factor > 0)) return null;
+  return Number((fromGrams / factor).toFixed(4));
 }
 
 export function isPresentationProduct(p) {

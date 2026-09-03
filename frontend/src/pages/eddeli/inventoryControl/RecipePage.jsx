@@ -140,12 +140,34 @@ function RecipePage() {
         </Box>
       ),
     },
-    { label: "Cantidad", id: "quantity", width: 80 },
+    {
+      label: "Cantidad",
+      id: "quantity",
+      width: 160,
+      render: (row) => {
+        if (!row.isQuantityInGrams) {
+          return <Typography variant="body2">{row.quantity}</Typography>;
+        }
+        const g = Number(row.quantity);
+        const kg = g / 1000;
+        const lb = g / 453.592;
+        return (
+          <Box>
+            <Typography variant="body2" fontWeight={700}>
+              {Number.isInteger(g) ? g : g.toFixed(2)} g
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block">
+              ≈ {kg.toFixed(3)} kg · {lb.toFixed(3)} lb
+            </Typography>
+          </Box>
+        );
+      },
+    },
     {
       label: "Unidad",
       id: "isQuantityInGrams",
       width: 90,
-      render: (row) => (row.isQuantityInGrams ? "Gramos" : "Unidades"),
+      render: (row) => (row.isQuantityInGrams ? "Gramos*" : "Unidades"),
     },
     { label: "Tipo costo", id: "itemType", width: 90 },
     {

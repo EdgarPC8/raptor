@@ -13,6 +13,7 @@ import {
   Grid,
   IconButton,
   InputAdornment,
+  MenuItem,
   Paper,
   Stack,
   Table,
@@ -57,9 +58,41 @@ import {
   INSUMOS_LINK_TOUR_ID,
   getInsumosLinkTourSteps,
 } from "../../../tours/insumosLinkTour.js";
+import { suggestUnitsPerPack } from "./components/movementFormConfig.js";
+import {
+  suggestLinkAmount,
+  formatStockWithAlt,
+  measureKind,
+} from "../../../utils/weightUnits.js";
 
 function formatStock(row) {
   return `${row.stock} ${row.unitAbbrev}`;
+}
+
+/** Clasifica el producto para filtros y etiquetas de enlace. */
+function productKind(product) {
+  if (!product) return "final";
+  if (product.isGenericIngredient || product.type === "raw") return "insumo";
+  if (product.type === "intermediate") return "intermediate";
+  return "final";
+}
+
+function productKindLabel(product) {
+  const kind = productKind(product);
+  if (kind === "insumo") return "Insumo genérico";
+  if (kind === "intermediate") return "Intermedio";
+  return "Producto final";
+}
+
+function productKindChipColor(product) {
+  const kind = productKind(product);
+  if (kind === "insumo") return "secondary";
+  if (kind === "intermediate") return "default";
+  return "primary";
+}
+
+function productUnitAbbrev(product) {
+  return product?.InventoryUnit?.abbreviation || product?.unitAbbrev || "u";
 }
 
 function RecipeChips({ count = 0, names = [], size = "small" }) {
@@ -99,6 +132,7 @@ export default function GenericIngredientsPage() {
   const [unlinked, setUnlinked] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [listFilter, setListFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [expandedTargets, setExpandedTargets] = useState(() => new Set());
 
   const [openLink, setOpenLink] = useState(false);
@@ -110,6 +144,7 @@ export default function GenericIngredientsPage() {
   const [linkProductId, setLinkProductId] = useState("");
   const [linkTargetId, setLinkTargetId] = useState("");
   const [linkUnitsPerPack, setLinkUnitsPerPack] = useState("1");
+  const [linkTargetKindFilter, setLinkTargetKindFilter] = useState("all");
   const [allProducts, setAllProducts] = useState([]);
 
   const selected = useMemo(
@@ -135,6 +170,7 @@ export default function GenericIngredientsPage() {
         .filter(
           (product) =>
             product.type === "final" &&
+            !product.isGenericIngredient &&
             Number(product.id) !== Number(linkTargetId),
         )
         .sort((a, b) => String(a.name).localeCompare(String(b.name), "es")),
@@ -167,10 +203,23 @@ export default function GenericIngredientsPage() {
   }, [load]);
 
   const openLinkModal = (preselectId = "") => {
+    const preselect = preselectId
+      ? allProducts.find((p) => Number(p.id) === Number(preselectId))
+      : null;
+    const existingTargetId = preselect?.genericProductId
+      ? String(preselect.genericProductId)
+      : selected
+        ? String(selected.id)
+        : "";
     setLinkProductId(preselectId ? String(preselectId) : "");
-    setLinkTargetId(selected ? String(selected.id) : "");
-    setLinkUnitsPerPack("1");
-    setLinkNote("");
+    setLinkTargetId(existingTargetId);
+    setLinkUnitsPerPack(
+      preselect?.unitsPerPack != null && Number(preselect.unitsPerPack) > 0
+        ? String(preselect.unitsPerPack)
+        : "1",
+    );
+    setLinkNote(preselect?.purchasePresentation || "");
+    setLinkTargetKindFilter("all");
     void loadAllProducts();
     setOpenLink(true);
   };
@@ -242,6 +291,7 @@ export default function GenericIngredientsPage() {
         setLinkTargetId("");
         setLinkUnitsPerPack("1");
         setLinkNote("");
+        setLinkTargetKindFilter("all");
       },
       successMessage: "Presentación enlazada",
     });
@@ -267,33 +317,66 @@ export default function GenericIngredientsPage() {
 
   const accent = theme.palette.primary.main;
   const selectedLink = allProducts.find((p) => String(p.id) === String(linkProductId));
-  const targetCandidates = useMemo(
-    () =>
-      allProducts.filter(
-        (p) =>
-          Number(p.id) !== Number(linkProductId) &&
-          (p.type === "final" || (p.isGenericIngredient && !p.genericProductId)),
-      ),
-    [allProducts, linkProductId],
-  );
+  const targetCandidates = useMemo(() => {
+    const rows = allProducts.filter((p) => {
+      if (Number(p.id) === Number(linkProductId)) return false;
+      const isInsumo = p.isGenericIngredient && !p.genericProductId;
+      const isFinal = p.type === "final" && !p.isGenericIngredient;
+      if (!isInsumo && !isFinal) return false;
+      // Mantener el destino ya elegido aunque el filtro lo oculte.
+      if (linkTargetId && String(p.id) === String(linkTargetId)) return true;
+      if (linkTargetKindFilter === "insumo") return isInsumo;
+      if (linkTargetKindFilter === "final") return isFinal;
+      return true;
+    });
+    return rows.sort((a, b) => {
+      const kindDiff =
+        (productKind(a) === "insumo" ? 0 : 1) - (productKind(b) === "insumo" ? 0 : 1);
+      return kindDiff || String(a.name).localeCompare(String(b.name), "es");
+    });
+  }, [allProducts, linkProductId, linkTargetKindFilter, linkTargetId]);
   const selectedTarget = targetCandidates.find(
     (p) => String(p.id) === String(linkTargetId),
   );
+  const suggestedPackQty = useMemo(() => {
+    if (!selectedLink || !selectedTarget) return null;
+    return (
+      suggestLinkAmount(selectedLink, selectedTarget) ??
+      suggestUnitsPerPack(selectedLink, selectedTarget)
+    );
+  }, [selectedLink, selectedTarget]);
+
+  const applySuggestedPackQty = useCallback(() => {
+    if (suggestedPackQty == null || !(suggestedPackQty > 0)) return;
+    setLinkUnitsPerPack(String(suggestedPackQty));
+  }, [suggestedPackQty]);
+
+  useEffect(() => {
+    if (!openLink || !selectedLink || !selectedTarget) return;
+    // Solo auto-rellena si está vacío, en 1, o coincide con un valor previo típico sin configurar.
+    const current = Number(linkUnitsPerPack);
+    if (!Number.isFinite(current) || current === 1 || linkUnitsPerPack === "") {
+      applySuggestedPackQty();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openLink, selectedLink?.id, selectedTarget?.id, suggestedPackQty]);
   const allProductRows = useMemo(() => {
     const q = listFilter.trim().toLowerCase();
     return [...allProducts]
       .filter((p) => {
+        const kind = productKind(p);
+        if (typeFilter !== "all" && kind !== typeFilter) return false;
         if (!q) return true;
-        return `${p.name} ${p.type} ${p.sku || ""} ${p.barcode || ""}`
+        return `${p.name} ${p.type} ${kind} ${productKindLabel(p)} ${p.sku || ""} ${p.barcode || ""}`
           .toLowerCase()
           .includes(q);
       })
       .sort((a, b) => {
-        const typeOrder = { final: 0, intermediate: 1, raw: 2 };
-        const diff = (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9);
+        const typeOrder = { final: 0, intermediate: 1, insumo: 2 };
+        const diff = (typeOrder[productKind(a)] ?? 9) - (typeOrder[productKind(b)] ?? 9);
         return diff || String(a.name).localeCompare(String(b.name), "es");
       });
-  }, [allProducts, listFilter]);
+  }, [allProducts, listFilter, typeFilter]);
   const productById = useMemo(
     () => new Map(allProducts.map((p) => [Number(p.id), p])),
     [allProducts],
@@ -339,11 +422,10 @@ export default function GenericIngredientsPage() {
           </Typography>
           <TourHelpButton onClick={startTour} title="Ver tutorial de insumos y presentaciones" />
         </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 720 }}>
-          <strong>Insumo genérico</strong> (tipo insumo) = Harina, lo usan las recetas.{" "}
-          <strong>Empaque</strong> (tipo final) = Quintal de harina.{" "}
-          <strong>Enlazar</strong> los une; en Movimientos → Abrir: baja el quintal y sube la harina.
-          Con el enlace activo y la opción en Configuración → Inventario, Caja puede sugerir abrir el empaque si falta stock.
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 860 }}>
+          <strong>Insumo genérico</strong>: peso en <strong>g</strong> (Harina) o volumen en{" "}
+          <strong>ml/L</strong> (Aceite). <strong>Empaque final</strong> (Quintal, Funda 900ml): al
+          enlazar indicas cuánto suma al insumo — ej. 1 funda → <strong>+900 ml</strong> de Aceite.
         </Typography>
       </Stack>
 
@@ -368,6 +450,21 @@ export default function GenericIngredientsPage() {
               ),
             }}
           />
+          <TextField
+            select
+            size="small"
+            label="Tipo"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            sx={{ minWidth: { xs: "100%", sm: 180 } }}
+            data-tour="insumos-type-filter"
+            SelectProps={{ native: false }}
+          >
+            <MenuItem value="all">Todos</MenuItem>
+            <MenuItem value="insumo">Insumos</MenuItem>
+            <MenuItem value="final">Finales</MenuItem>
+            <MenuItem value="intermediate">Intermedios</MenuItem>
+          </TextField>
           <Button
             variant="contained"
             startIcon={<LinkIcon />}
@@ -418,11 +515,8 @@ export default function GenericIngredientsPage() {
                   ? productById.get(Number(product.genericProductId))
                   : null;
                 const expanded = expandedTargets.has(product.id);
-                const typeLabel = product.isGenericIngredient
-                  ? "Insumo genérico"
-                  : product.type === "intermediate"
-                    ? "Intermedio"
-                    : "Final";
+                const typeLabel = productKindLabel(product);
+                const typeColor = productKindChipColor(product);
                 return (
                   <Fragment key={product.id}>
                     <TableRow key={product.id} hover>
@@ -445,12 +539,29 @@ export default function GenericIngredientsPage() {
                         <Chip
                           size="small"
                           label={typeLabel}
-                          color={product.isGenericIngredient ? "secondary" : product.type === "final" ? "primary" : "default"}
+                          color={typeColor}
                           variant="outlined"
                         />
                       </TableCell>
                       <TableCell align="right">
-                        {Number(product.stock || 0)} {product.InventoryUnit?.abbreviation || product.unitAbbrev || ""}
+                        {product.isGenericIngredient || product.type === "raw" ? (
+                          <Box>
+                            <Typography variant="body2" fontWeight={700}>
+                              {Number(product.stock || 0)}{" "}
+                              {product.InventoryUnit?.abbreviation || product.unitAbbrev || "g"}
+                            </Typography>
+                            {Number(product.stock) > 0 && (
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                {formatStockWithAlt(product.stock, product)}
+                              </Typography>
+                            )}
+                          </Box>
+                        ) : (
+                          <>
+                            {Number(product.stock || 0)}{" "}
+                            {product.InventoryUnit?.abbreviation || product.unitAbbrev || ""}
+                          </>
+                        )}
                       </TableCell>
                       <TableCell>
                         {target ? (
@@ -601,7 +712,7 @@ export default function GenericIngredientsPage() {
             {!loading && filteredGenerics.length === 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
                 {generics.length === 0
-                  ? "Sin insumos genéricos. Crea un producto tipo insumo en Productos o con «Crear producto»."
+                  ? "Sin insumos genéricos. Crea un producto tipo «Insumo (materia prima)» en Productos o con «Crear producto»."
                   : "Ningún insumo coincide con la búsqueda."}
               </Typography>
             )}
@@ -868,36 +979,73 @@ export default function GenericIngredientsPage() {
         </DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Elige una presentación final y su destino. El destino puede ser un insumo genérico o
-            un producto final (por ejemplo: paca de sal → sal de 2 kg).
+            <strong>1. Empaque</strong> = producto final (Funda Aceite 900ml, Quintal…).{" "}
+            <strong>2. Destino</strong> = insumo (Aceite en ml, Harina en g) u otro final.{" "}
+            <strong>3. Cantidad</strong> = cuánto del destino suma al abrir <em>1</em> empaque
+            (ej. <strong>900 ml</strong>).
           </Typography>
 
           <Box sx={{ mb: 1.5 }} data-tour="insumos-link-presentation">
             <SearchableSelect
-              label="Presentación a abrir"
-              placeholder="Buscar paca, caja, saco…"
+              label="Presentación a abrir (producto final / empaque)"
+              placeholder="Buscar quintal, arroba, paca, caja…"
               items={presentationCandidates}
               value={linkProductId}
-              productMeta
               onChange={(val) => {
                 const nextId =
                   val && typeof val === "object"
                     ? String(val.id ?? "")
                     : String(val ?? "");
                 setLinkProductId(nextId);
+                const row = allProducts.find((p) => String(p.id) === String(nextId));
+                if (row?.genericProductId) {
+                  setLinkTargetId(String(row.genericProductId));
+                  if (row.unitsPerPack != null && Number(row.unitsPerPack) > 0) {
+                    setLinkUnitsPerPack(String(row.unitsPerPack));
+                  }
+                  if (row.purchasePresentation) setLinkNote(row.purchasePresentation);
+                }
               }}
               getOptionValue={(opt) => opt?.id ?? ""}
               getOptionLabel={(opt) => {
                 if (!opt) return "";
-                const unit =
-                  opt.InventoryUnit?.abbreviation || opt.unitAbbrev || "u";
-                return `${opt.name} · Final · ${unit}`;
+                return `[Final / empaque] ${opt.name} · ${productUnitAbbrev(opt)}`;
               }}
               getSearchText={(opt) =>
-                `${opt?.name || ""} ${opt?.sku || ""} ${opt?.barcode || ""} ${
+                `${opt?.name || ""} final empaque ${opt?.sku || ""} ${opt?.barcode || ""} ${
                   opt?.purchasePresentation || ""
                 }`
               }
+              renderOption={(props, option) => (
+                <Box
+                  component="li"
+                  {...props}
+                  key={option.id ?? props.key}
+                  sx={{
+                    display: "flex !important",
+                    alignItems: "center !important",
+                    justifyContent: "space-between !important",
+                    gap: 1,
+                    py: "6px !important",
+                  }}
+                >
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="body2" fontWeight={600} noWrap>
+                      {option.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap display="block">
+                      Empaque · stock {Number(option.stock || 0)} {productUnitAbbrev(option)}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    label="Final"
+                    sx={{ height: 22, "& .MuiChip-label": { px: 0.75, fontSize: "0.7rem", fontWeight: 700 } }}
+                  />
+                </Box>
+              )}
             />
           </Box>
 
@@ -913,75 +1061,146 @@ export default function GenericIngredientsPage() {
               }}
             >
               <Typography variant="caption" color="text.secondary">
-                Seleccionado
+                Empaque seleccionado
               </Typography>
               <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                 {selectedLink.name}
               </Typography>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                Configura cuántas unidades del destino entrega cada paca al abrirse.
+                Indica el destino (insumo o final) y cuántas unidades entrega cada unidad abierta.
               </Typography>
             </Box>
           )}
 
-          <Box sx={{ mb: 1.5 }} data-tour="insumos-link-target">
-            <SearchableSelect
-              label="Destino al abrir"
-              placeholder="Buscar insumo genérico o producto final…"
-              items={targetCandidates}
-              value={linkTargetId}
-              productMeta
-              onChange={(val) => {
-                const nextId =
-                  val && typeof val === "object"
-                    ? String(val.id ?? "")
-                    : String(val ?? "");
-                setLinkTargetId(nextId);
-              }}
-              getOptionValue={(opt) => opt?.id ?? ""}
-              getOptionLabel={(opt) => {
-                if (!opt) return "";
-                const kind = opt.isGenericIngredient
-                  ? "Insumo genérico"
-                  : "Producto final";
-                const unit =
-                  opt.InventoryUnit?.abbreviation || opt.unitAbbrev || "u";
-                return `${opt.name} · ${kind} · ${unit}`;
-              }}
-              getSearchText={(opt) =>
-                `${opt?.name || ""} ${opt?.sku || ""} ${opt?.barcode || ""} ${
-                  opt?.isGenericIngredient ? "insumo genérico" : "producto final"
-                }`
-              }
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
-              Puede ser un insumo genérico o un producto final.
-            </Typography>
-          </Box>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 1.5 }}>
+            <TextField
+              select
+              size="small"
+              label="Ver destinos"
+              value={linkTargetKindFilter}
+              onChange={(e) => setLinkTargetKindFilter(e.target.value)}
+              sx={{ minWidth: { xs: "100%", sm: 180 } }}
+              data-tour="insumos-link-target-filter"
+            >
+              <MenuItem value="all">Insumos y finales</MenuItem>
+              <MenuItem value="insumo">Solo insumos</MenuItem>
+              <MenuItem value="final">Solo finales</MenuItem>
+            </TextField>
+            <Box sx={{ flex: 1, minWidth: 0 }} data-tour="insumos-link-target">
+              <SearchableSelect
+                label="Destino al abrir"
+                placeholder={
+                  linkTargetKindFilter === "insumo"
+                    ? "Buscar insumo genérico (ej. Harina)…"
+                    : linkTargetKindFilter === "final"
+                      ? "Buscar producto final unitario…"
+                      : "Buscar Harina (insumo) o un final…"
+                }
+                items={targetCandidates}
+                value={linkTargetId}
+                onChange={(val) => {
+                  const nextId =
+                    val && typeof val === "object"
+                      ? String(val.id ?? "")
+                      : String(val ?? "");
+                  setLinkTargetId(nextId);
+                }}
+                getOptionValue={(opt) => opt?.id ?? ""}
+                getOptionLabel={(opt) => {
+                  if (!opt) return "";
+                  const kind = productKind(opt) === "insumo" ? "Insumo" : "Final";
+                  return `[${kind}] ${opt.name} · ${productUnitAbbrev(opt)}`;
+                }}
+                getSearchText={(opt) =>
+                  `${opt?.name || ""} ${productKindLabel(opt)} ${
+                    productKind(opt) === "insumo" ? "insumo genérico harina" : "producto final"
+                  } ${opt?.sku || ""} ${opt?.barcode || ""}`
+                }
+                renderOption={(props, option) => {
+                  const kind = productKind(option);
+                  const isInsumo = kind === "insumo";
+                  return (
+                    <Box
+                      component="li"
+                      {...props}
+                      key={option.id ?? props.key}
+                      sx={{
+                        display: "flex !important",
+                        alignItems: "center !important",
+                        justifyContent: "space-between !important",
+                        gap: 1,
+                        py: "6px !important",
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography variant="body2" fontWeight={600} noWrap>
+                          {option.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap display="block">
+                          {isInsumo
+                            ? `Insumo de receta · stock ${Number(option.stock || 0)} ${productUnitAbbrev(option)}`
+                            : `Producto final · stock ${Number(option.stock || 0)} ${productUnitAbbrev(option)}`}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        size="small"
+                        color={isInsumo ? "secondary" : "primary"}
+                        variant={isInsumo ? "filled" : "outlined"}
+                        label={isInsumo ? "Insumo" : "Final"}
+                        sx={{ height: 22, "& .MuiChip-label": { px: 0.75, fontSize: "0.7rem", fontWeight: 700 } }}
+                      />
+                    </Box>
+                  );
+                }}
+              />
+            </Box>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: -0.5, mb: 1.5, display: "block" }}>
+            Ejemplo: Funda Aceite 900ml → Aceite (ml) = <strong>900</strong>. Quintal de harina →
+            Harina (g) = <strong>45360</strong>.
+          </Typography>
 
           <TextField
-            label="Unidades por paca"
+            label={
+              selectedTarget
+                ? `Al abrir 1 empaque, suma al destino (${productUnitAbbrev(selectedTarget)}${
+                    measureKind(selectedTarget) === "volume"
+                      ? " · volumen"
+                      : measureKind(selectedTarget) === "weight"
+                        ? " · peso"
+                        : ""
+                  })`
+                : "Cantidad que suma al destino"
+            }
             fullWidth
             required
             type="number"
             value={linkUnitsPerPack}
             onChange={(e) => setLinkUnitsPerPack(e.target.value)}
-            inputProps={{ min: 1, step: 1 }}
+            inputProps={{ min: 0.0001, step: "any" }}
             data-tour="insumos-link-units"
             helperText={
               selectedTarget
-                ? `Al abrir 1 paca se suman ${linkUnitsPerPack || 0} ${
-                    selectedTarget.InventoryUnit?.abbreviation ||
-                    selectedTarget.unitAbbrev ||
-                    "unidades"
-                  } a «${selectedTarget.name}».`
-                : "Indica cuántas unidades recibe el destino por cada paca."
+                ? `1 × «${selectedLink?.name || "empaque"}» → +${linkUnitsPerPack || "…"} ${
+                    productUnitAbbrev(selectedTarget)
+                  } en «${selectedTarget.name}».${
+                    suggestedPackQty != null
+                      ? ` Sugerido: ${suggestedPackQty} ${productUnitAbbrev(selectedTarget)}.`
+                      : ""
+                  }`
+                : "Elige destino primero. Si el insumo está en ml, escribe 900; si está en g, escribe gramos."
             }
-            sx={{ mb: 1.5 }}
+            sx={{ mb: 1 }}
           />
+          {suggestedPackQty != null && Number(linkUnitsPerPack) !== Number(suggestedPackQty) && (
+            <Button size="small" sx={{ mb: 1.5 }} onClick={applySuggestedPackQty}>
+              Usar sugerido: {suggestedPackQty}{" "}
+              {selectedTarget ? productUnitAbbrev(selectedTarget) : ""}
+            </Button>
+          )}
 
           <TextField
-            label="Nota (opcional)"
+            label="Nota del empaque (opcional)"
             fullWidth
             value={linkNote}
             onChange={(e) => setLinkNote(e.target.value)}
@@ -998,8 +1217,8 @@ export default function GenericIngredientsPage() {
             disabled={
               !linkProductId ||
               !linkTargetId ||
-              !Number.isInteger(Number(linkUnitsPerPack)) ||
-              Number(linkUnitsPerPack) < 1
+              !Number.isFinite(Number(linkUnitsPerPack)) ||
+              Number(linkUnitsPerPack) <= 0
             }
           >
             Enlazar

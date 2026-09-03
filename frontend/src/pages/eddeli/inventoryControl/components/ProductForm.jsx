@@ -87,8 +87,15 @@ function toNumOrZero(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function pickDefaultUnitId(units) {
+function pickDefaultUnitId(units, productType = "final") {
   if (!Array.isArray(units) || !units.length) return "";
+  if (productType === "raw") {
+    // Preferir gramos; el usuario puede cambiar a ml/L para líquidos.
+    const weight = units.find((u) =>
+      ["gr", "g"].includes(String(u.abbreviation || "").toLowerCase()),
+    );
+    return (weight || units[0]).id;
+  }
   const byAbbr = units.find(
     (u) => String(u.abbreviation || "").toLowerCase() === "un",
   );
@@ -97,6 +104,11 @@ function pickDefaultUnitId(units) {
     String(u.name || "").toLowerCase().includes("unidad"),
   );
   return (byName || units[0]).id;
+}
+
+function isGenericStorageUnit(unit) {
+  const abbr = String(unit?.abbreviation || "").trim().toLowerCase();
+  return ["gr", "g", "ml", "l", "lt"].includes(abbr);
 }
 
 /* ============ Helpers de imagen ============ */
@@ -513,13 +525,25 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
       return;
     }
 
-    const unitId = data.unitId || pickDefaultUnitId(units);
+    const productType = data.type || "final";
+    const unitId = data.unitId || pickDefaultUnitId(units, productType);
     if (!unitId) {
       toastAuth({
         message: "No hay unidades configuradas en el sistema.",
         variant: "error",
       });
       return;
+    }
+    if (productType === "raw") {
+      const unit = units.find((u) => String(u.id) === String(unitId));
+      if (!isGenericStorageUnit(unit)) {
+        toastAuth({
+          message:
+            "El insumo genérico usa gramos (peso) o ml/L (volumen). En la receta puedes escribir kg, lb o litros.",
+          variant: "error",
+        });
+        return;
+      }
     }
 
     const fd = new FormData();
@@ -716,16 +740,26 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
             margin="none"
             sx={denseFieldSx}
             value={watch("type") ?? "final"}
-            {...register("type")}
+            {...register("type", {
+              onChange: (e) => {
+                const nextType = e.target.value;
+                if (nextType === "raw") {
+                  const current = units.find((u) => String(u.id) === String(watch("unitId")));
+                  if (!isGenericStorageUnit(current)) {
+                    setValue("unitId", pickDefaultUnitId(units, "raw"), { shouldDirty: true });
+                  }
+                }
+              },
+            })}
           >
-            <MenuItem value="raw">Materia prima</MenuItem>
+            <MenuItem value="raw">Insumo (materia prima)</MenuItem>
             <MenuItem value="intermediate">Intermedio</MenuItem>
-            <MenuItem value="final">Final</MenuItem>
+            <MenuItem value="final">Final (venta / empaque)</MenuItem>
           </TextField>
         </Grid>
         <Grid item xs={4} sm={3} data-tour="producto-form-unit">
           <TextField
-            label="Unidad"
+            label={watch("type") === "raw" ? "Unidad del insumo" : "Unidad"}
             select
             size="small"
             fullWidth
@@ -734,11 +768,19 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
             sx={denseFieldSx}
             value={watch("unitId") || ""}
             {...register("unitId")}
+            helperText={
+              watch("type") === "raw"
+                ? "Peso: g · Volumen: ml/L"
+                : undefined
+            }
+            FormHelperTextProps={{ sx: { m: 0, fontSize: "0.65rem" } }}
           >
-            {Array.isArray(units) &&
-              units.map((u) => (
+            {(Array.isArray(units) ? units : [])
+              .filter((u) => (watch("type") === "raw" ? isGenericStorageUnit(u) : true))
+              .map((u) => (
                 <MenuItem key={u.id} value={u.id}>
                   {u.abbreviation || u.name}
+                  {u.name && u.abbreviation ? ` · ${u.name}` : ""}
                 </MenuItem>
               ))}
           </TextField>
