@@ -110,6 +110,16 @@ function CustomerBlock({ receipt, emissionDate, isTicket }) {
 }
 
 function ItemsTableA4({ items, detailCfg, documentType }) {
+  const colStyle = (extra = {}) => ({
+    border,
+    px: 0.5,
+    py: 0.35,
+    fontWeight: 600,
+    overflow: "hidden",
+    verticalAlign: "top",
+    ...extra,
+  });
+
   return (
     <Box
       component="table"
@@ -124,24 +134,25 @@ function ItemsTableA4({ items, detailCfg, documentType }) {
       <Box component="thead">
         <Box component="tr">
           {[
-            { h: "Codigo", w: "12%" },
-            { h: "Descripción", w: "38%" },
-            { h: "Cant", w: "10%" },
+            { h: "Codigo", w: "18%" },
+            { h: "Descripción", w: "34%" },
+            { h: "Cant", w: "8%" },
             { h: "Precio Unitario", w: "15%" },
-            { h: "Descto", w: "10%" },
-            { h: "Subtotal", w: "15%" },
+            { h: "Descto", w: "8%" },
+            { h: "Subtotal", w: "17%" },
           ].map(({ h, w }, i) => (
             <Box
               component="th"
               key={h}
               sx={{
                 border,
-                px: 0.6,
+                px: 0.5,
                 py: 0.45,
                 fontWeight: 800,
                 textAlign: i >= 2 ? "right" : "left",
                 bgcolor: "#f3f3f3",
                 width: w,
+                overflow: "hidden",
               }}
             >
               {h}
@@ -152,22 +163,37 @@ function ItemsTableA4({ items, detailCfg, documentType }) {
       <Box component="tbody">
         {items.map((it, idx) => (
           <Box component="tr" key={`a4-${idx}`}>
-            <Box component="td" sx={{ border, px: 0.6, py: 0.35, fontWeight: 600 }}>
+            <Box
+              component="td"
+              sx={colStyle({
+                fontSize: "0.88em",
+                wordBreak: "break-all",
+                overflowWrap: "anywhere",
+                lineHeight: 1.25,
+              })}
+            >
               {it.code || it.productId || idx + 1}
             </Box>
-            <Box component="td" sx={{ border, px: 0.6, py: 0.35, fontWeight: 600 }}>
+            <Box
+              component="td"
+              sx={colStyle({
+                wordBreak: "break-word",
+                overflowWrap: "anywhere",
+                lineHeight: 1.3,
+              })}
+            >
               {formatReceiptItemDescription(it, detailCfg, idx, documentType)}
             </Box>
-            <Box component="td" sx={{ border, px: 0.6, py: 0.35, textAlign: "right", fontWeight: 700 }}>
+            <Box component="td" sx={colStyle({ textAlign: "right", fontWeight: 700 })}>
               {formatInvoiceMoney(it.quantity)}
             </Box>
-            <Box component="td" sx={{ border, px: 0.6, py: 0.35, textAlign: "right", fontWeight: 700 }}>
+            <Box component="td" sx={colStyle({ textAlign: "right", fontWeight: 700 })}>
               {formatInvoiceUnitPrice(it.price)}
             </Box>
-            <Box component="td" sx={{ border, px: 0.6, py: 0.35, textAlign: "right", fontWeight: 700 }}>
+            <Box component="td" sx={colStyle({ textAlign: "right", fontWeight: 700 })}>
               {formatInvoiceMoney(it.discount || 0)}
             </Box>
-            <Box component="td" sx={{ border, px: 0.6, py: 0.35, textAlign: "right", fontWeight: 700 }}>
+            <Box component="td" sx={colStyle({ textAlign: "right", fontWeight: 700 })}>
               {formatInvoiceMoney(it.subtotal ?? it.lineTotal)}
             </Box>
           </Box>

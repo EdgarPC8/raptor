@@ -196,19 +196,19 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4", options = {}) 
       </div>`
     : `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:0.95em;table-layout:fixed">
         <colgroup>
-          <col style="width:12%" />
-          <col style="width:38%" />
-          <col style="width:10%" />
+          <col style="width:18%" />
+          <col style="width:34%" />
+          <col style="width:8%" />
           <col style="width:15%" />
-          <col style="width:10%" />
-          <col style="width:15%" />
+          <col style="width:8%" />
+          <col style="width:17%" />
         </colgroup>
         <thead>
           <tr>
             ${["Codigo", "Descripción", "Cant", "Precio Unitario", "Descto", "Subtotal"]
               .map(
                 (h, i) =>
-                  `<th style="border:1px solid #000;padding:5px 6px;font-weight:800;text-align:${i >= 2 ? "right" : "left"};background:#f3f3f3">${h}</th>`,
+                  `<th style="border:1px solid #000;padding:5px 4px;font-weight:800;text-align:${i >= 2 ? "right" : "left"};background:#f3f3f3;overflow:hidden">${h}</th>`,
               )
               .join("")}
           </tr>
@@ -217,12 +217,12 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4", options = {}) 
           ${items
             .map(
               (it, idx) => `<tr>
-                <td style="border:1px solid #000;padding:3px 5px;font-weight:600">${esc(it.code || it.productId || idx + 1)}</td>
-                <td style="border:1px solid #000;padding:3px 5px;font-weight:600">${esc(formatReceiptItemDescription(it, detailCfg, idx, docType))}</td>
-                <td style="border:1px solid #000;padding:3px 5px;text-align:right;font-weight:700">${esc(formatInvoiceMoney(it.quantity))}</td>
-                <td style="border:1px solid #000;padding:3px 5px;text-align:right;font-weight:700">${esc(formatInvoiceUnitPrice(it.price))}</td>
-                <td style="border:1px solid #000;padding:3px 5px;text-align:right;font-weight:700">${esc(formatInvoiceMoney(it.discount || 0))}</td>
-                <td style="border:1px solid #000;padding:3px 5px;text-align:right;font-weight:700">${esc(formatInvoiceMoney(it.subtotal ?? it.lineTotal))}</td>
+                <td style="border:1px solid #000;padding:3px 4px;font-weight:600;font-size:0.88em;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;vertical-align:top;line-height:1.25">${esc(it.code || it.productId || idx + 1)}</td>
+                <td style="border:1px solid #000;padding:3px 4px;font-weight:600;word-break:break-word;overflow-wrap:anywhere;overflow:hidden;vertical-align:top;line-height:1.3">${esc(formatReceiptItemDescription(it, detailCfg, idx, docType))}</td>
+                <td style="border:1px solid #000;padding:3px 4px;text-align:right;font-weight:700;overflow:hidden;vertical-align:top">${esc(formatInvoiceMoney(it.quantity))}</td>
+                <td style="border:1px solid #000;padding:3px 4px;text-align:right;font-weight:700;overflow:hidden;vertical-align:top">${esc(formatInvoiceUnitPrice(it.price))}</td>
+                <td style="border:1px solid #000;padding:3px 4px;text-align:right;font-weight:700;overflow:hidden;vertical-align:top">${esc(formatInvoiceMoney(it.discount || 0))}</td>
+                <td style="border:1px solid #000;padding:3px 4px;text-align:right;font-weight:700;overflow:hidden;vertical-align:top">${esc(formatInvoiceMoney(it.subtotal ?? it.lineTotal))}</td>
               </tr>`,
             )
             .join("")}
