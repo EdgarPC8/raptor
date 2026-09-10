@@ -7,6 +7,8 @@ import { createElement } from "react";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import SaleReceiptContent from "../components/saleReceipt/SaleReceiptContent.jsx";
 import { receiptElementToPdfBlob } from "./saleReceiptExport.js";
+import { getActiveAppSettings } from "../context/AppSettingsContext.jsx";
+import { normalizeReceiptDetailSettings } from "./receiptDetailFormat.js";
 
 const captureTheme = createTheme({
   typography: { fontFamily: "Arial, Helvetica, sans-serif" },
@@ -19,10 +21,16 @@ function waitMs(ms) {
 /**
  * @param {object} receipt - comprobante ya enriquecido con fiscal (enrichReceiptWithFiscal)
  * @param {string} [format]
+ * @param {object} [detailSettings] - receiptDetailSettings (columnas/texto)
  * @returns {Promise<Blob>}
  */
-export async function generateRidePdfBlob(receipt, format = "a4") {
+export async function generateRidePdfBlob(receipt, format = "a4", detailSettings = null) {
   if (!receipt) throw new Error("Sin comprobante para PDF RIDE");
+
+  const app = getActiveAppSettings();
+  const detailCfg = normalizeReceiptDetailSettings(
+    detailSettings ?? app?.receiptDetailSettings,
+  );
 
   const host = document.createElement("div");
   host.setAttribute("data-ride-pdf-host", "1");
@@ -51,7 +59,12 @@ export async function generateRidePdfBlob(receipt, format = "a4") {
                 if (el) resolve(el);
               },
             },
-            createElement(SaleReceiptContent, { receipt, format, showNotes: false }),
+            createElement(SaleReceiptContent, {
+              receipt,
+              format,
+              showNotes: false,
+              detailSettings: detailCfg,
+            }),
           ),
         ),
       );

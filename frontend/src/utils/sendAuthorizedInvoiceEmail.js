@@ -9,6 +9,7 @@ import {
   sendSriInvoiceCustomerEmail,
 } from "../api/sriInvoicesRequest.js";
 import { fetchSriBillingSettings } from "../api/sriBillingRequest.js";
+import { getActiveAppSettings } from "../context/AppSettingsContext.jsx";
 
 /** Convierte ítems del payload SRI (caja/emisión) al formato del RIDE. */
 export function mapSriPayloadItemsToReceiptItems(rawItems) {
@@ -139,7 +140,11 @@ export async function sendAuthorizedInvoiceEmailWithRidePdf({
       console.warn("PDF RIDE correo: sin ítems en receipt ni payloadJson");
     }
 
-    pdfBlob = await generateRidePdfBlob(enriched, "a4");
+    pdfBlob = await generateRidePdfBlob(
+      enriched,
+      "a4",
+      getActiveAppSettings()?.receiptDetailSettings || null,
+    );
   } catch (e) {
     console.warn("PDF RIDE para correo:", e?.message || e);
   }
