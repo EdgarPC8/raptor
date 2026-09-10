@@ -12,6 +12,10 @@ import {
   formatReceiptItemDescription,
   normalizeReceiptDetailSettings,
 } from "../../utils/receiptDetailFormat.js";
+import {
+  receiptColumnCellValue,
+  resolveReceiptTableColumns,
+} from "../../utils/receiptTableColumns.js";
 import { useAppSettings } from "../../context/AppSettingsContext.jsx";
 
 const BLACK = "#000";
@@ -109,14 +113,35 @@ function CustomerBlock({ receipt, emissionDate, isTicket }) {
   );
 }
 
-function ItemsTableA4({ items, detailCfg, documentType }) {
-  const colStyle = (extra = {}) => ({
+function invoiceCellFormatters(detailCfg, documentType) {
+  return {
+    money: formatInvoiceMoney,
+    unitPrice: formatInvoiceUnitPrice,
+    description: (it, idx) =>
+      formatReceiptItemDescription(it, detailCfg, idx, documentType),
+  };
+}
+
+function ItemsTableA4({ items, detailCfg, documentType, format }) {
+  const cols = resolveReceiptTableColumns(detailCfg, documentType, format || "a4");
+  const formatters = invoiceCellFormatters(detailCfg, documentType);
+  const colStyle = (col, extra = {}) => ({
     border,
     px: 0.5,
     py: 0.35,
-    fontWeight: 600,
+    fontWeight: col.id === "code" ? 600 : col.align === "right" ? 700 : 600,
     overflow: "hidden",
     verticalAlign: "top",
+    textAlign: col.align,
+    width: col.width,
+    ...(col.breakWords
+      ? {
+          wordBreak: col.id === "code" ? "break-all" : "break-word",
+          overflowWrap: "anywhere",
+          lineHeight: 1.25,
+          fontSize: col.id === "code" ? "0.88em" : undefined,
+        }
+      : {}),
     ...extra,
   });
 
@@ -133,29 +158,22 @@ function ItemsTableA4({ items, detailCfg, documentType }) {
     >
       <Box component="thead">
         <Box component="tr">
-          {[
-            { h: "Codigo", w: "18%" },
-            { h: "Descripción", w: "34%" },
-            { h: "Cant", w: "8%" },
-            { h: "Precio Unitario", w: "15%" },
-            { h: "Descto", w: "8%" },
-            { h: "Subtotal", w: "17%" },
-          ].map(({ h, w }, i) => (
+          {cols.map((col) => (
             <Box
               component="th"
-              key={h}
+              key={col.id}
               sx={{
                 border,
                 px: 0.5,
                 py: 0.45,
                 fontWeight: 800,
-                textAlign: i >= 2 ? "right" : "left",
+                textAlign: col.align,
                 bgcolor: "#f3f3f3",
-                width: w,
+                width: col.width,
                 overflow: "hidden",
               }}
             >
-              {h}
+              {col.header}
             </Box>
           ))}
         </Box>
@@ -163,39 +181,11 @@ function ItemsTableA4({ items, detailCfg, documentType }) {
       <Box component="tbody">
         {items.map((it, idx) => (
           <Box component="tr" key={`a4-${idx}`}>
-            <Box
-              component="td"
-              sx={colStyle({
-                fontSize: "0.88em",
-                wordBreak: "break-all",
-                overflowWrap: "anywhere",
-                lineHeight: 1.25,
-              })}
-            >
-              {it.code || it.productId || idx + 1}
-            </Box>
-            <Box
-              component="td"
-              sx={colStyle({
-                wordBreak: "break-word",
-                overflowWrap: "anywhere",
-                lineHeight: 1.3,
-              })}
-            >
-              {formatReceiptItemDescription(it, detailCfg, idx, documentType)}
-            </Box>
-            <Box component="td" sx={colStyle({ textAlign: "right", fontWeight: 700 })}>
-              {formatInvoiceMoney(it.quantity)}
-            </Box>
-            <Box component="td" sx={colStyle({ textAlign: "right", fontWeight: 700 })}>
-              {formatInvoiceUnitPrice(it.price)}
-            </Box>
-            <Box component="td" sx={colStyle({ textAlign: "right", fontWeight: 700 })}>
-              {formatInvoiceMoney(it.discount || 0)}
-            </Box>
-            <Box component="td" sx={colStyle({ textAlign: "right", fontWeight: 700 })}>
-              {formatInvoiceMoney(it.subtotal ?? it.lineTotal)}
-            </Box>
+            {cols.map((col) => (
+              <Box component="td" key={col.id} sx={colStyle(col)}>
+                {receiptColumnCellValue(col.id, it, idx, formatters)}
+              </Box>
+            ))}
           </Box>
         ))}
       </Box>
@@ -203,13 +193,17 @@ function ItemsTableA4({ items, detailCfg, documentType }) {
   );
 }
 
-function ItemsTableTicket({ items, detailCfg, documentType }) {
+function ItemsTableTicket({ items, detailCfg, documentType, format }) {
+  const cols = resolveReceiptTableColumns(detailCfg, documentType, format || "ticket80");
+  const formatters = invoiceCellFormatters(detailCfg, documentType);
+  const gridCols = cols.map((c) => `${Math.max(0.4, c.widthPct / 12)}fr`).join(" ");
+
   return (
     <Box sx={{ mb: 1, fontSize: "inherit" }}>
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "0.7fr 2.2fr 0.9fr 0.7fr 0.9fr",
+          gridTemplateColumns: gridCols,
           gap: 0.25,
           borderBottom: border,
           pb: 0.35,
@@ -218,18 +212,18 @@ function ItemsTableTicket({ items, detailCfg, documentType }) {
           fontSize: "0.85em",
         }}
       >
-        <span>Cant</span>
-        <span>Descripción</span>
-        <span style={{ textAlign: "right" }}>P.V.P</span>
-        <span style={{ textAlign: "right" }}>Descto</span>
-        <span style={{ textAlign: "right" }}>Subtotal</span>
+        {cols.map((col) => (
+          <span key={col.id} style={{ textAlign: col.align }}>
+            {col.header}
+          </span>
+        ))}
       </Box>
       {items.map((it, idx) => (
         <Box
           key={`tk-${idx}`}
           sx={{
             display: "grid",
-            gridTemplateColumns: "0.7fr 2.2fr 0.9fr 0.7fr 0.9fr",
+            gridTemplateColumns: gridCols,
             gap: 0.25,
             py: 0.3,
             borderBottom: "1px dotted #999",
@@ -238,13 +232,18 @@ function ItemsTableTicket({ items, detailCfg, documentType }) {
             alignItems: "start",
           }}
         >
-          <span>{formatInvoiceMoney(it.quantity)}</span>
-          <span style={{ wordBreak: "break-word" }}>
-            {formatReceiptItemDescription(it, detailCfg, idx, documentType)}
-          </span>
-          <span style={{ textAlign: "right" }}>{formatInvoiceUnitPrice(it.price)}</span>
-          <span style={{ textAlign: "right" }}>{formatInvoiceMoney(it.discount || 0)}</span>
-          <span style={{ textAlign: "right" }}>{formatInvoiceMoney(it.subtotal ?? it.lineTotal)}</span>
+          {cols.map((col) => (
+            <span
+              key={col.id}
+              style={{
+                textAlign: col.align,
+                wordBreak: col.breakWords ? "break-word" : undefined,
+                overflowWrap: col.breakWords ? "anywhere" : undefined,
+              }}
+            >
+              {receiptColumnCellValue(col.id, it, idx, formatters)}
+            </span>
+          ))}
         </Box>
       ))}
     </Box>
@@ -464,7 +463,7 @@ export default function InvoiceRideContent({
           {ticketAuthBlock}
           <Box sx={{ borderTop: border, borderBottom: border, py: 0.5, my: 1 }} />
           <CustomerBlock receipt={receipt} emissionDate={emissionDate} isTicket />
-          <ItemsTableTicket items={items} detailCfg={detailCfg} documentType={docType} />
+          <ItemsTableTicket items={items} detailCfg={detailCfg} documentType={docType} format={format} />
           <TotalsBlock receipt={receipt} isTicket ivaRate={ivaRate} />
           <Box sx={{ mt: 1.25 }}>
             <PaymentExtra receipt={receipt} isTicket />
@@ -484,7 +483,7 @@ export default function InvoiceRideContent({
             <Box sx={{ border, p: 1.25 }}>{docMetaBlock}</Box>
           </Box>
           <CustomerBlock receipt={receipt} emissionDate={emissionDate} isTicket={false} />
-          <ItemsTableA4 items={items} detailCfg={detailCfg} documentType={docType} />
+          <ItemsTableA4 items={items} detailCfg={detailCfg} documentType={docType} format={format} />
           <Box
             sx={{
               display: "grid",

@@ -2,6 +2,10 @@
  * Formato del detalle de productos en factura / nota de venta.
  */
 import { normalizePrintFormat } from "./receiptFormats.js";
+import {
+  DEFAULT_RECEIPT_TABLE_LAYOUTS,
+  normalizeReceiptTableLayouts,
+} from "./receiptTableColumns.js";
 
 export const PRODUCT_NAME_CASE_OPTIONS = [
   { value: "as_stored", label: "Como está en la base de datos" },
@@ -21,6 +25,7 @@ export const DEFAULT_RECEIPT_DETAIL_SETTINGS = {
   applyToFactura: true,
   applyToNotaVenta: true,
   defaultPrintFormat: "a4",
+  tableLayouts: normalizeReceiptTableLayouts(DEFAULT_RECEIPT_TABLE_LAYOUTS),
 };
 
 export function normalizeReceiptDetailSettings(raw) {
@@ -49,6 +54,7 @@ export function normalizeReceiptDetailSettings(raw) {
     applyToNotaVenta:
       src.applyToNotaVenta !== false && src.applyToNotaVenta !== "false",
     defaultPrintFormat: normalizePrintFormat(src.defaultPrintFormat, "a4"),
+    tableLayouts: normalizeReceiptTableLayouts(src.tableLayouts),
   };
 }
 
@@ -130,38 +136,61 @@ export function formatReceiptItemDescription(
   return parts.join(" ");
 }
 
-/** Productos de ejemplo para la plantilla de prueba. */
+/** Productos de ejemplo para la plantilla de prueba (incluye códigos largos). */
 export const RECEIPT_PREVIEW_SAMPLE_ITEMS = [
   {
-    name: "Pan de yuca artesanal",
+    name: "Atun Real Aceite 170g",
     quantity: 2,
-    price: 0.35,
-    lineTotal: 0.7,
-    barcode: "7701234567890",
+    price: 1.35,
+    lineTotal: 2.7,
+    barcode: "090388000792",
+    code: "090388000792",
     unitLabel: "un",
+    discount: 0,
+    subtotal: 2.7,
   },
   {
-    name: "ACEITE VEGETAL 1L",
+    name: "Yogurt Paraíso Fresa 1L",
     quantity: 1,
-    price: 3.5,
-    lineTotal: 3.5,
-    barcode: "786100000001",
+    price: 1.85,
+    lineTotal: 1.85,
+    barcode: "786210443241",
+    code: "786210443241",
     unitLabel: "bot",
+    discount: 0,
+    subtotal: 1.85,
   },
   {
-    name: "leche entera 1 litro",
+    name: "Galletas de sal Ducales 315Gr",
     quantity: 3,
-    price: 1.1,
-    lineTotal: 3.3,
-    barcode: "",
-    unitLabel: "lt",
+    price: 2.1,
+    lineTotal: 6.3,
+    barcode: "786123450001",
+    code: "786123450001",
+    unitLabel: "paq",
+    discount: 0.3,
+    subtotal: 6.0,
   },
   {
-    name: "  Galletas   de   avena  ",
+    name: "Lava 900g",
     quantity: 1,
-    price: 1.25,
-    lineTotal: 1.25,
-    barcode: "SKU-4421",
-    unitLabel: "paq",
+    price: 3.45,
+    lineTotal: 3.45,
+    barcode: "7861036713202",
+    code: "7861036713202",
+    unitLabel: "un",
+    discount: 0,
+    subtotal: 3.45,
+  },
+  {
+    name: "Sal vaquera",
+    quantity: 2,
+    price: 0.55,
+    lineTotal: 1.1,
+    barcode: "612",
+    code: "612",
+    unitLabel: "un",
+    discount: 0,
+    subtotal: 1.1,
   },
 ];

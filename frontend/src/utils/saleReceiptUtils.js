@@ -9,6 +9,11 @@ import {
   formatReceiptItemDescription,
   normalizeReceiptDetailSettings,
 } from "./receiptDetailFormat.js";
+import {
+  formatReceiptQuantity,
+  receiptColumnCellValue,
+  resolveReceiptTableColumns,
+} from "./receiptTableColumns.js";
 
 const to2 = (n) => Number(Number(n || 0).toFixed(2));
 // Precio unitario: se conserva con hasta 3 decimales (ej. 0.125) para que la
@@ -347,19 +352,9 @@ function buildPrintHtml(receipt, format, options = {}) {
   const layout = getReceiptLayout(format);
   const isTicket = layout.isTicket;
   const p = layout.print;
-  const cols = layout.productColPct;
   const w = isTicket ? "100%" : "210mm";
   const fs = isTicket ? p.fs : "14px";
   const pad = isTicket ? "0" : "24px";
-  const productCell = isTicket
-    ? "padding:2px 1px;word-wrap:break-word;overflow-wrap:break-word;white-space:normal;vertical-align:top;line-height:1.35;font-weight:600"
-    : "padding:2px 0;font-weight:600";
-  const numCell = isTicket
-    ? `text-align:center;padding:2px 1px;vertical-align:top;font-size:${p.num}px;font-weight:700`
-    : "text-align:center;padding:2px 4px;font-weight:700";
-  const moneyCell = isTicket
-    ? `text-align:right;padding:2px 1px;vertical-align:top;font-size:${p.num}px;font-weight:700;word-wrap:break-word;overflow-wrap:break-word`
-    : "text-align:right;padding:2px 0;font-weight:700";
   const totalRow = (label, value, bold = false) => {
     const fw = bold ? "font-weight:800;" : "font-weight:700;";
     const fsTotal = bold ? (isTicket ? `font-size:${p.totalBold}px;` : "font-size:17px;") : "";
@@ -385,22 +380,58 @@ function buildPrintHtml(receipt, format, options = {}) {
     options.detailSettings ?? getActiveAppSettings()?.receiptDetailSettings,
   );
   const docType = receipt.documentType || "nota_venta";
+  const tableCols = resolveReceiptTableColumns(detailCfg, docType, format);
+  const cellFmt = {
+    money: formatMoneyReceipt,
+    unitPrice: formatUnitMoneyReceipt,
+    description: (it, idx) =>
+      formatReceiptItemDescription(it, detailCfg, idx, docType),
+  };
+  const qtyColIndex = tableCols.findIndex((c) => c.id === "qty");
   const rows = (receipt.items || [])
-    .map(
-      (it, idx) =>
-        `<tr>
-          <td style="${productCell}">${escapeHtml(formatReceiptItemDescription(it, detailCfg, idx, docType))}</td>
-          <td style="${numCell}">${it.quantity}</td>
-          <td style="${moneyCell}">${formatUnitMoneyReceipt(it.price)}</td>
-          <td style="${moneyCell}">${formatMoneyReceipt(it.lineTotal)}</td>
-        </tr>`,
-    )
+    .map((it, idx) => {
+      const tds = tableCols
+        .map((c) => {
+          const val = escapeHtml(receiptColumnCellValue(c.id, it, idx, cellFmt));
+          const align =
+            c.id === "qty" ? "center" : c.align === "right" ? "right" : "left";
+          const style = [
+            `text-align:${align}`,
+            "padding:2px 1px",
+            "vertical-align:top",
+            `font-weight:${c.align === "right" || c.id === "qty" ? 700 : 600}`,
+            c.breakWords
+              ? "word-wrap:break-word;overflow-wrap:anywhere;white-space:normal"
+              : "white-space:nowrap",
+            isTicket && c.align === "right" ? `font-size:${p.num}px` : "",
+          ]
+            .filter(Boolean)
+            .join(";");
+          return `<td style="${style}">${val}</td>`;
+        })
+        .join("");
+      return `<tr>${tds}</tr>`;
+    })
     .join("");
 
   const totalQuantity = (receipt.items || []).reduce(
     (acc, it) => acc + Number(it.quantity || 0),
     0,
   );
+
+  const footCells = tableCols
+    .map((c, i) => {
+      if (c.id === "qty") {
+        return `<td style="text-align:center;padding:3px 1px;font-weight:800;color:#000">${escapeHtml(formatReceiptQuantity(totalQuantity))}</td>`;
+      }
+      const labelCell =
+        qtyColIndex > 0 ? i === qtyColIndex - 1 : i === 0 && c.id === "description";
+      if (labelCell) {
+        return `<td style="text-align:right;padding:3px 1px;font-weight:800;color:#000">Total Cant</td>`;
+      }
+      return `<td style="padding:3px 1px"></td>`;
+    })
+    .join("");
 
   return `<div style="width:${w};max-width:${w};margin:0 auto;padding:${pad};box-sizing:border-box;font-family:Arial,sans-serif;font-size:${fs};font-weight:600;color:#000;line-height:1.35;overflow:hidden">
     <div style="text-align:center;margin-bottom:${isTicket ? 6 : 16}px">
@@ -418,22 +449,23 @@ function buildPrintHtml(receipt, format, options = {}) {
       <div><strong>${RECEIPT_FIELD_LABELS.payment}</strong> ${escapeHtml(receipt.paymentMethod)}</div>
     </div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:${isTicket ? 6 : 12}px;color:#000;table-layout:fixed">
+      <colgroup>
+        ${tableCols.map((c) => `<col style="width:${c.width}" />`).join("")}
+      </colgroup>
       <thead>
         <tr style="border-bottom:1px solid #ccc">
-          <th style="text-align:left;padding:2px 1px;font-weight:800;color:#000;width:${isTicket ? cols.product : "auto"}">Producto</th>
-          <th style="text-align:center;padding:2px 1px;font-weight:800;color:#000;width:${isTicket ? cols.cant : "auto"}">Cant</th>
-          <th style="text-align:right;padding:2px 1px;font-weight:800;color:#000;width:${isTicket ? cols.pu : "auto"}">P.U.</th>
-          <th style="text-align:right;padding:2px 1px;font-weight:800;color:#000;width:${isTicket ? cols.total : "auto"}">Total</th>
+          ${tableCols
+            .map((c) => {
+              const align =
+                c.id === "qty" ? "center" : c.align === "right" ? "right" : "left";
+              return `<th style="text-align:${align};padding:2px 1px;font-weight:800;color:#000;width:${c.width}">${escapeHtml(c.header)}</th>`;
+            })
+            .join("")}
         </tr>
       </thead>
       <tbody>${rows}</tbody>
       <tfoot>
-        <tr style="border-top:1px solid #ccc">
-          <td style="text-align:right;padding:3px 1px;font-weight:800;color:#000">Total Cant</td>
-          <td style="text-align:center;padding:3px 1px;font-weight:800;color:#000">${totalQuantity}</td>
-          <td style="padding:3px 1px"></td>
-          <td style="padding:3px 1px"></td>
-        </tr>
+        <tr style="border-top:1px solid #ccc">${footCells}</tr>
       </tfoot>
     </table>
     <div style="border-top:1px dashed #999;padding-top:${isTicket ? 3 : 10}px;color:#000">

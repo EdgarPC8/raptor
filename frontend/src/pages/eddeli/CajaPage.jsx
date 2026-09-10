@@ -3239,7 +3239,11 @@ export default function CajaPage() {
             pr: 1,
           }}
         >
-          <span>¿Abrir empaque para reponer stock?</span>
+          <span>
+            {openPackSuggestions.length > 1
+              ? `Abrir empaques · ${openPackSuggestions.length} productos`
+              : "¿Abrir empaque para reponer stock?"}
+          </span>
           <TourHelpButton
             onClick={startOpenPackTour}
             title="Ver tutorial de abrir empaque"
@@ -3248,62 +3252,80 @@ export default function CajaPage() {
         <DialogContent dividers sx={{ pt: 1 }}>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
             Falta stock en el carrito, pero hay empaques enlazados en{" "}
-            <strong>{activeShift?.store?.name || "este local"}</strong>. Si confirmás, se abre el
-            empaque (baja la paca y suben las unidades del producto) y luego se cobra.
+            <strong>{activeShift?.store?.name || "este local"}</strong>. Confirmás una sola vez:
+            se abren todos los de la lista (baja la paca y suben las unidades) y luego se cobra.
           </Typography>
-          <Stack spacing={1.25} data-tour="caja-open-pack-list">
-            {openPackSuggestions.map((row, idx) => {
-              const qty = Number(
-                String(openPackQty[row.presentationProductId] ?? row.packsToOpen)
-                  .trim()
-                  .replace(",", ".") || 0,
-              );
-              const gained = Math.max(0, Math.floor(qty)) * row.unitsPerPack;
-              return (
-                <Paper
-                  key={row.presentationProductId}
-                  variant="outlined"
-                  sx={{ p: 1.25, borderRadius: 1.5 }}
-                  {...(idx === 0 ? { "data-tour": "caja-open-pack-qty" } : {})}
-                >
-                  <Typography variant="body2" fontWeight={700}>
-                    {row.presentationName}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    Destino: «{row.issueName}» · faltan {row.deficit} {row.targetUnitAbbrev} · hay{" "}
-                    {row.packStock} empaque(s)
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
-                    1 empaque = +{row.unitsPerPack} {row.targetUnitAbbrev}
-                  </Typography>
-                  <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    spacing={1}
-                    alignItems={{ sm: "center" }}
-                    sx={{ mt: 1 }}
-                  >
-                    <TextField
-                      size="small"
-                      type="number"
-                      label="Abrir"
-                      value={openPackQty[row.presentationProductId] ?? ""}
-                      onChange={(e) =>
-                        setOpenPackQty((prev) => ({
-                          ...prev,
-                          [row.presentationProductId]: e.target.value,
-                        }))
-                      }
-                      inputProps={{ min: 1, max: row.packStock, step: 1 }}
-                      sx={{ width: { xs: "100%", sm: 120 } }}
-                    />
-                    <Typography variant="caption" color="success.main" fontWeight={700}>
-                      → +{gained} {row.targetUnitAbbrev} a «{row.issueName}»
-                    </Typography>
-                  </Stack>
-                </Paper>
-              );
-            })}
-          </Stack>
+          <TableContainer
+            data-tour="caja-open-pack-list"
+            sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1 }}
+          >
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Producto / empaque</TableCell>
+                  <TableCell align="right">Faltan</TableCell>
+                  <TableCell align="right">Stock paca</TableCell>
+                  <TableCell align="right">Abrir</TableCell>
+                  <TableCell align="right">Ganan</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {openPackSuggestions.map((row, idx) => {
+                  const qty = Number(
+                    String(openPackQty[row.presentationProductId] ?? row.packsToOpen)
+                      .trim()
+                      .replace(",", ".") || 0,
+                  );
+                  const gained = Math.max(0, Math.floor(qty)) * row.unitsPerPack;
+                  return (
+                    <TableRow key={`${row.issueProductId}-${row.presentationProductId}`}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={700}>
+                          {row.issueName}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Empaque: {row.presentationName} · 1 = +{row.unitsPerPack}{" "}
+                          {row.targetUnitAbbrev}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        {row.deficit} {row.targetUnitAbbrev}
+                      </TableCell>
+                      <TableCell align="right">{row.packStock}</TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{ minWidth: 100 }}
+                        {...(idx === 0 ? { "data-tour": "caja-open-pack-qty" } : {})}
+                      >
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={openPackQty[row.presentationProductId] ?? ""}
+                          onChange={(e) =>
+                            setOpenPackQty((prev) => ({
+                              ...prev,
+                              [row.presentationProductId]: e.target.value,
+                            }))
+                          }
+                          inputProps={{ min: 1, max: row.packStock, step: 1 }}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          fontWeight={700}
+                          color="success.main"
+                        >
+                          +{gained} {row.targetUnitAbbrev}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </DialogContent>
         <DialogActions sx={{ px: 2, py: 1.5 }} data-tour="caja-open-pack-actions">
           <Button onClick={handleSkipOpenPack} disabled={saving} size="small">
@@ -3315,7 +3337,11 @@ export default function CajaPage() {
             onClick={() => void handleConfirmOpenPackAndCheckout()}
             disabled={saving}
           >
-            {saving ? "…" : "Abrir y cobrar"}
+            {saving
+              ? "…"
+              : openPackSuggestions.length > 1
+                ? "Abrir todos y cobrar"
+                : "Abrir y cobrar"}
           </Button>
         </DialogActions>
       </Dialog>

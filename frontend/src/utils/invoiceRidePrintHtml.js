@@ -12,6 +12,10 @@ import {
   formatReceiptItemDescription,
   normalizeReceiptDetailSettings,
 } from "./receiptDetailFormat.js";
+import {
+  receiptColumnCellValue,
+  resolveReceiptTableColumns,
+} from "./receiptTableColumns.js";
 
 function esc(str) {
   return String(str ?? "")
@@ -177,38 +181,56 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4", options = {}) 
     ${fiscal.accessKey ? metaRow("Clave acceso", fiscal.accessKey) : ""}
   </div>`;
 
+  const tableCols = resolveReceiptTableColumns(detailCfg, docType, format);
+  const cellFmt = {
+    money: formatInvoiceMoney,
+    unitPrice: formatInvoiceUnitPrice,
+    description: (it, idx) =>
+      formatReceiptItemDescription(it, detailCfg, idx, docType),
+  };
+  const gridCols = tableCols
+    .map((c) => `${Math.max(0.4, c.widthPct / 12)}fr`)
+    .join(" ");
+
   const itemsHtml = isTicket
     ? `<div style="margin-bottom:8px">
-        <div style="display:grid;grid-template-columns:0.7fr 2.2fr 0.9fr 0.7fr 0.9fr;gap:2px;border-bottom:1px solid #000;padding-bottom:3px;margin-bottom:3px;font-weight:800;font-size:0.85em">
-          <span>Cant</span><span>Descripción</span><span style="text-align:right">P.V.P</span><span style="text-align:right">Descto</span><span style="text-align:right">Subtotal</span>
+        <div style="display:grid;grid-template-columns:${gridCols};gap:2px;border-bottom:1px solid #000;padding-bottom:3px;margin-bottom:3px;font-weight:800;font-size:0.85em">
+          ${tableCols
+            .map(
+              (c) =>
+                `<span style="text-align:${c.align}">${esc(c.header)}</span>`,
+            )
+            .join("")}
         </div>
         ${items
           .map(
-            (it, idx) => `<div style="display:grid;grid-template-columns:0.7fr 2.2fr 0.9fr 0.7fr 0.9fr;gap:2px;padding:3px 0;border-bottom:1px dotted #999;font-weight:600;font-size:0.9em;align-items:start">
-              <span>${esc(formatInvoiceMoney(it.quantity))}</span>
-              <span style="word-break:break-word">${esc(formatReceiptItemDescription(it, detailCfg, idx, docType))}</span>
-              <span style="text-align:right">${esc(formatInvoiceUnitPrice(it.price))}</span>
-              <span style="text-align:right">${esc(formatInvoiceMoney(it.discount || 0))}</span>
-              <span style="text-align:right">${esc(formatInvoiceMoney(it.subtotal ?? it.lineTotal))}</span>
+            (it, idx) => `<div style="display:grid;grid-template-columns:${gridCols};gap:2px;padding:3px 0;border-bottom:1px dotted #999;font-weight:600;font-size:0.9em;align-items:start">
+              ${tableCols
+                .map((c) => {
+                  const val = esc(receiptColumnCellValue(c.id, it, idx, cellFmt));
+                  const style = [
+                    `text-align:${c.align}`,
+                    c.breakWords ? "word-break:break-word;overflow-wrap:anywhere" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(";");
+                  return `<span style="${style}">${val}</span>`;
+                })
+                .join("")}
             </div>`,
           )
           .join("")}
       </div>`
     : `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:0.95em;table-layout:fixed">
         <colgroup>
-          <col style="width:18%" />
-          <col style="width:34%" />
-          <col style="width:8%" />
-          <col style="width:15%" />
-          <col style="width:8%" />
-          <col style="width:17%" />
+          ${tableCols.map((c) => `<col style="width:${c.width}" />`).join("")}
         </colgroup>
         <thead>
           <tr>
-            ${["Codigo", "Descripción", "Cant", "Precio Unitario", "Descto", "Subtotal"]
+            ${tableCols
               .map(
-                (h, i) =>
-                  `<th style="border:1px solid #000;padding:5px 4px;font-weight:800;text-align:${i >= 2 ? "right" : "left"};background:#f3f3f3;overflow:hidden">${h}</th>`,
+                (c) =>
+                  `<th style="border:1px solid #000;padding:5px 4px;font-weight:800;text-align:${c.align};background:#f3f3f3;overflow:hidden">${esc(c.header)}</th>`,
               )
               .join("")}
           </tr>
@@ -217,12 +239,18 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4", options = {}) 
           ${items
             .map(
               (it, idx) => `<tr>
-                <td style="border:1px solid #000;padding:3px 4px;font-weight:600;font-size:0.88em;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;vertical-align:top;line-height:1.25">${esc(it.code || it.productId || idx + 1)}</td>
-                <td style="border:1px solid #000;padding:3px 4px;font-weight:600;word-break:break-word;overflow-wrap:anywhere;overflow:hidden;vertical-align:top;line-height:1.3">${esc(formatReceiptItemDescription(it, detailCfg, idx, docType))}</td>
-                <td style="border:1px solid #000;padding:3px 4px;text-align:right;font-weight:700;overflow:hidden;vertical-align:top">${esc(formatInvoiceMoney(it.quantity))}</td>
-                <td style="border:1px solid #000;padding:3px 4px;text-align:right;font-weight:700;overflow:hidden;vertical-align:top">${esc(formatInvoiceUnitPrice(it.price))}</td>
-                <td style="border:1px solid #000;padding:3px 4px;text-align:right;font-weight:700;overflow:hidden;vertical-align:top">${esc(formatInvoiceMoney(it.discount || 0))}</td>
-                <td style="border:1px solid #000;padding:3px 4px;text-align:right;font-weight:700;overflow:hidden;vertical-align:top">${esc(formatInvoiceMoney(it.subtotal ?? it.lineTotal))}</td>
+                ${tableCols
+                  .map((c) => {
+                    const val = esc(receiptColumnCellValue(c.id, it, idx, cellFmt));
+                    const extra =
+                      c.id === "code"
+                        ? "font-size:0.88em;word-break:break-all;overflow-wrap:anywhere;line-height:1.25"
+                        : c.breakWords
+                          ? "word-break:break-word;overflow-wrap:anywhere;line-height:1.3"
+                          : "";
+                    return `<td style="border:1px solid #000;padding:3px 4px;font-weight:${c.align === "right" ? 700 : 600};text-align:${c.align};overflow:hidden;vertical-align:top;${extra}">${val}</td>`;
+                  })
+                  .join("")}
               </tr>`,
             )
             .join("")}

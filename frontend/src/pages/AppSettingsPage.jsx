@@ -54,6 +54,7 @@ import NotificationToastSettings from "../components/NotificationToastSettings.j
 import SriBillingSettingsPanel from "../components/SriBillingSettingsPanel.jsx";
 import BackupsPage from "./BackupsPage.jsx";
 import ReceiptDetailPreviewDialog from "../components/settings/ReceiptDetailPreviewDialog.jsx";
+import ReceiptTableColumnsEditor from "../components/settings/ReceiptTableColumnsEditor.jsx";
 import ThemePaletteEditor from "../components/settings/ThemePaletteEditor.jsx";
 import KeyboardShortcutsEditor from "../components/settings/KeyboardShortcutsEditor.jsx";
 import PrintFormatToggle from "../components/saleReceipt/PrintFormatToggle.jsx";
@@ -380,6 +381,12 @@ export default function AppSettingsPage() {
         ...(f.receiptDetailSettings || DEFAULT_RECEIPT_DETAIL_SETTINGS),
         defaultPrintFormat: value,
       },
+    }));
+  };
+  const onReceiptDetailSettingsReplace = (next) => {
+    setForm((f) => ({
+      ...f,
+      receiptDetailSettings: normalizeReceiptDetailSettings(next),
     }));
   };
 
@@ -1235,6 +1242,17 @@ export default function AppSettingsPage() {
                     onChange={onDefaultPrintFormat}
                   />
                 }
+              />
+            </SettingsSection>
+            <SettingsSection
+              title="Columnas y anchos"
+              hint="Por tipo de comprobante (factura / nota) y tamaño (A4, 80 mm, 55 mm): orden, columnas visibles y anchos. Vista previa con productos de prueba."
+              tourId="config-receipt-columns"
+            >
+              <ReceiptTableColumnsEditor
+                settings={form.receiptDetailSettings}
+                onChange={onReceiptDetailSettingsReplace}
+                businessName={form.alias || form.name || activeApp?.alias}
               />
             </SettingsSection>
             <SettingsSection

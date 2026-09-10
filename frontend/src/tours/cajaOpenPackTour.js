@@ -8,7 +8,7 @@ export function getCajaOpenPackTourSteps() {
       popover: {
         title: "Abrir empaque desde caja",
         description:
-          "Falta stock del producto en el carrito, pero hay un empaque enlazado con existencias en este local. Podés abrirlo ahora para reponer y cobrar.",
+          "Falta stock en el carrito, pero hay empaques enlazados con existencias en este local. Si hay varios productos, salen todos juntos en una sola lista (como el autocompletar).",
         side: "bottom",
         align: "center",
       },
@@ -18,7 +18,7 @@ export function getCajaOpenPackTourSteps() {
       popover: {
         title: "Qué se va a abrir",
         description:
-          "Cada tarjeta muestra el empaque, el destino, cuánto falta y cuántas unidades entrega cada apertura (1 empaque = +N del producto).",
+          "La tabla lista todos los productos a reponer: empaque, cuánto falta, stock de pacas, cuántas abrir y unidades que ganan.",
         side: "bottom",
         align: "start",
       },
@@ -39,7 +39,7 @@ export function getCajaOpenPackTourSteps() {
       popover: {
         title: "Confirmar o saltar",
         description:
-          "«Abrir y cobrar» desglosa el empaque y registra la venta. «No abrir» deja el stock como está: si tenés autocompletar, podrás ajustar; si no, verás aviso de stock insuficiente.",
+          "«Abrir y cobrar» (o «Abrir todos y cobrar») abre todos los de la lista de una vez y registra la venta. «No abrir» deja el stock: si tenés autocompletar, podrás ajustar; si no, verás aviso de stock insuficiente.",
         side: "top",
         align: "end",
       },

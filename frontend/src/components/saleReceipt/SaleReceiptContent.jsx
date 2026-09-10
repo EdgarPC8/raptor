@@ -11,6 +11,11 @@ import {
   formatReceiptItemDescription,
   normalizeReceiptDetailSettings,
 } from "../../utils/receiptDetailFormat.js";
+import {
+  formatReceiptQuantity,
+  receiptColumnCellValue,
+  resolveReceiptTableColumns,
+} from "../../utils/receiptTableColumns.js";
 import { useAppSettings } from "../../context/AppSettingsContext.jsx";
 import InvoiceRideContent from "./InvoiceRideContent.jsx";
 
@@ -78,6 +83,14 @@ export default function SaleReceiptContent({
   const items = receipt.items || [];
   const totalQuantity = items.reduce((acc, it) => acc + Number(it.quantity || 0), 0);
   const docType = receipt.documentType || "nota_venta";
+  const tableCols = resolveReceiptTableColumns(detailCfg, docType, format);
+  const cellFormatters = {
+    money: formatMoneyReceipt,
+    unitPrice: formatUnitMoneyReceipt,
+    description: (it, idx) =>
+      formatReceiptItemDescription(it, detailCfg, idx, docType),
+  };
+  const qtyColIndex = tableCols.findIndex((c) => c.id === "qty");
 
   return (
     <Box
@@ -161,99 +174,102 @@ export default function SaleReceiptContent({
         </Typography>
       </Box>
 
-      <Table size="small" sx={{ mb: 1, tableLayout: isTicket ? "fixed" : "auto" }}>
+      <Table size="small" sx={{ mb: 1, tableLayout: "fixed" }}>
         <TableHead>
           <TableRow>
-            <TableCell sx={{ ...headCellSx, px: isTicket ? 0.5 : 1, width: layout.tableProductWidth }}>Producto</TableCell>
-            <TableCell align="center" sx={{ ...headCellSx, px: 0.5, width: isTicket ? 40 : 48 }}>
-              Cant
-            </TableCell>
-            <TableCell align="right" sx={{ ...headCellSx, px: isTicket ? 0.5 : 1 }}>
-              P.U.
-            </TableCell>
-            <TableCell align="right" sx={{ ...headCellSx, px: isTicket ? 0.5 : 1 }}>
-              Total
-            </TableCell>
+            {tableCols.map((col) => (
+              <TableCell
+                key={col.id}
+                align={col.align === "right" ? "right" : col.id === "qty" ? "center" : "left"}
+                sx={{
+                  ...headCellSx,
+                  px: isTicket ? 0.5 : 1,
+                  width: col.width,
+                }}
+              >
+                {col.header}
+              </TableCell>
+            ))}
           </TableRow>
         </TableHead>
         <TableBody>
-          {(receipt.items || []).map((it, idx) => (
+          {items.map((it, idx) => (
             <TableRow key={`line-${idx}`}>
-              <TableCell
-                sx={{
-                  ...cellSx,
-                  py: 0.35,
-                  px: isTicket ? 0.5 : 1,
-                  fontSize: "inherit",
-                  whiteSpace: "normal",
-                  wordBreak: "break-word",
-                  overflowWrap: "anywhere",
-                  verticalAlign: "top",
-                  lineHeight: 1.35,
-                  fontWeight: 600,
-                }}
-              >
-                {formatReceiptItemDescription(it, detailCfg, idx, docType)}
-              </TableCell>
-              <TableCell
-                align="center"
-                sx={{
-                  ...cellSx,
-                  py: 0.35,
-                  px: 0.5,
-                  fontSize: "inherit",
-                  verticalAlign: "top",
-                  whiteSpace: "nowrap",
-                  fontWeight: 700,
-                }}
-              >
-                {it.quantity}
-              </TableCell>
-              <TableCell
-                align="right"
-                sx={{
-                  ...cellSx,
-                  py: 0.35,
-                  px: isTicket ? 0.5 : 1,
-                  fontSize: "inherit",
-                  verticalAlign: "top",
-                  whiteSpace: "nowrap",
-                  fontWeight: 700,
-                }}
-              >
-                {formatUnitMoneyReceipt(it.price)}
-              </TableCell>
-              <TableCell
-                align="right"
-                sx={{
-                  ...cellSx,
-                  py: 0.35,
-                  px: isTicket ? 0.5 : 1,
-                  fontSize: "inherit",
-                  verticalAlign: "top",
-                  whiteSpace: "nowrap",
-                  fontWeight: 700,
-                }}
-              >
-                {formatMoneyReceipt(it.lineTotal)}
-              </TableCell>
+              {tableCols.map((col) => (
+                <TableCell
+                  key={col.id}
+                  align={col.align === "right" ? "right" : col.id === "qty" ? "center" : "left"}
+                  sx={{
+                    ...cellSx,
+                    py: 0.35,
+                    px: isTicket ? 0.5 : 1,
+                    fontSize: "inherit",
+                    verticalAlign: "top",
+                    whiteSpace: col.breakWords ? "normal" : "nowrap",
+                    wordBreak: col.breakWords
+                      ? col.id === "code"
+                        ? "break-all"
+                        : "break-word"
+                      : undefined,
+                    overflowWrap: col.breakWords ? "anywhere" : undefined,
+                    lineHeight: 1.35,
+                    fontWeight: col.align === "right" || col.id === "qty" ? 700 : 600,
+                    width: col.width,
+                    overflow: "hidden",
+                  }}
+                >
+                  {receiptColumnCellValue(col.id, it, idx, cellFormatters)}
+                </TableCell>
+              ))}
             </TableRow>
           ))}
           <TableRow>
-            <TableCell
-              align="right"
-              sx={{ ...cellSx, py: 0.5, px: isTicket ? 0.5 : 1, fontWeight: 800, borderTop: "1px solid #ccc" }}
-            >
-              Total Cant
-            </TableCell>
-            <TableCell
-              align="center"
-              sx={{ ...cellSx, py: 0.5, px: 0.5, fontWeight: 800, borderTop: "1px solid #ccc" }}
-            >
-              {totalQuantity}
-            </TableCell>
-            <TableCell sx={{ ...cellSx, py: 0.5, borderTop: "1px solid #ccc" }} />
-            <TableCell sx={{ ...cellSx, py: 0.5, borderTop: "1px solid #ccc" }} />
+            {tableCols.map((col, i) => {
+              if (col.id === "qty") {
+                return (
+                  <TableCell
+                    key={col.id}
+                    align="center"
+                    sx={{
+                      ...cellSx,
+                      py: 0.5,
+                      px: 0.5,
+                      fontWeight: 800,
+                      borderTop: "1px solid #ccc",
+                    }}
+                  >
+                    {formatReceiptQuantity(totalQuantity)}
+                  </TableCell>
+                );
+              }
+              const labelCell =
+                qtyColIndex > 0
+                  ? i === qtyColIndex - 1
+                  : i === 0 && col.id === "description";
+              if (labelCell) {
+                return (
+                  <TableCell
+                    key={col.id}
+                    align="right"
+                    sx={{
+                      ...cellSx,
+                      py: 0.5,
+                      px: isTicket ? 0.5 : 1,
+                      fontWeight: 800,
+                      borderTop: "1px solid #ccc",
+                    }}
+                  >
+                    Total Cant
+                  </TableCell>
+                );
+              }
+              return (
+                <TableCell
+                  key={col.id}
+                  sx={{ ...cellSx, py: 0.5, borderTop: "1px solid #ccc" }}
+                />
+              );
+            })}
           </TableRow>
         </TableBody>
       </Table>
