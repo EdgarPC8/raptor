@@ -1,6 +1,6 @@
 /** Configuración del sistema: pestañas por categoría (extensible). */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Link as RouterLink, Navigate, useSearchParams } from "react-router-dom";
 import {
   Box,
   Paper,
@@ -29,6 +29,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import UploadIcon from "@mui/icons-material/Upload";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import StorefrontIcon from "@mui/icons-material/Storefront";
+import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import PreviewIcon from "@mui/icons-material/Preview";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
@@ -46,7 +47,10 @@ import {
   isFeatureUnlocked,
 } from "../utils/entitlementFeatures.js";
 import { updateAppSettings } from "../api/appSettingsRequest.js";
-import { getStoresRequest } from "../api/inventoryControlRequest.js";
+import {
+  getStoresRequest,
+  updateStoreRequest,
+} from "../api/inventoryControlRequest.js";
 import { uploadImageRequest, deleteImageRequest } from "../api/imgRequest.js";
 import { buildImageUrl } from "../api/axios.js";
 import AppTimeClockPanel from "../components/AppTimeClockPanel.jsx";
@@ -78,11 +82,16 @@ import {
 import { normalizeKeyboardShortcuts } from "../utils/keyboardShortcuts.js";
 import {
   locationKindLabel,
+  normalizeLocationKind,
   sortStoresByKind,
   storeHoldsInventory,
 } from "../utils/storeLocationKind.js";
+import { APP_ROUTES } from "../config/appRoutes.js";
+import { APP_ID } from "../config/appInfo.js";
 
 const ALLOWED = new Set(["Administrador", "Programador"]);
+/** Multistock solo en EdDeli (desbloqueado por gestor). Store/Tienda = un local. */
+const MULTI_STOCK_APP = APP_ID === "eddeli";
 
 /**
  * Pestañas de configuración (agregar más aquí a futuro).
@@ -91,6 +100,12 @@ const ALLOWED = new Set(["Administrador", "Programador"]);
 const SETTINGS_TABS = [
   { id: "marca", label: "Marca", icon: <StorefrontIcon fontSize="small" />, saveKind: "app" },
   { id: "sistema", label: "Sistema", icon: <AccessTimeIcon fontSize="small" />, saveKind: "app" },
+  {
+    id: "local",
+    label: "Local",
+    icon: <PlaceOutlinedIcon fontSize="small" />,
+    saveKind: "app",
+  },
   {
     id: "inventario",
     label: "Inventario",
@@ -239,6 +254,13 @@ export default function AppSettingsPage() {
   const [multiStockStores, setMultiStockStores] = useState([]);
   const [multiStockStoresLoading, setMultiStockStoresLoading] = useState(false);
   const [multiStockUnifying, setMultiStockUnifying] = useState(false);
+  const [localStores, setLocalStores] = useState([]);
+  const [localStoresLoading, setLocalStoresLoading] = useState(false);
+  const [localCodes, setLocalCodes] = useState({
+    establishmentCode: "001",
+    emissionPointCode: "001",
+  });
+  const [localCodesSaving, setLocalCodesSaving] = useState(false);
   const fileRef = useRef(null);
   const iconFileRef = useRef(null);
 
@@ -283,6 +305,7 @@ export default function AppSettingsPage() {
         showPublicStoresPropia: settings.showPublicStoresPropia !== false,
         showPublicStoresVitrina: settings.showPublicStoresVitrina !== false,
         multiStockEnabled: Boolean(settings.multiStockEnabled),
+        principalStoreId: settings.principalStoreId ?? null,
         showProductCostInSelect: Boolean(settings.showProductCostInSelect),
         moneyDisplayDecimals: Number(settings.moneyDisplayDecimals ?? 2),
         moneyRoundingMode: settings.moneyRoundingMode || "up",
@@ -312,21 +335,23 @@ export default function AppSettingsPage() {
   }, [settings]);
 
   const multiStockFeatureStatus = useMemo(
-    () => getFeatureStatus(subscription, "multi_stock"),
+    () => (MULTI_STOCK_APP ? getFeatureStatus(subscription, "multi_stock") : "hidden"),
     [subscription],
   );
   const multiStockUnlocked = useMemo(
     () =>
+      MULTI_STOCK_APP &&
       isFeatureUnlocked(multiStockFeatureStatus, {
         isProgrammer: user?.loginRol === "Programador",
       }),
     [multiStockFeatureStatus, user?.loginRol],
   );
-  const multiStockAlreadyOn = Boolean(form?.multiStockEnabled);
+  const multiStockAlreadyOn = Boolean(MULTI_STOCK_APP && form?.multiStockEnabled);
   const multiStockCanToggleOff = multiStockAlreadyOn && ALLOWED.has(user?.loginRol);
   const multiStockSwitchDisabled = multiStockAlreadyOn
     ? !multiStockCanToggleOff
     : !multiStockUnlocked;
+  const showMultiStockToggle = MULTI_STOCK_APP && multiStockFeatureStatus !== "hidden";
 
   const loadMultiStockPrincipalStores = useCallback(async () => {
     setMultiStockStoresLoading(true);
@@ -342,6 +367,90 @@ export default function AppSettingsPage() {
       setMultiStockStoresLoading(false);
     }
   }, []);
+
+  const loadLocalTabStores = useCallback(async () => {
+    setLocalStoresLoading(true);
+    try {
+      const { data } = await getStoresRequest();
+      const list = sortStoresByKind(Array.isArray(data) ? data : []);
+      setLocalStores(list);
+    } catch {
+      setLocalStores([]);
+    } finally {
+      setLocalStoresLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab === "local") loadLocalTabStores();
+  }, [tab, loadLocalTabStores]);
+
+  const propiaStores = useMemo(
+    () =>
+      localStores.filter(
+        (s) =>
+          s.isActive !== false &&
+          normalizeLocationKind(s.locationKind) === "propia",
+      ),
+    [localStores],
+  );
+
+  const selectedPrincipalId = useMemo(() => {
+    const fromForm = form?.principalStoreId;
+    if (fromForm != null && fromForm !== "") return String(fromForm);
+    if (propiaStores.length === 1) return String(propiaStores[0].id);
+    return "";
+  }, [form?.principalStoreId, propiaStores]);
+
+  const selectedPrincipalStore = useMemo(() => {
+    if (!selectedPrincipalId) return null;
+    return (
+      localStores.find((s) => String(s.id) === String(selectedPrincipalId)) ||
+      null
+    );
+  }, [localStores, selectedPrincipalId]);
+
+  useEffect(() => {
+    if (!selectedPrincipalStore) {
+      setLocalCodes({ establishmentCode: "001", emissionPointCode: "001" });
+      return;
+    }
+    setLocalCodes({
+      establishmentCode: String(selectedPrincipalStore.establishmentCode || "001"),
+      emissionPointCode: String(selectedPrincipalStore.emissionPointCode || "001"),
+    });
+  }, [selectedPrincipalStore]);
+
+  // Un solo local propia → enlazar fijo a SRI si aún no hay principal.
+  useEffect(() => {
+    if (tab !== "local" || localStoresLoading || !form || !user) return;
+    if (!ALLOWED.has(user.loginRol)) return;
+    if (form.principalStoreId) return;
+    if (propiaStores.length !== 1) return;
+    const onlyId = propiaStores[0].id;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { settings: next } = await updateAppSettings({
+          principalStoreId: onlyId,
+        });
+        if (cancelled) return;
+        setForm((f) => ({
+          ...f,
+          principalStoreId: next.principalStoreId ?? onlyId,
+        }));
+        setSettings(next);
+        await reload();
+        await loadLocalTabStores();
+      } catch {
+        /* silencioso: el usuario puede enlazar a mano */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al entrar sin principal
+  }, [tab, localStoresLoading, propiaStores.length, form?.principalStoreId, user?.loginRol]);
 
   const tabIndex = useMemo(
     () => visibleTabs.findIndex((t) => t.id === tab),
@@ -376,10 +485,16 @@ export default function AppSettingsPage() {
   };
 
   const persistSettings = async (patch, successMsg = "Configuración guardada") => {
-    const { principalStoreId, ...settingsPatch } = patch || {};
+    const { principalStoreId: patchPrincipal, ...settingsPatch } = patch || {};
     const payload = { ...form, ...settingsPatch };
-    if (principalStoreId != null && principalStoreId !== "") {
-      payload.principalStoreId = principalStoreId;
+    const nextPrincipal =
+      patchPrincipal !== undefined
+        ? patchPrincipal
+        : form?.principalStoreId ?? null;
+    if (nextPrincipal != null && nextPrincipal !== "") {
+      payload.principalStoreId = nextPrincipal;
+    } else if (patchPrincipal === null) {
+      payload.principalStoreId = null;
     }
     await toast({
       promise: (async () => {
@@ -387,6 +502,7 @@ export default function AppSettingsPage() {
         setForm((f) => ({
           ...f,
           ...settingsPatch,
+          principalStoreId: next.principalStoreId ?? f.principalStoreId,
           logoPath: next.logoPath ?? settingsPatch.logoPath ?? f.logoPath,
           iconPath: next.iconPath ?? settingsPatch.iconPath ?? f.iconPath,
         }));
@@ -396,6 +512,47 @@ export default function AppSettingsPage() {
       successMessage: successMsg,
       errorMessage: "No se pudo guardar la configuración",
     });
+  };
+
+  const onSelectPrincipalStore = async (storeId) => {
+    const id = storeId ? Number(storeId) : null;
+    setForm((f) => ({ ...f, principalStoreId: id }));
+    await persistSettings(
+      { principalStoreId: id },
+      "Local vinculado a facturación SRI",
+    );
+    await loadLocalTabStores();
+  };
+
+  const onSaveLocalCodes = async () => {
+    if (!selectedPrincipalStore?.id) return;
+    setLocalCodesSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append(
+        "establishmentCode",
+        String(localCodes.establishmentCode || "001").replace(/\D/g, "").padStart(3, "0").slice(-3),
+      );
+      fd.append(
+        "emissionPointCode",
+        String(localCodes.emissionPointCode || "001").replace(/\D/g, "").padStart(3, "0").slice(-3),
+      );
+      fd.append("locationKind", "propia");
+      await toast({
+        promise: (async () => {
+          await updateStoreRequest(selectedPrincipalStore.id, fd);
+          await persistSettings(
+            { principalStoreId: selectedPrincipalStore.id },
+            "Códigos del local sincronizados con SRI",
+          );
+          await loadLocalTabStores();
+        })(),
+        successMessage: "Códigos del local guardados",
+        errorMessage: "No se pudieron guardar los códigos del local",
+      });
+    } finally {
+      setLocalCodesSaving(false);
+    }
   };
 
   const onMultiStockToggle = (e) => {
@@ -938,6 +1095,152 @@ export default function AppSettingsPage() {
             </>
           )}
 
+          {tab === "local" && (
+            <>
+              <SettingsSection
+                title="Local de operación"
+                hint={
+                  showMultiStockToggle
+                    ? "Un local o varios (multistock). El local principal se enlaza con Facturación SRI (establecimiento / punto de emisión)."
+                    : "Local de operación enlazado a Facturación SRI (establecimiento / punto de emisión)."
+                }
+                tourId="config-local"
+              >
+                {showMultiStockToggle ? (
+                  <Box data-tour="config-multistock">
+                    <SettingsRow
+                      label="Varios locales (multistock)"
+                      description={
+                        !multiStockUnlocked
+                          ? FEATURE_STATUS_HINT[multiStockFeatureStatus] ||
+                            "Aún no disponible para tu instalación."
+                          : multiStockAlreadyOn
+                            ? "Activo: stock separado por local. Al desactivar se unifica en un solo local."
+                            : "Desactivado: un solo local de operación (modo clásico)."
+                      }
+                      control={
+                        <FormControlLabel
+                          sx={{ m: 0 }}
+                          control={
+                            <Switch
+                              size="small"
+                              checked={Boolean(form.multiStockEnabled)}
+                              disabled={multiStockSwitchDisabled}
+                              onChange={onMultiStockToggle}
+                            />
+                          }
+                          label={form.multiStockEnabled ? "Varios locales" : "Un local"}
+                        />
+                      }
+                    />
+                  </Box>
+                ) : null}
+
+                <SettingsRow
+                  label="Local vinculado a SRI"
+                  description={
+                    showMultiStockToggle && form.multiStockEnabled
+                      ? "Elegí la sucursal propia cuyos códigos 001-001 usan la facturación electrónica."
+                      : "Local fijo de caja y facturación SRI."
+                  }
+                  wide
+                  control={
+                    localStoresLoading ? (
+                      <CircularProgress size={22} />
+                    ) : (
+                      <TextField
+                        select
+                        size="small"
+                        fullWidth
+                        value={selectedPrincipalId}
+                        onChange={(e) => onSelectPrincipalStore(e.target.value)}
+                        disabled={!propiaStores.length}
+                        helperText={
+                          !propiaStores.length
+                            ? "No hay sucursales propias activas. Creá una en Locales."
+                            : selectedPrincipalStore
+                              ? `${locationKindLabel(selectedPrincipalStore.locationKind)} · ${selectedPrincipalStore.address || "Sin dirección"}`
+                              : "Seleccioná un local"
+                        }
+                      >
+                        {propiaStores.map((s) => (
+                          <MenuItem key={s.id} value={String(s.id)}>
+                            {s.name}
+                            {form?.principalStoreId != null &&
+                            Number(s.id) === Number(form.principalStoreId)
+                              ? " · enlazado SRI"
+                              : ""}
+                            {` (#${s.id})`}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    )
+                  }
+                />
+
+                <SettingsRow
+                  label="Establecimiento / Punto emisión"
+                  description="Mismos códigos que en Facturación SRI. Al guardar se sincronizan."
+                  wide
+                  control={
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                      <TextField
+                        size="small"
+                        label="Estab."
+                        value={localCodes.establishmentCode}
+                        onChange={(e) =>
+                          setLocalCodes((c) => ({
+                            ...c,
+                            establishmentCode: e.target.value.replace(/\D/g, "").slice(0, 3),
+                          }))
+                        }
+                        inputProps={{ maxLength: 3 }}
+                        sx={{ width: 88 }}
+                        disabled={!selectedPrincipalStore}
+                      />
+                      <Typography color="text.secondary">-</Typography>
+                      <TextField
+                        size="small"
+                        label="Pto"
+                        value={localCodes.emissionPointCode}
+                        onChange={(e) =>
+                          setLocalCodes((c) => ({
+                            ...c,
+                            emissionPointCode: e.target.value.replace(/\D/g, "").slice(0, 3),
+                          }))
+                        }
+                        inputProps={{ maxLength: 3 }}
+                        sx={{ width: 88 }}
+                        disabled={!selectedPrincipalStore}
+                      />
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={onSaveLocalCodes}
+                        disabled={!selectedPrincipalStore || localCodesSaving}
+                      >
+                        {localCodesSaving ? "…" : "Guardar códigos"}
+                      </Button>
+                    </Stack>
+                  }
+                />
+
+                <Alert severity="info" sx={{ mt: 0.5 }}>
+                  Gestión completa de locales (propia / bodega / vitrina):{" "}
+                  <Button
+                    component={RouterLink}
+                    to={APP_ROUTES.channel.stores}
+                    size="small"
+                    sx={{ textTransform: "none", p: 0, minWidth: 0, verticalAlign: "baseline" }}
+                  >
+                    Canal → Locales
+                  </Button>
+                  . Régimen, RUC y firma: pestaña Facturación SRI.
+                </Alert>
+              </SettingsSection>
+            </>
+          )}
+
           {tab === "inventario" && (
             <SettingsSection
               title="Inventario y montos"
@@ -1147,35 +1450,6 @@ export default function AppSettingsPage() {
                 }
               />
             </Box>
-            {multiStockFeatureStatus !== "hidden" ? (
-              <Box data-tour="config-multistock">
-                <SettingsRow
-                  label="Multistock (stock por local)"
-                  description={
-                    !multiStockUnlocked
-                      ? FEATURE_STATUS_HINT[multiStockFeatureStatus] ||
-                        "Aún no disponible para tu instalación."
-                      : multiStockAlreadyOn
-                        ? "Activo: stock separado por local. Al desactivar se unifica en un solo stock por producto."
-                        : "Desactivado: un stock general por producto (modo clásico)."
-                  }
-                  control={
-                    <FormControlLabel
-                      sx={{ m: 0 }}
-                      control={
-                        <Switch
-                          size="small"
-                          checked={Boolean(form.multiStockEnabled)}
-                          disabled={multiStockSwitchDisabled}
-                          onChange={onMultiStockToggle}
-                        />
-                      }
-                      label={form.multiStockEnabled ? "Activado" : "Desactivado"}
-                    />
-                  }
-                />
-              </Box>
-            ) : null}
             </SettingsSection>
           )}
 

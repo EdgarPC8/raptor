@@ -29,6 +29,7 @@ function SimpleDialog({
   contentSx,
   paperSx,
   titleExtra = null,
+  actions = null,
 }) {
   const titleId = useId();
   const descId = useId();
@@ -42,6 +43,18 @@ function SimpleDialog({
       return;
     onClose?.(event, reason);
   };
+
+  const footer =
+    actions != null ? (
+      <DialogActions>{actions}</DialogActions>
+    ) : onClickAccept ? (
+      <DialogActions>
+        <Button onClick={() => onClose?.()}>Cancelar</Button>
+        <Button onClick={onClickAccept} autoFocus>
+          Aceptar
+        </Button>
+      </DialogActions>
+    ) : null;
 
   return (
     <Dialog
@@ -87,14 +100,7 @@ function SimpleDialog({
         )}
       </DialogContent>
 
-      {onClickAccept && (
-        <DialogActions>
-          <Button onClick={() => onClose?.()}>Cancelar</Button>
-          <Button onClick={onClickAccept} autoFocus>
-            Aceptar
-          </Button>
-        </DialogActions>
-      )}
+      {footer}
     </Dialog>
   );
 }

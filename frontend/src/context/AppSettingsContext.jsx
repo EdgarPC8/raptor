@@ -89,6 +89,12 @@ function toActiveApp(settings, { offline = false } = {}) {
     multiStockEnabled: SHELL_ONLY
       ? false
       : Boolean(settings?.multiStockEnabled ?? resolved.multiStockEnabled),
+    principalStoreId: SHELL_ONLY
+      ? null
+      : (() => {
+          const n = Number(settings?.principalStoreId ?? resolved.principalStoreId);
+          return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+        })(),
     showProductCostInSelect: SHELL_ONLY
       ? false
       : Boolean(settings?.showProductCostInSelect ?? resolved.showProductCostInSelect),

@@ -207,8 +207,8 @@ export function getMovementCatalogPrice(product, type, reason) {
   }
   if (type === "entrada" && reason === "ENTRADA_COMPRA") {
     const sup = Number(product.supplierPrice ?? 0);
-    if (sup > 0) return sup;
-    return Number(product.price ?? 0);
+    // Solo precio proveedor: no usar precio de venta (fuga que inflaba compras).
+    return sup > 0 ? sup : 0;
   }
   return 0;
 }
@@ -217,4 +217,48 @@ export function getMovementCatalogPriceLabel(type, reason) {
   if (type === "salida") return "distribuidor";
   if (type === "entrada" && reason === "ENTRADA_COMPRA") return "proveedor";
   return "catálogo";
+}
+
+/** Tope de línea de compra (debe alinearse con backend purchasePriceGuards). */
+export const MAX_PURCHASE_LINE_TOTAL = 2500;
+export const MAX_UNIT_VS_REF_RATIO = 40;
+
+/**
+ * Valida total de compra antes de guardar (mismo criterio que el backend).
+ * @returns {string|null} error message
+ */
+export function validatePurchaseLineTotal({ quantity, total, product, reason, products = [] }) {
+  if (reason !== "ENTRADA_COMPRA") return null;
+
+  if (isGenericIngredientProduct(product)) {
+    const hasPack = (products || []).some(
+      (p) =>
+        Number(p?.genericProductId) === Number(product.id) &&
+        Number(p?.unitsPerPack) > 0 &&
+        p?.isActive !== false,
+    );
+    if (hasPack) {
+      return `«${product.name}» es genérico de receta. Comprá la presentación (cubeta/paca) y abrila.`;
+    }
+  }
+
+  if (total == null || total === "") return null;
+  const qty = Number(quantity);
+  const amount = Number(total);
+  if (!Number.isFinite(amount) || amount < 0) return "El monto de compra no es válido";
+  if (!Number.isFinite(qty) || !(qty > 0)) return "La cantidad de compra no es válida";
+  if (amount > MAX_PURCHASE_LINE_TOTAL) {
+    return `Total $${amount.toFixed(2)} supera el tope $${MAX_PURCHASE_LINE_TOTAL}. Revisá modo Total vs Unitario × cant.`;
+  }
+  const unit = amount / qty;
+  const ref =
+    Number(product?.supplierPrice) > 0
+      ? Number(product.supplierPrice)
+      : Number(product?.price) > 0
+        ? Number(product.price)
+        : 0;
+  if (ref > 0 && unit > ref * MAX_UNIT_VS_REF_RATIO) {
+    return `Costo unitario ~$${unit.toFixed(4)} es demasiado alto vs referencia $${ref.toFixed(4)}. Revisá cantidad/modo de precio.`;
+  }
+  return null;
 }

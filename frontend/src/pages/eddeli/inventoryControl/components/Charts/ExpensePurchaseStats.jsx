@@ -283,7 +283,7 @@ function PurchaseStatsTable({ stats }) {
 
 export default function ExpensePurchaseStats() {
   const theme = useTheme();
-  const [period, setPeriod] = React.useState('month');
+  const [period, setPeriod] = React.useState('year');
   const [band, setBand] = React.useState(1);
   const [customFromMonth, setCustomFromMonth] = React.useState(januaryYearMonth());
   const [customToMonth, setCustomToMonth] = React.useState(currentYearMonth());
@@ -375,8 +375,8 @@ export default function ExpensePurchaseStats() {
         sx={{ mb: 0.5 }}
       >
         <ChartBlockHeader
-          title="Compras de insumos por producto"
-          subtitle="Gastos por fecha en Expense (materia prima e insumos). Elige el período y el bloque del ranking."
+          title="Compras por producto"
+          subtitle="Entradas de compra de cualquier producto (quintales, cubetas, genéricos, etc.). Elegí período y bloque del ranking."
           sx={{ mb: 0, flex: 1 }}
         />
         <Button
@@ -456,11 +456,13 @@ export default function ExpensePurchaseStats() {
       </Stack>
 
       <Alert severity="info" sx={{ py: 0.5, mb: 1.5 }}>
-        {loading ? 'Cargando…' : `${periodBounds.label} · solo insumos (materia prima)`}
+        {loading
+          ? 'Cargando…'
+          : `${periodBounds.label} · todas las entradas de compra (cualquier tipo de producto)`}
       </Alert>
 
       <Stack direction="row" spacing={1} sx={{ mb: 1.5, flexWrap: 'wrap', rowGap: 0.5 }}>
-        <Chip label={`Insumos: ${intFmt(summary.totalProducts)}`} size="small" />
+        <Chip label={`Productos: ${intFmt(summary.totalProducts)}`} size="small" />
         <Chip label={`Compras: ${intFmt(summary.totalPurchases)}`} size="small" />
         <Chip label={`Total: ${moneyFmt(summary.totalAmount)}`} color="primary" size="small" />
         <Chip label={`Ticket medio: ${moneyFmt(summary.avgTicket)}`} color="success" size="small" />
@@ -476,15 +478,16 @@ export default function ExpensePurchaseStats() {
       >
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, px: 0.5 }}>
           {bandSlice.length > 0
-            ? `Posiciones ${rankStart}–${rankEnd} por monto de compra (${stats.length} insumos con movimiento)`
-            : `Ranking por monto de compra (${stats.length} insumos con movimiento)`}
+            ? `Posiciones ${rankStart}–${rankEnd} por monto de compra (${stats.length} productos con movimiento)`
+            : `Ranking por monto de compra (${stats.length} productos con movimiento)`}
         </Typography>
 
         {loading ? (
           <ChartSkeleton height={220} />
         ) : chartDataset.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-            No hay compras de insumos en este período.
+            No hay entradas de compra en este período. Probá «Año» o «Todos», o recibí un pedido a
+            proveedor / registrá una entrada de compra.
           </Typography>
         ) : (
           <BarChart
@@ -521,19 +524,19 @@ export default function ExpensePurchaseStats() {
         scroll="paper"
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
-          Detalle de compras de insumos
+          Detalle de compras por producto
           <IconButton aria-label="Cerrar" onClick={() => setDetailOpen(false)} size="small">
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {periodBounds.label} · {intFmt(stats.length)} insumos · Total {moneyFmt(summary.totalAmount)}
+            {periodBounds.label} · {intFmt(stats.length)} productos · Total {moneyFmt(summary.totalAmount)}
           </Typography>
           <PurchaseStatsTable stats={stats} />
           {!loading && stats.length === 0 && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              No hay compras de insumos en este período.
+              No hay compras en este período.
             </Typography>
           )}
         </DialogContent>

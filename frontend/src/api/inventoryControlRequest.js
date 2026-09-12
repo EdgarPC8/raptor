@@ -683,8 +683,9 @@ export const updateStoreRequest = (id, formData) =>
   });
 
 // Eliminar store (igual)
-export const deleteStoreRequest = (id) =>
+export const deleteStoreRequest = (id, data = {}) =>
   axios.delete(`/inventory/stores/${id}`, {
+    data,
     headers: { Authorization: jwt() },
   });
 

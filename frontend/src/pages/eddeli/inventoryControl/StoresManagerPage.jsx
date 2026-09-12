@@ -519,11 +519,23 @@ function StoreFormTabPanel({ value, index, children }) {
   );
 }
 
-function StoreForm({ value, onChange, inventoryStores = [], multiStockEnabled = true }) {
+function StoreForm({
+  value,
+  onChange,
+  inventoryStores = [],
+  multiStockEnabled = true,
+  principalStoreId = null,
+}) {
   const set = (k, v) => onChange({ ...value, [k]: v });
   const isPropia = (value.locationKind || "vitrina") === "propia";
   const isBodega = (value.locationKind || "vitrina") === "bodega";
   const holdsInv = storeHoldsInventory(value.locationKind);
+  const isPrincipal =
+    principalStoreId != null &&
+    value?.id != null &&
+    Number(principalStoreId) === Number(value.id);
+  /** Solo el local enlazado en Config → Local no se desactiva aquí. Visible sí se puede. */
+  const cannotDeactivate = Boolean(isPrincipal);
   const [tab, setTab] = useState(0);
 
   const [selectedFile, setSelectedFile] = useState(null);
@@ -735,6 +747,7 @@ function StoreForm({ value, onChange, inventoryStores = [], multiStockEnabled = 
               <Switch
                 size="small"
                 checked={Boolean(value.isActive)}
+                disabled={cannotDeactivate}
                 onChange={(e) => {
                   const on = e.target.checked;
                   set("isActive", on);
@@ -742,7 +755,11 @@ function StoreForm({ value, onChange, inventoryStores = [], multiStockEnabled = 
                 }}
               />
             }
-            label="Activo (operativo: turno, stock, movimientos)"
+            label={
+              cannotDeactivate
+                ? `Activo — «${value.name || "este local"}» enlazado en Config → Local`
+                : "Activo (operativo: turno, stock, movimientos)"
+            }
           />
           <FormControlLabel
             sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: "0.82rem" } }}
@@ -750,16 +767,25 @@ function StoreForm({ value, onChange, inventoryStores = [], multiStockEnabled = 
               <Switch
                 size="small"
                 checked={Boolean(value.isVisible)}
-                disabled={!value.isActive}
+                disabled={!value.isActive || cannotDeactivate}
                 onChange={(e) => set("isVisible", e.target.checked)}
               />
             }
             label={
-              value.isActive
-                ? "Visible en home / punto de venta"
-                : "Visible (inactivo → siempre oculto)"
+              cannotDeactivate
+                ? "Visible — el enlazado a SRI debe quedar visible"
+                : value.isActive
+                  ? "Visible en home / punto de venta"
+                  : "Visible (inactivo → siempre oculto)"
             }
           />
+          {cannotDeactivate ? (
+            <Alert severity="info" sx={{ py: 0.5, px: 1.25 }}>
+              <strong>«{value.name || "Este local"}»</strong> está enlazado en{" "}
+              <strong>Configuración → Local</strong>: no se puede desactivar ni ocultar. Los demás
+              locales (no enlazados) sí.
+            </Alert>
+          ) : null}
         </Stack>
       </StoreFormTabPanel>
 
@@ -990,6 +1016,7 @@ function StoresPage() {
   const { toast: toastAuth } = useAuth();
   const { activeApp } = useAppSettings();
   const multiStockEnabled = Boolean(activeApp?.multiStockEnabled);
+  const principalStoreId = activeApp?.principalStoreId ?? null;
   const { startTour } = usePageTour({
     tourId: LOCALES_TOUR_ID,
     getSteps: getLocalesTourSteps,
@@ -997,6 +1024,9 @@ function StoresPage() {
 
   const [openDelete, setOpenDelete] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
+  const [deleteTransferTo, setDeleteTransferTo] = useState("");
+  const [deleteError, setDeleteError] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const [openForm, setOpenForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -1226,21 +1256,94 @@ function StoresPage() {
 
   const handleConfirmDelete = (row) => {
     setRowToDelete(row);
+    setDeleteError(null);
+    const others = (rows || []).filter(
+      (s) =>
+        Number(s.id) !== Number(row.id) &&
+        s.isActive !== false &&
+        storeHoldsInventory(s.locationKind),
+    );
+    setDeleteTransferTo(others[0] ? String(others[0].id) : "");
     setOpenDelete(true);
   };
 
+  const deleteTransferCandidates = useMemo(() => {
+    if (!rowToDelete) return [];
+    return (rows || []).filter(
+      (s) =>
+        Number(s.id) !== Number(rowToDelete.id) &&
+        s.isActive !== false &&
+        storeHoldsInventory(s.locationKind),
+    );
+  }, [rows, rowToDelete]);
+
   const handleDelete = async () => {
     if (!rowToDelete) return;
-    return toastAuth({
-      promise: deleteStoreRequest(rowToDelete.id),
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      const payload = {};
+      if (deleteTransferTo) payload.transferToStoreId = Number(deleteTransferTo);
+      await toastAuth({
+        promise: deleteStoreRequest(rowToDelete.id, payload),
+        onSuccess: (res) => {
+          setRows((prev) => prev.filter((r) => r.id !== rowToDelete.id));
+          setOpenDelete(false);
+          setRowToDelete(null);
+          return {
+            title: "Locales",
+            description: res?.data?.message || "Eliminado correctamente",
+          };
+        },
+        onError: (err) => {
+          const data = err?.response?.data;
+          const blockers = Array.isArray(data?.blockers) ? data.blockers : [];
+          const candidates = Array.isArray(data?.transferCandidates)
+            ? data.transferCandidates
+            : [];
+          setDeleteError({
+            message: data?.message || "No se pudo eliminar",
+            blockers,
+            links: data?.links || [],
+            transferCandidates: candidates,
+          });
+          if (candidates[0]?.id && !deleteTransferTo) {
+            setDeleteTransferTo(String(candidates[0].id));
+          }
+          return {
+            title: "No se pudo eliminar",
+            description: data?.message || "Revisá el mensaje del modal",
+          };
+        },
+      });
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const handleDeactivateInstead = async () => {
+    if (!rowToDelete?.id) return;
+    const fd = new FormData();
+    fd.append("isActive", "false");
+    fd.append("isVisible", "false");
+    await toastAuth({
+      promise: updateStoreRequest(rowToDelete.id, fd),
       onSuccess: () => {
-        setRows((prev) => prev.filter((r) => r.id !== rowToDelete.id));
+        setRows((prev) =>
+          prev.map((r) =>
+            r.id === rowToDelete.id ? { ...r, isActive: false, isVisible: false } : r,
+          ),
+        );
         setOpenDelete(false);
-        return { title: "Puntos de venta", description: "Eliminado correctamente" };
+        setRowToDelete(null);
+        return {
+          title: "Locales",
+          description: "Local desactivado (ya no aparece como operativo)",
+        };
       },
       onError: (res) => ({
-        title: "Puntos de venta",
-        description: res?.response?.data?.message || "No se pudo eliminar",
+        title: "Locales",
+        description: res?.response?.data?.message || "No se pudo desactivar",
       }),
     });
   };
@@ -1259,6 +1362,48 @@ function StoresPage() {
     () => (rows || []).filter((s) => storeHoldsInventory(s.locationKind)),
     [rows],
   );
+
+  const extraActiveInventoryStores = useMemo(() => {
+    if (multiStockEnabled) return [];
+    return (rows || []).filter((s) => {
+      const active = s?.isActive === true || s?.isActive === 1 || s?.isActive === "1";
+      if (!active) return false;
+      if (!storeHoldsInventory(s.locationKind)) return false;
+      if (principalStoreId != null && Number(s.id) === Number(principalStoreId)) return false;
+      return true;
+    });
+  }, [rows, multiStockEnabled, principalStoreId]);
+
+  const applySingleLocalCleanup = async () => {
+    if (!extraActiveInventoryStores.length) return;
+    await toastAuth({
+      promise: (async () => {
+        for (const s of extraActiveInventoryStores) {
+          const fd = new FormData();
+          fd.append("isActive", "false");
+          fd.append("isVisible", "false");
+          await updateStoreRequest(s.id, fd);
+        }
+        if (principalStoreId) {
+          const principal = (rows || []).find(
+            (r) => Number(r.id) === Number(principalStoreId),
+          );
+          if (principal) {
+            const fd = new FormData();
+            fd.append("isActive", "true");
+            fd.append("isVisible", "true");
+            if (normalizeLocationKind(principal.locationKind) !== "propia") {
+              fd.append("locationKind", "propia");
+            }
+            await updateStoreRequest(principal.id, fd);
+          }
+        }
+        await fetchRows();
+      })(),
+      successMessage: "Locales extras desactivados; quedó el principal operativo",
+      errorMessage: "No se pudo ordenar los locales",
+    });
+  };
 
   const columns = [
     {
@@ -1304,8 +1449,28 @@ function StoresPage() {
       width: 130,
       render: (row) => {
         const k = normalizeLocationKind(row.locationKind);
-        if (k === "propia") return <Chip size="small" color="primary" label="Sucursal propia" />;
-        if (k === "bodega") return <Chip size="small" color="secondary" label="Bodega" />;
+        const isPrincipal =
+          principalStoreId != null && Number(row.id) === Number(principalStoreId);
+        if (k === "propia") {
+          return (
+            <Stack direction="row" spacing={0.5} alignItems="center" useFlexGap flexWrap="wrap">
+              <Chip size="small" color="primary" label="Sucursal propia" />
+              {isPrincipal ? (
+                <Chip size="small" variant="outlined" color="primary" label="Enlazado Config" />
+              ) : null}
+            </Stack>
+          );
+        }
+        if (k === "bodega") {
+          return (
+            <Stack direction="row" spacing={0.5} alignItems="center" useFlexGap flexWrap="wrap">
+              <Chip size="small" color="secondary" label="Bodega" />
+              {isPrincipal ? (
+                <Chip size="small" variant="outlined" color="primary" label="Enlazado Config" />
+              ) : null}
+            </Stack>
+          );
+        }
         return <Chip size="small" variant="outlined" label="Vitrina" />;
       },
     },
@@ -1349,38 +1514,44 @@ function StoresPage() {
     {
       label: "Acciones",
       id: "actions",
-      width: 230,
+      width: 160,
+      sticky: "right",
       render: (row) => {
         const holdsInv = storeHoldsInventory(row.locationKind);
         return (
-          <>
+          <Stack direction="row" spacing={0} justifyContent="flex-end">
             {holdsInv ? (
               <Tooltip title="Stock y traspasos">
                 <IconButton
+                  size="small"
                   data-tour="locales-stock-action"
                   onClick={() => openStockDialog(row)}
                 >
-                  <InventoryIcon />
+                  <InventoryIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             ) : (
               <Tooltip title="Productos">
-                <IconButton onClick={() => openProductsDialog(row)}>
-                  <InventoryIcon />
+                <IconButton size="small" onClick={() => openProductsDialog(row)}>
+                  <InventoryIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             )}
             <Tooltip title="Editar">
-              <IconButton onClick={() => handleOpenEdit(row)}>
-                <Edit />
+              <IconButton size="small" onClick={() => handleOpenEdit(row)}>
+                <Edit fontSize="small" />
               </IconButton>
             </Tooltip>
             <Tooltip title="Eliminar">
-              <IconButton onClick={() => handleConfirmDelete(row)}>
-                <Delete />
+              <IconButton
+                size="small"
+                color="error"
+                onClick={() => handleConfirmDelete(row)}
+              >
+                <Delete fontSize="small" />
               </IconButton>
             </Tooltip>
-          </>
+          </Stack>
         );
       },
     },
@@ -1443,9 +1614,32 @@ function StoresPage() {
           </Alert>
         </>
       ) : (
-        <Alert severity="info" sx={{ mb: 2, py: 0.75 }}>
-          Modo un solo local: abre turno en tu local activo sin crear Bodega ni sucursales extra.
-        </Alert>
+        <Stack spacing={1} sx={{ mb: 2 }}>
+          <Alert severity="info" sx={{ py: 0.75 }}>
+            Modo un solo local: el operativo es el de <strong>Configuración → Local</strong> (SRI).
+            Bodegas u otras propias activas conviene dejarlas inactivas hasta activar multistock.
+          </Alert>
+          {extraActiveInventoryStores.length > 0 ? (
+            <Alert
+              severity="warning"
+              sx={{ py: 0.75, alignItems: "center" }}
+              action={
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={applySingleLocalCleanup}
+                  sx={{ textTransform: "none", fontWeight: 700, whiteSpace: "nowrap" }}
+                >
+                  Desactivar extras
+                </Button>
+              }
+            >
+              Hay <strong>{extraActiveInventoryStores.length}</strong> local(es) activo(s) además del
+              principal ({extraActiveInventoryStores.map((s) => s.name).join(", ")}). Podés
+              desactivarlos de una vez.
+            </Alert>
+          ) : null}
+        </Stack>
       )}
 
       <Stack
@@ -1541,6 +1735,7 @@ function StoresPage() {
           onChange={setFormValue}
           inventoryStores={inventoryStores}
           multiStockEnabled={multiStockEnabled}
+          principalStoreId={principalStoreId}
         />
         <DialogActions sx={{ px: 0, pt: 1.5, pb: 0.5 }}>
           <Button onClick={() => setOpenForm(false)}>Cancelar</Button>
@@ -1573,11 +1768,84 @@ function StoresPage() {
       {/* Confirmación de borrado */}
       <SimpleDialog
         open={openDelete}
-        onClose={() => setOpenDelete(false)}
-        tittle="Eliminar punto de venta"
-        onClickAccept={handleDelete}
+        onClose={() => !deleteBusy && setOpenDelete(false)}
+        title="Eliminar local"
+        maxWidth="sm"
+        fullWidth
+        disableClose={deleteBusy}
+        actions={
+          <>
+            <Button onClick={() => setOpenDelete(false)} disabled={deleteBusy}>
+              Cancelar
+            </Button>
+            <Button
+              color="inherit"
+              onClick={handleDeactivateInstead}
+              disabled={deleteBusy}
+            >
+              Solo desactivar
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleDelete}
+              disabled={deleteBusy}
+            >
+              {deleteBusy ? "Eliminando…" : "Eliminar"}
+            </Button>
+          </>
+        }
       >
-        ¿Seguro que deseas eliminar <b>{rowToDelete?.name}</b>?
+        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+          <Typography>
+            ¿Eliminar <b>{rowToDelete?.name}</b>
+            {rowToDelete ? ` (#${rowToDelete.id})` : ""}?
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Si tiene stock, elegí a qué local pasarlo (la otra Bodega o tu sucursal). Si no
+            podés borrarlo, también podés <strong>solo desactivarlo</strong>.
+          </Typography>
+          {deleteTransferCandidates.length > 0 ? (
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Pasar stock a"
+              value={deleteTransferTo}
+              onChange={(e) => setDeleteTransferTo(e.target.value)}
+              helperText="Obligatorio si este local tiene inventario"
+            >
+              {deleteTransferCandidates.map((s) => (
+                <MenuItem key={s.id} value={String(s.id)}>
+                  {s.name} · {locationKindLabel(s.locationKind)}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : (
+            <Alert severity="warning">
+              No hay otro local activa (propia/bodega) para recibir stock.
+            </Alert>
+          )}
+          {deleteError ? (
+            <Alert severity="error">
+              <Typography variant="body2" fontWeight={700} gutterBottom>
+                {deleteError.message}
+              </Typography>
+              {deleteError.blockers?.length ? (
+                <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                  {deleteError.blockers.map((b) => (
+                    <li key={b.code || b.message}>{b.message}</li>
+                  ))}
+                </Box>
+              ) : null}
+              {deleteError.links?.length ? (
+                <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                  Enlazado a: {deleteError.links.join(", ")}
+                </Typography>
+              ) : null}
+            </Alert>
+          ) : null}
+        </Stack>
       </SimpleDialog>
     </Container>
   );

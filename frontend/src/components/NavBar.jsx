@@ -101,6 +101,7 @@ import {
   NOTIFICATION_TOAST_FLAG,
 } from "../utils/notificationToast.js";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
+import { getStoresRequest } from "../api/inventoryControlRequest.js";
 import { APP_ID } from "../config/appInfo.js";
 import { APP_ROUTES } from "../config/appRoutes.js";
 import {
@@ -515,6 +516,7 @@ export default function NavBar() {
   const [openChangeRol, setOpenChangeRol] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [newsUnreadCount, setNewsUnreadCount] = useState(0);
+  const [storeLabel, setStoreLabel] = useState("");
 
   const publicNavItems = useMemo(() => {
     return PUBLIC_NAV.filter((item) => {
@@ -677,6 +679,40 @@ export default function NavBar() {
   useEffect(() => {
     fetchUnreadCount();
   }, [fetchUnreadCount]);
+
+  useEffect(() => {
+    if (!showUserActions) {
+      setStoreLabel("");
+      return undefined;
+    }
+    let cancelled = false;
+    getStoresRequest()
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res?.data) ? res.data : [];
+        const principalId = activeApp?.principalStoreId;
+        const byPrincipal =
+          principalId != null
+            ? list.find((s) => Number(s?.id) === Number(principalId))
+            : null;
+        const usable = list.filter((s) => {
+          const active =
+            s?.isActive === true || s?.isActive === 1 || s?.isActive === "1";
+          if (!active) return false;
+          const kind = String(s?.locationKind || s?.kind || "propia").toLowerCase();
+          return kind === "propia";
+        });
+        const pick = byPrincipal || usable[0] || null;
+        const name = String(pick?.name || pick?.alias || "").trim();
+        setStoreLabel(name);
+      })
+      .catch(() => {
+        if (!cancelled) setStoreLabel("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showUserActions, activeApp?.multiStockEnabled, activeApp?.principalStoreId]);
 
   useEffect(() => {
     refreshNewsBadge();
@@ -1128,6 +1164,22 @@ export default function NavBar() {
                     }}
                   >
                     {user.loginRol}
+                  </Typography>
+                ) : null}
+                {storeLabel ? (
+                  <Typography
+                    variant="caption"
+                    noWrap
+                    title={storeLabel}
+                    sx={{
+                      fontWeight: 600,
+                      opacity: 0.75,
+                      fontSize: "0.62rem",
+                      maxWidth: "100%",
+                      mt: 0.15,
+                    }}
+                  >
+                    {storeLabel}
                   </Typography>
                 ) : null}
               </Box>

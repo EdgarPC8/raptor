@@ -72,6 +72,7 @@ import {
   isPriceRequired,
   isPriceOptional,
   showPriceField,
+  validatePurchaseLineTotal,
 } from "./movementFormConfig.js";
 import AttachmentField from "./AttachmentField.jsx";
 import { uploadMovementVoucher } from "../../../../api/documentRequest.js";
@@ -572,6 +573,17 @@ function MovementForm({
     if (productIva > 0) setIvaRate(productIva);
 
     const payload = buildCurrentLinePayload(formData);
+    const purchaseErr = validatePurchaseLineTotal({
+      quantity: payload.quantity,
+      total: payload.price,
+      product,
+      reason: payload.reason,
+      products: productOptions,
+    });
+    if (purchaseErr) {
+      toastAuth({ message: purchaseErr, variant: "warning" });
+      return;
+    }
     const { _meta, ...apiLine } = payload;
     setCart((prev) => [
       ...prev,
@@ -762,6 +774,31 @@ function MovementForm({
         return;
       }
 
+      const purchaseGuardLines =
+        itemsToSave.length > 0
+          ? itemsToSave
+          : [
+              (() => {
+                const { _meta, unitPriceInput, shouldMultiply: _sm, hasIva: _hi, ...line } =
+                  buildCurrentLinePayload(formData);
+                return line;
+              })(),
+            ];
+      for (const it of purchaseGuardLines) {
+        const p = productById.get(Number(it.productId));
+        const err = validatePurchaseLineTotal({
+          quantity: it.quantity,
+          total: it.price,
+          product: p,
+          reason: it.reason,
+          products: productOptions,
+        });
+        if (err) {
+          toastAuth({ message: err, variant: "warning" });
+          return;
+        }
+      }
+
       const isCompraFlow =
         itemsToSave.length > 0
           ? itemsToSave.some((i) => i.type === "entrada" && i.reason === "ENTRADA_COMPRA")
@@ -835,6 +872,18 @@ function MovementForm({
         message: "Elige Bodega o sucursal para este movimiento.",
         variant: "warning",
       });
+      return;
+    }
+
+    const purchaseErr = validatePurchaseLineTotal({
+      quantity: dataToSend.quantity,
+      total: dataToSend.price,
+      product: selectedProduct,
+      reason: dataToSend.reason,
+      products: productOptions,
+    });
+    if (purchaseErr) {
+      toastAuth({ message: purchaseErr, variant: "warning" });
       return;
     }
 

@@ -6,6 +6,7 @@
 export const CONFIG_TAB_TOUR_IDS = {
   marca: "config-marca",
   sistema: "config-sistema",
+  local: "config-local",
   inventario: "config-inventario",
   comprobantes: "config-comprobantes",
   publico: "config-publico",
@@ -31,7 +32,7 @@ const tabsStep = {
   popover: {
     title: "Pestañas",
     description:
-      "Marca, Sistema, Inventario, Comprobantes, Público, Facturación SRI y (si sos Programador) Backups. Cambiá de pestaña para ver otro tutorial.",
+      "Marca, Sistema, Local, Inventario, Comprobantes, Público, Facturación SRI y (si sos Programador) Backups. Cambiá de pestaña para ver otro tutorial.",
     side: "bottom",
     align: "center",
   },
@@ -173,13 +174,31 @@ export function getConfigInventarioTourSteps() {
         align: "start",
       },
     },
+    saveStep,
+  ];
+}
+
+export function getConfigLocalTourSteps() {
+  return [
+    headerStep("Local de operación y vínculo con facturación SRI."),
+    tabsStep,
+    {
+      element: "[data-tour='config-local']",
+      popover: {
+        title: "Local",
+        description:
+          "Acá ves el local enlazado al SRI y los códigos de establecimiento / punto de emisión. En EdDeli, si el gestor lo desbloqueó, también podés activar varios locales (multistock).",
+        side: "bottom",
+        align: "start",
+      },
+    },
     {
       element: "[data-tour='config-multistock']",
       allowMissing: true,
       popover: {
-        title: "Multistock",
+        title: "Un local o varios",
         description:
-          "Stock por local/sucursal. Activarlo cambia el modo clásico (stock en el producto) a inventario por sede. Según tu plan puede estar bloqueado.",
+          "Solo en EdDeli: con un local queda fijo y se enlaza al SRI; con varios elegís el principal para facturación. Store y Tienda operan siempre con un local.",
         side: "top",
         align: "start",
       },
@@ -278,6 +297,8 @@ export function getConfigTabTourSteps(tabId) {
   switch (tabId) {
     case "sistema":
       return getConfigSistemaTourSteps();
+    case "local":
+      return getConfigLocalTourSteps();
     case "inventario":
       return getConfigInventarioTourSteps();
     case "comprobantes":

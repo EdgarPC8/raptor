@@ -42,6 +42,11 @@ import {
   generateRecurringOccurrencesRequest,
 } from "../../../api/financeRequest";
 import { getStoresRequest } from "../../../api/inventoryControlRequest";
+import { useAppSettings } from "../../../context/AppSettingsContext.jsx";
+import {
+  locationKindLabel,
+  sortStoresByKind,
+} from "../../../utils/storeLocationKind.js";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -124,6 +129,8 @@ function formatDueDate(value) {
 
 export default function RecurringExpensesPage() {
   const { toast } = useAuth();
+  const { activeApp } = useAppSettings();
+  const principalStoreId = activeApp?.principalStoreId ?? null;
   const [tab, setTab] = useState("occurrences");
   const [monthKey, setMonthKey] = useState(() => {
     const d = new Date();
@@ -161,7 +168,8 @@ export default function RecurringExpensesPage() {
       setTemplates(Array.isArray(data.templates) ? data.templates : []);
       setOccurrences(Array.isArray(data.occurrences) ? data.occurrences : []);
       setMonthLabel(data.monthLabel || monthKey);
-      setStores(Array.isArray(storesRes.data) ? storesRes.data : []);
+      const rawStores = Array.isArray(storesRes.data) ? storesRes.data : [];
+      setStores(sortStoresByKind(rawStores));
     } catch (e) {
       console.error(e);
       toast({ message: "Error al cargar gastos recurrentes", variant: "error" });
@@ -174,9 +182,38 @@ export default function RecurringExpensesPage() {
     load();
   }, [load]);
 
+  /** Solo locales activos; si editás una plantilla de un local apagado, ese también aparece. */
+  const storeOptions = useMemo(() => {
+    const active = stores.filter(
+      (s) => s?.isActive === true || s?.isActive === 1 || s?.isActive === "1",
+    );
+    const selectedId = form.storeId;
+    if (
+      selectedId !== "" &&
+      selectedId != null &&
+      !active.some((s) => String(s.id) === String(selectedId))
+    ) {
+      const orphan = stores.find((s) => String(s.id) === String(selectedId));
+      if (orphan) return sortStoresByKind([...active, orphan]);
+    }
+    return active;
+  }, [stores, form.storeId]);
+
   const openCreate = () => {
     setEditTemplate(null);
-    setForm(emptyTemplateForm());
+    const defaults = emptyTemplateForm();
+    const activeStores = stores.filter(
+      (s) => s?.isActive === true || s?.isActive === 1 || s?.isActive === "1",
+    );
+    if (
+      principalStoreId &&
+      activeStores.some((s) => Number(s.id) === Number(principalStoreId))
+    ) {
+      defaults.storeId = principalStoreId;
+    } else if (activeStores.length === 1) {
+      defaults.storeId = activeStores[0].id;
+    }
+    setForm(defaults);
     setCreateOpen(true);
   };
 
@@ -459,11 +496,21 @@ export default function RecurringExpensesPage() {
           onChange={(e) => setForm((f) => ({ ...f, storeId: e.target.value }))}
         >
           <MenuItem value="">General (sin local)</MenuItem>
-          {stores.map((s) => (
-            <MenuItem key={s.id} value={s.id}>
-              {s.name}
-            </MenuItem>
-          ))}
+          {storeOptions.map((s) => {
+            const isPrincipal =
+              principalStoreId != null &&
+              Number(s.id) === Number(principalStoreId);
+            const inactive =
+              !(s?.isActive === true || s?.isActive === 1 || s?.isActive === "1");
+            return (
+              <MenuItem key={s.id} value={s.id}>
+                {s.name}
+                {isPrincipal ? " · activo (SRI)" : ""}
+                {!isPrincipal ? ` · ${locationKindLabel(s.locationKind)}` : ""}
+                {inactive ? " · inactivo" : ""}
+              </MenuItem>
+            );
+          })}
         </Select>
       </FormControl>
 

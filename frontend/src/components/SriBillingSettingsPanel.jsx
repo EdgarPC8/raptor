@@ -341,7 +341,8 @@ const SriBillingSettingsPanel = forwardRef(function SriBillingSettingsPanel(_pro
       <Alert severity="info" sx={{ py: 1 }}>
         El POS sigue con consumidor final y comprobantes. Aquí preparas RUC, firma{" "}
         <strong>.p12</strong> y, en la pestaña <strong>Correo</strong>, el SMTP para enviar la
-        factura al cliente al autorizar. Colores:{" "}
+        factura al cliente al autorizar. Establecimiento / punto de emisión se sincronizan con el{" "}
+        <strong>local principal</strong> (Configuración → Local). Colores:{" "}
         <strong style={{ color: "#2e7d32" }}>verde</strong> = bien,{" "}
         <strong style={{ color: "#d32f2f" }}>rojo</strong> = falta,{" "}
         <strong style={{ color: "#ed6c02" }}>amarillo</strong> = opcional.
