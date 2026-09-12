@@ -5,6 +5,9 @@ import { code128SvgMarkup } from "../../utils/code128Barcode.js";
 import {
   formatInvoiceMoney,
   formatInvoiceUnitPrice,
+  resolveRideTaxRegimeLabel,
+  shouldShowAccountingRequired,
+  shouldShowSpecialTaxpayer,
   sriPaymentFormLabel,
   dominantIvaRate,
 } from "../../utils/invoiceFiscalUtils.js";
@@ -325,6 +328,9 @@ export default function InvoiceRideContent({
     fiscal.emissionDate ||
     (receipt.date && String(receipt.date).match(/\d{4}-\d{2}-\d{2}/)?.[0]) ||
     "";
+  const regimeLabel = resolveRideTaxRegimeLabel(fiscal, detailCfg);
+  const showAccounting = shouldShowAccountingRequired(detailCfg);
+  const showSpecial = shouldShowSpecialTaxpayer(detailCfg);
 
   const issuerBlock = (
     <Box sx={{ textAlign: isTicket ? "center" : "left" }}>
@@ -363,10 +369,23 @@ export default function InvoiceRideContent({
           {fiscal.establishmentAddress}
         </Typography>
       ) : null}
-      <Typography sx={{ fontWeight: 600, fontSize: "0.82em", mt: 0.35 }}>
-        <Box component="span" sx={{ fontWeight: 800 }}>Obligado a llevar Contabilidad: </Box>
-        {fiscal.accountingRequired ? "SI" : "NO"}
-      </Typography>
+      {showAccounting ? (
+        <Typography sx={{ fontWeight: 600, fontSize: "0.82em", mt: 0.35 }}>
+          <Box component="span" sx={{ fontWeight: 800 }}>Obligado a llevar Contabilidad: </Box>
+          {fiscal.accountingRequired ? "SI" : "NO"}
+        </Typography>
+      ) : null}
+      {regimeLabel ? (
+        <Typography sx={{ fontWeight: 700, fontSize: "0.82em", mt: 0.2 }}>
+          {regimeLabel}
+        </Typography>
+      ) : null}
+      {showSpecial && fiscal.specialTaxpayerResolution ? (
+        <Typography sx={{ fontWeight: 600, fontSize: "0.82em" }}>
+          <Box component="span" sx={{ fontWeight: 800 }}>Contribuyente Especial: </Box>
+          {fiscal.specialTaxpayerResolution}
+        </Typography>
+      ) : null}
       {fiscal.phone ? (
         <Typography sx={{ fontWeight: 600, fontSize: "0.82em" }}>{fiscal.phone}</Typography>
       ) : null}

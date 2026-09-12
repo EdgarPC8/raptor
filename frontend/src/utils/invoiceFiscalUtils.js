@@ -43,6 +43,50 @@ export function environmentLabel(env) {
   return String(env || "").toLowerCase() === "produccion" ? "PRODUCCIÓN" : "PRUEBAS";
 }
 
+/**
+ * Texto del RIDE para régimen (ej. Contifico: "CONTRIBUYENTE RÉGIMEN RIMPE").
+ * Si el usuario ya escribió la frase completa, se respeta; si solo puso "RIMPE", se completa.
+ */
+export function formatTaxRegimeLabel(regime) {
+  const raw = String(regime || "").trim();
+  if (!raw) return "";
+  const norm = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  if (norm.includes("CONTRIBUYENTE") || norm.includes("REGIMEN")) return raw.toUpperCase();
+  return `CONTRIBUYENTE RÉGIMEN ${raw.toUpperCase()}`;
+}
+
+/** Hay datos SRI útiles para vista previa (no solo defaults vacíos). */
+export function hasSriPreviewData(sriSettings) {
+  if (!sriSettings || typeof sriSettings !== "object") return false;
+  const ruc = String(sriSettings.ruc || "").trim();
+  const legal = String(sriSettings.legalName || "").trim();
+  return ruc.length === 13 || legal.length > 0;
+}
+
+/**
+ * Etiqueta de régimen para el RIDE.
+ * Respeta showTaxRegime en receiptDetailSettings.
+ * En plantilla de prueba (fromSettingsPreview) usa RIMPE si SRI no tiene valor.
+ */
+export function resolveRideTaxRegimeLabel(fiscal, detailSettings) {
+  if (detailSettings && detailSettings.showTaxRegime === false) return "";
+  const raw = String(fiscal?.taxRegime || "").trim();
+  if (raw) return formatTaxRegimeLabel(raw);
+  if (fiscal?.fromSettingsPreview) return formatTaxRegimeLabel("RIMPE");
+  return "";
+}
+
+export function shouldShowAccountingRequired(detailSettings) {
+  return !detailSettings || detailSettings.showAccountingRequired !== false;
+}
+
+export function shouldShowSpecialTaxpayer(detailSettings) {
+  return !detailSettings || detailSettings.showSpecialTaxpayer !== false;
+}
+
 /** Forma de pago según catálogo SRI (texto largo como en RIDE). */
 export function sriPaymentFormLabel(method) {
   const m = String(method || "")
@@ -117,6 +161,10 @@ export function enrichReceiptWithFiscal(receipt, sriSettings, sriInvoice = null,
       phone: sriSettings?.phone || "",
       email: sriSettings?.email || "",
       accountingRequired: Boolean(sriSettings?.accountingRequired),
+      taxRegime: String(sriSettings?.taxRegime || "").trim(),
+      specialTaxpayerResolution: String(
+        sriSettings?.specialTaxpayerResolution || "",
+      ).trim(),
       environment: sriSettings?.environment || sriInvoice?.environment || "pruebas",
       environmentLabel: environmentLabel(
         sriInvoice?.environment || sriSettings?.environment,

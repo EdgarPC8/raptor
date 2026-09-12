@@ -501,6 +501,7 @@ export default function NavBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const isPromoEditor = /\/diseno-promocional\/editor\/\d+/.test(location.pathname);
+  const isConfigPage = /\/configuracion\/?$/.test(location.pathname) || location.pathname.includes("/sistema/configuracion");
   const { isAuthenticated, isLoading, isGuest, user, logout, profileImageUser, toast } =
     useAuth();
   const { activeApp } = useAppSettings();
@@ -1305,9 +1306,11 @@ export default function NavBar() {
                 alignSelf: "stretch",
               }
             : {
-                pt: 10,
-                px: { xs: 1.5, sm: 2, md: 3 },
-                pb: 3,
+                pt: isConfigPage ? 8.5 : 10,
+                px: isConfigPage
+                  ? { xs: 1, sm: 1.25, md: 1.5 }
+                  : { xs: 1.5, sm: 2, md: 3 },
+                pb: isConfigPage ? 2 : 3,
                 overflowX: "hidden",
               }),
         }}

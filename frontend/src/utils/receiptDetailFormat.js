@@ -6,6 +6,11 @@ import {
   DEFAULT_RECEIPT_TABLE_LAYOUTS,
   normalizeReceiptTableLayouts,
 } from "./receiptTableColumns.js";
+import {
+  enrichReceiptWithFiscal,
+  formatInvoiceNumber,
+  hasSriPreviewData,
+} from "./invoiceFiscalUtils.js";
 
 export const PRODUCT_NAME_CASE_OPTIONS = [
   { value: "as_stored", label: "Como está en la base de datos" },
@@ -24,6 +29,10 @@ export const DEFAULT_RECEIPT_DETAIL_SETTINGS = {
   collapseSpaces: true,
   applyToFactura: true,
   applyToNotaVenta: true,
+  /** RIDE: mostrar régimen (RIMPE, etc.). En plantilla usa texto de prueba si SRI no tiene valor. */
+  showTaxRegime: true,
+  showAccountingRequired: true,
+  showSpecialTaxpayer: true,
   defaultPrintFormat: "a4",
   tableLayouts: normalizeReceiptTableLayouts(DEFAULT_RECEIPT_TABLE_LAYOUTS),
 };
@@ -53,6 +62,11 @@ export function normalizeReceiptDetailSettings(raw) {
     applyToFactura: src.applyToFactura !== false && src.applyToFactura !== "false",
     applyToNotaVenta:
       src.applyToNotaVenta !== false && src.applyToNotaVenta !== "false",
+    showTaxRegime: src.showTaxRegime !== false && src.showTaxRegime !== "false",
+    showAccountingRequired:
+      src.showAccountingRequired !== false && src.showAccountingRequired !== "false",
+    showSpecialTaxpayer:
+      src.showSpecialTaxpayer !== false && src.showSpecialTaxpayer !== "false",
     defaultPrintFormat: normalizePrintFormat(src.defaultPrintFormat, "a4"),
     tableLayouts: normalizeReceiptTableLayouts(src.tableLayouts),
   };
@@ -194,3 +208,114 @@ export const RECEIPT_PREVIEW_SAMPLE_ITEMS = [
     subtotal: 1.1,
   },
 ];
+
+/**
+ * Comprobante de vista previa (plantilla).
+ * Si hay config SRI con RUC/razón social, usa esos datos; si no, mock de prueba.
+ */
+export function buildReceiptPreview({
+  documentType = "nota_venta",
+  businessName = "Mi negocio",
+  sriSettings = null,
+} = {}) {
+  const items = RECEIPT_PREVIEW_SAMPLE_ITEMS.map((it) => ({
+    ...it,
+    code: it.barcode || it.code || "",
+    discount: Number(it.discount || 0),
+    subtotal: it.subtotal ?? it.lineTotal,
+    iva: 0,
+    taxRate: documentType === "factura" ? 15 : 0,
+  }));
+  const subtotal = items.reduce(
+    (a, it) => a + Number(it.subtotal ?? it.lineTotal ?? 0),
+    0,
+  );
+  const iva = documentType === "factura" ? Number((subtotal * 0.15).toFixed(2)) : 0;
+  const isFactura = documentType === "factura";
+  const fallbackName = businessName || "Mi negocio";
+
+  const base = {
+    id: isFactura ? "001-001-000000123" : "NV-DEMO-001",
+    documentType,
+    documentTypeLabel: isFactura ? "Factura" : "Nota de venta",
+    documentTitle: isFactura ? "FACTURA" : "NOTA DE VENTA",
+    businessName: fallbackName,
+    businessDescription: "Plantilla de prueba — configuración del sistema",
+    date: new Date().toLocaleString("es-EC"),
+    dateIso: new Date().toISOString().slice(0, 10),
+    customerName: isFactura ? "Cliente Demo S.A." : "Consumidor Final",
+    customerCedula: isFactura ? "1790000000001" : "",
+    customerAddress: "Av. Ejemplo 123",
+    customerPhone: "0999999999",
+    customerEmail: "demo@correo.com",
+    items,
+    subtotal,
+    iva,
+    total: Number((subtotal + iva).toFixed(2)),
+    paymentMethod: "Efectivo",
+  };
+
+  if (!isFactura) return base;
+
+  if (hasSriPreviewData(sriSettings)) {
+    const seq = Math.max(1, Number(sriSettings.nextInvoiceSequential) || 1);
+    const enriched = enrichReceiptWithFiscal(
+      {
+        ...base,
+        businessName: sriSettings.legalName || fallbackName,
+        businessDescription: sriSettings.tradeName || "",
+      },
+      sriSettings,
+      null,
+      {},
+    );
+    const invoiceNumber =
+      enriched.fiscal.invoiceNumber ||
+      formatInvoiceNumber(
+        sriSettings.establishmentCode,
+        sriSettings.emissionPointCode,
+        seq,
+      );
+    return {
+      ...enriched,
+      id: invoiceNumber,
+      businessName: sriSettings.legalName || fallbackName,
+      businessDescription: sriSettings.tradeName || "",
+      fiscal: {
+        ...enriched.fiscal,
+        sequential: seq,
+        invoiceNumber,
+        accessKey: "",
+        authorizationNumber: "",
+        authorizedAt: null,
+        emissionDate: base.dateIso,
+        /** Si SRI no tiene régimen, plantilla muestra ejemplo RIMPE. */
+        taxRegime: String(enriched.fiscal.taxRegime || "").trim() || "RIMPE",
+        fromSettingsPreview: true,
+      },
+    };
+  }
+
+  return {
+    ...base,
+    fiscal: {
+      legalName: fallbackName,
+      tradeName: "Plantilla de prueba",
+      ruc: "1790000000001",
+      invoiceNumber: "001-001-000000123",
+      environment: "pruebas",
+      environmentLabel: "PRUEBAS",
+      authorizationNumber: "",
+      accessKey: "",
+      matrixAddress: "Av. Ejemplo 123",
+      establishmentAddress: "Av. Ejemplo 123",
+      phone: "",
+      email: "",
+      accountingRequired: false,
+      taxRegime: "RIMPE",
+      specialTaxpayerResolution: "",
+      emissionDate: base.dateIso,
+      fromSettingsPreview: true,
+    },
+  };
+}

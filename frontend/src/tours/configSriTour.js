@@ -8,38 +8,39 @@ export function getConfigSriTourSteps() {
       popover: {
         title: "Estado SRI",
         description:
-          "Chips de listo/falta, ambiente (pruebas o producción) y si el módulo está activado. El cobro en Caja sigue igual hasta que se emita factura.",
+          "Chips de listo/falta, ambiente, módulo y correo. El cobro en Caja sigue igual hasta emitir factura.",
+        side: "bottom",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='sri-tabs']",
+      popover: {
+        title: "Dos pestañas",
+        description:
+          "Facturación SRI: RUC, emisor y firma .p12. Correo: SMTP para enviar la factura al cliente al autorizar.",
         side: "bottom",
         align: "start",
       },
     },
     {
       element: "[data-tour='sri-enabled']",
+      allowMissing: true,
       popover: {
         title: "Activar módulo",
         description:
-          "Flag para cuando exista emisión al SRI. No cambia el POS actual (consumidor final / comprobantes).",
+          "Flag para emisión al SRI (pestaña Facturación SRI). No cambia el POS actual.",
         side: "bottom",
         align: "start",
       },
     },
     {
       element: "[data-tour='sri-emitter']",
+      allowMissing: true,
       popover: {
         title: "Datos del emisor",
         description:
-          "RUC, razón social, direcciones, establecimiento y punto de emisión. Verde = OK, rojo = falta obligatorio, amarillo = opcional.",
-        side: "top",
-        align: "start",
-      },
-    },
-    {
-      element: "[data-tour='sri-invoice-email']",
-      allowMissing: true,
-      popover: {
-        title: "Correo de facturas",
-        description:
-          "Opciones de envío o plantilla de correo asociadas a la factura electrónica, cuando el flujo de emisión esté activo.",
+          "RUC, razón social, direcciones, establecimiento y punto de emisión. Verde = OK, rojo = falta, amarillo = opcional.",
         side: "top",
         align: "start",
       },
@@ -50,7 +51,18 @@ export function getConfigSriTourSteps() {
       popover: {
         title: "Firma electrónica",
         description:
-          "Sube el certificado .p12/.pfx y la contraseña. La clave se cifra en el servidor y no se vuelve a mostrar.",
+          "Sube el certificado .p12/.pfx y la contraseña. La clave se cifra y no se vuelve a mostrar.",
+        side: "top",
+        align: "start",
+      },
+    },
+    {
+      element: "[data-tour='sri-invoice-email']",
+      allowMissing: true,
+      popover: {
+        title: "Correo de facturas",
+        description:
+          "Cambia a la pestaña Correo: activa el envío, configura SMTP y prueba. Al autorizar, la factura llega al email del cliente.",
         side: "top",
         align: "start",
       },
@@ -58,9 +70,9 @@ export function getConfigSriTourSteps() {
     {
       element: "[data-tour='config-save']",
       popover: {
-        title: "Guardar facturación SRI",
+        title: "Guardar",
         description:
-          "Guarda los datos fiscales y la contraseña de firma (si la escribiste). El estado «listo» aparece cuando RUC, emisor y certificado están completos.",
+          "Guarda datos fiscales, firma y SMTP de ambas pestañas. «Listo» aparece cuando RUC, emisor y certificado están completos.",
         side: "left",
         align: "end",
       },

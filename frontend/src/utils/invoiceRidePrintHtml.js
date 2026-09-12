@@ -3,6 +3,9 @@ import { code128SvgMarkup } from "./code128Barcode.js";
 import {
   formatInvoiceMoney,
   formatInvoiceUnitPrice,
+  resolveRideTaxRegimeLabel,
+  shouldShowAccountingRequired,
+  shouldShowSpecialTaxpayer,
   sriPaymentFormLabel,
   dominantIvaRate,
 } from "./invoiceFiscalUtils.js";
@@ -109,10 +112,13 @@ function customerHtml(receipt, emissionDate, isTicket) {
   </div>`;
 }
 
-function issuerHtml(receipt, fiscal, isTicket) {
+function issuerHtml(receipt, fiscal, isTicket, detailCfg) {
   const logo = receipt.logoUrl
     ? `<img src="${esc(receipt.logoUrl)}" alt="" style="max-width:${isTicket ? 120 : 160}px;max-height:${isTicket ? 70 : 90}px;object-fit:contain;margin:0 ${isTicket ? "auto" : 0} 6px;display:block" />`
     : "";
+  const regimeLabel = resolveRideTaxRegimeLabel(fiscal, detailCfg);
+  const showAccounting = shouldShowAccountingRequired(detailCfg);
+  const showSpecial = shouldShowSpecialTaxpayer(detailCfg);
   return `<div style="text-align:${isTicket ? "center" : "left"}">
     ${logo}
     <div style="font-weight:900;font-size:${isTicket ? "0.95em" : "1.05em"};line-height:1.25">${esc(fiscal.legalName || receipt.businessName)}</div>
@@ -123,7 +129,17 @@ function issuerHtml(receipt, fiscal, isTicket) {
     }
     ${fiscal.matrixAddress ? `<div style="font-weight:600;font-size:0.82em;margin-top:4px"><strong>Matriz: </strong>${esc(fiscal.matrixAddress)}</div>` : ""}
     ${fiscal.establishmentAddress ? `<div style="font-weight:600;font-size:0.82em"><strong>Sucursal: </strong>${esc(fiscal.establishmentAddress)}</div>` : ""}
-    <div style="font-weight:600;font-size:0.82em;margin-top:3px"><strong>Obligado a llevar Contabilidad: </strong>${fiscal.accountingRequired ? "SI" : "NO"}</div>
+    ${
+      showAccounting
+        ? `<div style="font-weight:600;font-size:0.82em;margin-top:3px"><strong>Obligado a llevar Contabilidad: </strong>${fiscal.accountingRequired ? "SI" : "NO"}</div>`
+        : ""
+    }
+    ${regimeLabel ? `<div style="font-weight:700;font-size:0.82em;margin-top:2px">${esc(regimeLabel)}</div>` : ""}
+    ${
+      showSpecial && fiscal.specialTaxpayerResolution
+        ? `<div style="font-weight:600;font-size:0.82em"><strong>Contribuyente Especial: </strong>${esc(fiscal.specialTaxpayerResolution)}</div>`
+        : ""
+    }
     ${fiscal.phone ? `<div style="font-weight:600;font-size:0.82em">${esc(fiscal.phone)}</div>` : ""}
     ${fiscal.email ? `<div style="font-weight:600;font-size:0.82em">${esc(fiscal.email)}</div>` : ""}
   </div>`;
@@ -260,7 +276,7 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4", options = {}) 
   if (isTicket) {
     return `<div style="width:${w};max-width:${w};margin:0 auto;padding:${pad};box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:${fs};color:#000;line-height:1.3">
       ${docMeta}
-      <div style="margin:8px 0">${issuerHtml(receipt, fiscal, true)}</div>
+      <div style="margin:8px 0">${issuerHtml(receipt, fiscal, true, detailCfg)}</div>
       ${ticketAuth}
       <div style="border-top:1px solid #000;border-bottom:1px solid #000;padding:4px 0;margin:8px 0"></div>
       ${customerHtml(receipt, emissionDate, true)}
@@ -272,7 +288,7 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4", options = {}) 
 
   return `<div style="width:${w};max-width:${w};margin:0 auto;padding:${pad};box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;font-size:${fs};color:#000;line-height:1.3">
     <div style="display:grid;grid-template-columns:1.05fr 0.95fr;gap:10px;margin-bottom:10px">
-      <div style="border:1px solid #000;padding:10px">${issuerHtml(receipt, fiscal, false)}</div>
+      <div style="border:1px solid #000;padding:10px">${issuerHtml(receipt, fiscal, false, detailCfg)}</div>
       <div style="border:1px solid #000;padding:10px">${docMeta}</div>
     </div>
     ${customerHtml(receipt, emissionDate, false)}

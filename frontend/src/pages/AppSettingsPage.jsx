@@ -70,7 +70,6 @@ import { APP_TIMEZONE_OPTIONS } from "../utils/appDateTime.js";
 import {
   DEFAULT_RECEIPT_DETAIL_SETTINGS,
   normalizeReceiptDetailSettings,
-  PRODUCT_NAME_CASE_OPTIONS,
 } from "../utils/receiptDetailFormat.js";
 import {
   DEFAULT_THEME_PALETTE,
@@ -360,20 +359,6 @@ export default function AppSettingsPage() {
 
   const onChange = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
   const onToggle = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.checked }));
-  const onReceiptDetailChange = (key) => (e) => {
-    const value =
-      e?.target?.type === "checkbox" ? e.target.checked : e.target.value;
-    setForm((f) => ({
-      ...f,
-      receiptDetailSettings: {
-        ...(f.receiptDetailSettings || DEFAULT_RECEIPT_DETAIL_SETTINGS),
-        [key]:
-          key === "maxNameLength"
-            ? Number(value) || 0
-            : value,
-      },
-    }));
-  };
   const onDefaultPrintFormat = (value) => {
     setForm((f) => ({
       ...f,
@@ -567,7 +552,7 @@ export default function AppSettingsPage() {
 
   if (loading || !form) {
     return (
-      <Box sx={{ maxWidth: 1040, mx: "auto", py: 3, px: 2 }}>
+      <Box sx={{ width: "100%", maxWidth: 1480, mx: "auto", py: 1, px: { xs: 0.5, sm: 1 }, pb: 2 }}>
         <PageSkeleton />
       </Box>
     );
@@ -579,13 +564,13 @@ export default function AppSettingsPage() {
     : activeApp.iconUrl || null;
 
   return (
-    <Box sx={{ maxWidth: 1040, mx: "auto", py: 3, px: 2, pb: 10 }}>
+    <Box sx={{ width: "100%", maxWidth: 1480, mx: "auto", pt: 0.5, px: { xs: 0.5, sm: 1 }, pb: 10 }}>
       <Stack
         data-tour="config-header"
         direction="row"
         alignItems="center"
         spacing={1}
-        sx={{ mb: 0.5 }}
+        sx={{ mb: 0.25 }}
         flexWrap="wrap"
       >
         <Typography variant="h5" fontWeight={800}>
@@ -600,7 +585,7 @@ export default function AppSettingsPage() {
           }
         />
       </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>
         Elegí una categoría arriba. Se irán sumando más opciones según el módulo.
       </Typography>
 
@@ -653,7 +638,7 @@ export default function AppSettingsPage() {
           ))}
         </Tabs>
 
-        <Box sx={{ p: { xs: 2, sm: 2.75 }, minHeight: 360 }}>
+        <Box sx={{ p: { xs: 1.25, sm: 1.75 }, minHeight: 360 }}>
           {tab === "marca" && (
             <>
               <SettingsSection
@@ -1211,13 +1196,11 @@ export default function AppSettingsPage() {
             <>
             <SettingsSection
               title="Impresión"
-              hint="Tamaño de papel para factura, nota de venta y el resto del sistema (caja, pedidos, cobros)."
+              hint="Un solo tamaño para todo: predeterminado al imprimir y el que editas en Columnas. A4, 80 mm y 55 mm guardan layouts aparte."
               tourId="config-receipt-print"
             >
               <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1}
-                alignItems={{ xs: "stretch", sm: "center" }}
+                direction="row"
                 justifyContent="flex-end"
                 sx={{ mb: 0.5 }}
               >
@@ -1232,8 +1215,8 @@ export default function AppSettingsPage() {
                 </Button>
               </Stack>
               <SettingsRow
-                label="Formato predeterminado"
-                description="A4, ticket 80 mm o 55 mm. Se puede cambiar en cada impresión."
+                label="Formato"
+                description="Vale para caja, pedidos y para editar columnas abajo. Cada tamaño tiene su propio layout."
                 align="flex-start"
                 wide
                 control={
@@ -1246,7 +1229,7 @@ export default function AppSettingsPage() {
             </SettingsSection>
             <SettingsSection
               title="Columnas y anchos"
-              hint="Por tipo de comprobante (factura / nota) y tamaño (A4, 80 mm, 55 mm): orden, columnas visibles y anchos. Vista previa con productos de prueba."
+              hint="Izquierda: columnas, RIDE y texto del detalle. Derecha: vista previa. El tamaño es el de Impresión (arriba)."
               tourId="config-receipt-columns"
             >
               <ReceiptTableColumnsEditor
@@ -1254,79 +1237,6 @@ export default function AppSettingsPage() {
                 onChange={onReceiptDetailSettingsReplace}
                 businessName={form.alias || form.name || activeApp?.alias}
               />
-            </SettingsSection>
-            <SettingsSection
-              title="Texto del detalle"
-              hint="Cómo se ven los productos en factura / nota de venta. No cambia la BD."
-              tourId="config-receipt-detail"
-            >
-              <SettingsRow
-                label="Mayúsculas / minúsculas"
-                description="Formato del nombre del producto en el comprobante."
-                control={
-                  <TextField
-                    select
-                    size="small"
-                    fullWidth
-                    value={form.receiptDetailSettings?.productNameCase || "as_stored"}
-                    onChange={onReceiptDetailChange("productNameCase")}
-                  >
-                    {PRODUCT_NAME_CASE_OPTIONS.map((opt) => (
-                      <MenuItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                }
-              />
-              <SettingsRow
-                label="Límite de caracteres"
-                description="0 = sin límite. Útil en tickets angostos."
-                control={
-                  <TextField
-                    size="small"
-                    fullWidth
-                    type="number"
-                    value={form.receiptDetailSettings?.maxNameLength ?? 0}
-                    onChange={onReceiptDetailChange("maxNameLength")}
-                    inputProps={{ min: 0, max: 200 }}
-                  />
-                }
-              />
-              {[
-                ["showLineNumber", "Número de línea", "Muestra 1., 2., …"],
-                ["showBarcode", "Código / barras", "Junto al nombre del producto"],
-                ["showUnit", "Unidad de medida", "Abreviatura de la unidad"],
-                ["trimSpaces", "Recortar espacios", "Inicio y final del nombre"],
-                ["collapseSpaces", "Colapsar espacios", "Varios espacios → uno"],
-                ["applyToFactura", "Aplicar a factura", "Factura electrónica SRI"],
-                ["applyToNotaVenta", "Aplicar a nota de venta", "Comprobante interno"],
-              ].map(([key, label, description]) => {
-                const checked =
-                  key === "showLineNumber" || key === "showBarcode" || key === "showUnit"
-                    ? Boolean(form.receiptDetailSettings?.[key])
-                    : form.receiptDetailSettings?.[key] !== false;
-                return (
-                  <SettingsRow
-                    key={key}
-                    label={label}
-                    description={description}
-                    control={
-                      <FormControlLabel
-                        sx={{ m: 0 }}
-                        control={
-                          <Switch
-                            size="small"
-                            checked={checked}
-                            onChange={onReceiptDetailChange(key)}
-                          />
-                        }
-                        label={checked ? "Activado" : "Desactivado"}
-                      />
-                    }
-                  />
-                );
-              })}
             </SettingsSection>
             </>
           )}

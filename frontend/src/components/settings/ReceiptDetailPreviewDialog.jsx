@@ -1,5 +1,6 @@
 /**
- * Modal de vista previa: plantilla de prueba del detalle de factura / nota de venta.
+ * Modal de vista previa: plantilla del detalle de factura / nota de venta.
+ * Si hay config SRI (RUC / razón social), usa esos datos; si no, mock de prueba.
  * Mismos formatos de impresión que el resto del sistema (A4 / 80 mm / 55 mm).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -26,7 +27,7 @@ import PrintThermalHint from "../saleReceipt/PrintThermalHint.jsx";
 import {
   DEFAULT_RECEIPT_DETAIL_SETTINGS,
   normalizeReceiptDetailSettings,
-  RECEIPT_PREVIEW_SAMPLE_ITEMS,
+  buildReceiptPreview,
 } from "../../utils/receiptDetailFormat.js";
 import { getReceiptLayout, normalizePrintFormat } from "../../utils/receiptFormats.js";
 import { printSaleReceipt } from "../../utils/saleReceiptUtils.js";
@@ -34,52 +35,8 @@ import {
   downloadReceiptAsPng,
   downloadReceiptAsPdf,
 } from "../../utils/saleReceiptExport.js";
-
-function buildPreviewReceipt({ documentType, businessName }) {
-  const items = RECEIPT_PREVIEW_SAMPLE_ITEMS.map((it) => ({
-    ...it,
-    code: it.barcode || "",
-    discount: 0,
-    subtotal: it.lineTotal,
-    iva: 0,
-    taxRate: documentType === "factura" ? 15 : 0,
-  }));
-  const subtotal = items.reduce((a, it) => a + Number(it.lineTotal || 0), 0);
-  const iva = documentType === "factura" ? Number((subtotal * 0.15).toFixed(2)) : 0;
-  const isFactura = documentType === "factura";
-  return {
-    id: isFactura ? "001-001-000000123" : "NV-DEMO-001",
-    documentType,
-    documentTypeLabel: isFactura ? "Factura" : "Nota de venta",
-    documentTitle: isFactura ? "FACTURA" : "NOTA DE VENTA",
-    businessName: businessName || "Mi negocio",
-    businessDescription: "Plantilla de prueba — configuración del sistema",
-    date: new Date().toLocaleString("es-EC"),
-    customerName: isFactura ? "Cliente Demo S.A." : "Consumidor Final",
-    customerCedula: isFactura ? "1790000000001" : "",
-    customerAddress: "Av. Ejemplo 123",
-    customerEmail: "demo@correo.com",
-    items,
-    subtotal,
-    iva,
-    total: Number((subtotal + iva).toFixed(2)),
-    paymentMethod: "Efectivo",
-    fiscal: isFactura
-      ? {
-          legalName: businessName || "Mi negocio",
-          tradeName: "Plantilla de prueba",
-          ruc: "1790000000001",
-          invoiceNumber: "001-001-000000123",
-          environmentLabel: "Pruebas",
-          authorizationNumber: "1234567890",
-          accessKey: "1234567890123456789012345678901234567890123456789",
-          matrixAddress: "Av. Ejemplo 123",
-          accountingRequired: false,
-          fromSettingsPreview: true,
-        }
-      : undefined,
-  };
-}
+import { fetchSriBillingSettings } from "../../api/sriBillingRequest.js";
+import { hasSriPreviewData } from "../../utils/invoiceFiscalUtils.js";
 
 export default function ReceiptDetailPreviewDialog({
   open,
@@ -97,6 +54,7 @@ export default function ReceiptDetailPreviewDialog({
     normalizePrintFormat(cfg.defaultPrintFormat),
   );
   const [exporting, setExporting] = useState(false);
+  const [sriSettings, setSriSettings] = useState(null);
   const previewRef = useRef(null);
 
   useEffect(() => {
@@ -105,13 +63,31 @@ export default function ReceiptDetailPreviewDialog({
     }
   }, [open, cfg.defaultPrintFormat]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    fetchSriBillingSettings()
+      .then((data) => {
+        if (!cancelled) setSriSettings(data || null);
+      })
+      .catch(() => {
+        if (!cancelled) setSriSettings(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const usingSri = hasSriPreviewData(sriSettings);
+
   const receipt = useMemo(
     () =>
-      buildPreviewReceipt({
+      buildReceiptPreview({
         documentType: docType,
         businessName,
+        sriSettings,
       }),
-    [docType, businessName],
+    [docType, businessName, sriSettings],
   );
 
   const layout = getReceiptLayout(format);
@@ -162,6 +138,12 @@ export default function ReceiptDetailPreviewDialog({
     }
   };
 
+  const hintText = isFactura
+    ? usingSri
+      ? "Factura con tus datos SRI (RUC, régimen, ambiente). Autorización pendiente hasta emitir. Los productos son de ejemplo."
+      : "Sin RUC/razón social en SRI: se muestra plantilla de prueba. Configura Facturación SRI para ver tus datos reales."
+    : "Productos de prueba con mayúsculas/minúsculas mezcladas para ver el efecto de la configuración. El formato elegido queda como predeterminado al guardar Configuración.";
+
   return (
     <Dialog
       open={open}
@@ -180,7 +162,9 @@ export default function ReceiptDetailPreviewDialog({
         }}
       >
         <DialogTitle sx={{ p: 0, fontWeight: 700, fontSize: "1.05rem" }}>
-          Plantilla de prueba — detalle del comprobante
+          {isFactura && usingSri
+            ? "Vista previa — detalle del comprobante"
+            : "Plantilla de prueba — detalle del comprobante"}
         </DialogTitle>
         <IconButton aria-label="Cerrar" onClick={onClose} size="small">
           <CloseIcon />
@@ -214,9 +198,7 @@ export default function ReceiptDetailPreviewDialog({
             <PrintFormatToggle value={format} onChange={handleFormat} />
           </Box>
           <Typography variant="caption" color="text.secondary">
-            Productos de prueba con mayúsculas/minúsculas mezcladas para ver el efecto de la
-            configuración. No es un comprobante real. El formato elegido queda como
-            predeterminado al guardar Configuración.
+            {hintText}
           </Typography>
           <PrintThermalHint format={format} />
           <Box
