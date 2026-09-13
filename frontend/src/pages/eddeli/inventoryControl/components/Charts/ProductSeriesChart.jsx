@@ -283,7 +283,6 @@ export default function ProductSeriesChart({
           ]}
           series={series}
           height={chartHeight}
-          experimentalFeatures={{ preferStrictDomainInLineCharts: true }}
           margin={{ left: 4, right: 8, top: 8, bottom: 24 }}
           slotProps={{
             axisLine: { stroke: axisStroke },

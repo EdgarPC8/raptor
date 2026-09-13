@@ -24,6 +24,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import ViewModuleIcon from "@mui/icons-material/ViewModule";
 import TableRowsIcon from "@mui/icons-material/TableRows";
 import StorefrontIcon from "@mui/icons-material/Storefront";
+import FactCheckIcon from "@mui/icons-material/FactCheck";
 import SearchIcon from "@mui/icons-material/Search";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -34,6 +35,7 @@ import TourHelpButton from "../../../components/TourHelpButton.jsx";
 import ProductForm from "./components/ProductForm";
 import ProductsGridView from "./components/ProductsGridView";
 import ProductsByStoreView from "./components/ProductsByStoreView";
+import ProductsReviewPanel from "./components/ProductsReviewPanel";
 import ProductStoreStocksDialog from "./ProductStoreStocksDialog.jsx";
 import {
   getAllProductsAll,
@@ -514,6 +516,10 @@ function ProductsPage() {
             <TableRowsIcon sx={{ mr: 0.5 }} fontSize="small" />
             Tabla
           </ToggleButton>
+          <ToggleButton value="review" aria-label="revision">
+            <FactCheckIcon sx={{ mr: 0.5 }} fontSize="small" />
+            Revisión
+          </ToggleButton>
           {multiStockEnabled ? (
             <ToggleButton value="byStore" aria-label="por local">
               <StorefrontIcon sx={{ mr: 0.5 }} fontSize="small" />
@@ -569,6 +575,17 @@ function ProductsPage() {
             loading={loading}
           />
         </Paper>
+      ) : viewMode === "review" ? (
+        <ProductsReviewPanel
+          products={filteredTableData}
+          loadingProducts={loading}
+          onEdit={openEditProduct}
+          onDeleteRequest={(product) => {
+            setDataToDelete(product);
+            setOpen(true);
+          }}
+          onReload={fecthData}
+        />
       ) : viewMode === "byStore" && multiStockEnabled ? (
         <ProductsByStoreView
           products={data}

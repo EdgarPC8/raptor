@@ -21,7 +21,9 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
+  TableSortLabel,
   TextField,
   Tooltip,
   Typography,
@@ -134,6 +136,10 @@ export default function GenericIngredientsPage() {
   const [listFilter, setListFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [expandedTargets, setExpandedTargets] = useState(() => new Set());
+  const [orderBy, setOrderBy] = useState("name");
+  const [orderDirection, setOrderDirection] = useState("asc");
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   const [openLink, setOpenLink] = useState(false);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
@@ -362,21 +368,16 @@ export default function GenericIngredientsPage() {
   }, [openLink, selectedLink?.id, selectedTarget?.id, suggestedPackQty]);
   const allProductRows = useMemo(() => {
     const q = listFilter.trim().toLowerCase();
-    return [...allProducts]
-      .filter((p) => {
-        const kind = productKind(p);
-        if (typeFilter !== "all" && kind !== typeFilter) return false;
-        if (!q) return true;
-        return `${p.name} ${p.type} ${kind} ${productKindLabel(p)} ${p.sku || ""} ${p.barcode || ""}`
-          .toLowerCase()
-          .includes(q);
-      })
-      .sort((a, b) => {
-        const typeOrder = { final: 0, intermediate: 1, insumo: 2 };
-        const diff = (typeOrder[productKind(a)] ?? 9) - (typeOrder[productKind(b)] ?? 9);
-        return diff || String(a.name).localeCompare(String(b.name), "es");
-      });
+    return [...allProducts].filter((p) => {
+      const kind = productKind(p);
+      if (typeFilter !== "all" && kind !== typeFilter) return false;
+      if (!q) return true;
+      return `${p.name} ${p.type} ${kind} ${productKindLabel(p)} ${p.sku || ""} ${p.barcode || ""}`
+        .toLowerCase()
+        .includes(q);
+    });
   }, [allProducts, listFilter, typeFilter]);
+
   const productById = useMemo(
     () => new Map(allProducts.map((p) => [Number(p.id), p])),
     [allProducts],
@@ -391,6 +392,68 @@ export default function GenericIngredientsPage() {
     });
     return map;
   }, [allProducts]);
+
+  const sortedProductRows = useMemo(() => {
+    const typeOrder = { final: 0, intermediate: 1, insumo: 2 };
+    const dir = orderDirection === "asc" ? 1 : -1;
+    const getTargetName = (p) => {
+      if (!p.genericProductId) return "";
+      return productById.get(Number(p.genericProductId))?.name || "";
+    };
+    const getLinksCount = (p) => (linksByTarget.get(Number(p.id)) || []).length;
+
+    return [...allProductRows].sort((a, b) => {
+      let cmp = 0;
+      switch (orderBy) {
+        case "type":
+          cmp =
+            (typeOrder[productKind(a)] ?? 9) - (typeOrder[productKind(b)] ?? 9);
+          break;
+        case "stock":
+          cmp = Number(a.stock || 0) - Number(b.stock || 0);
+          break;
+        case "target":
+          cmp = String(getTargetName(a)).localeCompare(String(getTargetName(b)), "es", {
+            sensitivity: "base",
+          });
+          break;
+        case "links":
+          cmp = getLinksCount(a) - getLinksCount(b);
+          break;
+        case "name":
+        default:
+          cmp = String(a.name || "").localeCompare(String(b.name || ""), "es", {
+            sensitivity: "base",
+          });
+          break;
+      }
+      if (cmp !== 0) return cmp * dir;
+      return String(a.name || "").localeCompare(String(b.name || ""), "es") * dir;
+    });
+  }, [allProductRows, orderBy, orderDirection, productById, linksByTarget]);
+
+  const pagedProductRows = useMemo(() => {
+    const start = page * rowsPerPage;
+    return sortedProductRows.slice(start, start + rowsPerPage);
+  }, [sortedProductRows, page, rowsPerPage]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [listFilter, typeFilter, orderBy, orderDirection]);
+
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(sortedProductRows.length / rowsPerPage) - 1);
+    if (page > maxPage) setPage(maxPage);
+  }, [sortedProductRows.length, rowsPerPage, page]);
+
+  const handleSort = (columnId) => {
+    if (orderBy === columnId) {
+      setOrderDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setOrderBy(columnId);
+      setOrderDirection(columnId === "stock" || columnId === "links" ? "desc" : "asc");
+    }
+  };
   const toggleTarget = (id) => {
     setExpandedTargets((previous) => {
       const next = new Set(previous);
@@ -431,17 +494,20 @@ export default function GenericIngredientsPage() {
 
       <Paper sx={{ borderRadius: 2, overflow: "hidden" }} data-tour="insumos-table">
         <Stack
-          direction={{ xs: "column", sm: "row" }}
+          direction="row"
           spacing={1}
-          sx={{ p: 1.5, borderBottom: 1, borderColor: "divider" }}
+          useFlexGap
+          flexWrap="wrap"
+          alignItems="center"
+          sx={{ p: 1.5, borderBottom: 1, borderColor: "divider", width: "100%", minWidth: 0 }}
         >
           <TextField
             size="small"
-            fullWidth
             data-tour="insumos-search"
             placeholder="Buscar producto, tipo, SKU o código…"
             value={listFilter}
             onChange={(e) => setListFilter(e.target.value)}
+            sx={{ flex: "1 1 200px", minWidth: 0, maxWidth: "100%" }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -456,7 +522,7 @@ export default function GenericIngredientsPage() {
             label="Tipo"
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            sx={{ minWidth: { xs: "100%", sm: 180 } }}
+            sx={{ flex: "0 1 150px", minWidth: 120, maxWidth: "100%" }}
             data-tour="insumos-type-filter"
             SelectProps={{ native: false }}
           >
@@ -467,32 +533,80 @@ export default function GenericIngredientsPage() {
           </TextField>
           <Button
             variant="contained"
+            size="small"
             startIcon={<LinkIcon />}
             onClick={() => openLinkModal()}
-            sx={{ whiteSpace: "nowrap" }}
+            sx={{ flex: "0 0 auto", whiteSpace: "nowrap" }}
             data-tour="insumos-config-link"
           >
             Configurar enlace
           </Button>
           <Button
             variant="outlined"
+            size="small"
             startIcon={<AddIcon />}
             onClick={openCreateProduct}
-            sx={{ whiteSpace: "nowrap" }}
+            sx={{ flex: "0 0 auto", whiteSpace: "nowrap" }}
           >
             Crear producto
           </Button>
         </Stack>
-        <TableContainer sx={{ maxHeight: "calc(100vh - 240px)" }}>
+        <TableContainer sx={{ maxHeight: "calc(100vh - 280px)" }}>
           <Table stickyHeader size="small">
             <TableHead>
               <TableRow>
                 <TableCell sx={{ width: 44 }} />
-                <TableCell>Producto</TableCell>
-                <TableCell>Tipo</TableCell>
-                <TableCell align="right">Stock</TableCell>
-                <TableCell>Destino al abrir</TableCell>
-                <TableCell align="center">Enlaces</TableCell>
+                <TableCell sortDirection={orderBy === "name" ? orderDirection : false}>
+                  <TableSortLabel
+                    active={orderBy === "name"}
+                    direction={orderBy === "name" ? orderDirection : "asc"}
+                    onClick={() => handleSort("name")}
+                  >
+                    Producto
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sortDirection={orderBy === "type" ? orderDirection : false}>
+                  <TableSortLabel
+                    active={orderBy === "type"}
+                    direction={orderBy === "type" ? orderDirection : "asc"}
+                    onClick={() => handleSort("type")}
+                  >
+                    Tipo
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell
+                  align="right"
+                  sortDirection={orderBy === "stock" ? orderDirection : false}
+                >
+                  <TableSortLabel
+                    active={orderBy === "stock"}
+                    direction={orderBy === "stock" ? orderDirection : "asc"}
+                    onClick={() => handleSort("stock")}
+                  >
+                    Stock
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sortDirection={orderBy === "target" ? orderDirection : false}>
+                  <TableSortLabel
+                    active={orderBy === "target"}
+                    direction={orderBy === "target" ? orderDirection : "asc"}
+                    onClick={() => handleSort("target")}
+                  >
+                    Destino al abrir
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell
+                  align="center"
+                  sortDirection={orderBy === "links" ? orderDirection : false}
+                >
+                  <TableSortLabel
+                    active={orderBy === "links"}
+                    direction={orderBy === "links" ? orderDirection : "asc"}
+                    onClick={() => handleSort("links")}
+                  >
+                    Enlaces
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
@@ -502,14 +616,14 @@ export default function GenericIngredientsPage() {
                   <TableCell colSpan={7}><ListSkeleton count={5} itemHeight={44} /></TableCell>
                 </TableRow>
               )}
-              {!loading && allProductRows.length === 0 && (
+              {!loading && sortedProductRows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} align="center" sx={{ py: 4, color: "text.secondary" }}>
                     No hay productos que coincidan con la búsqueda.
                   </TableCell>
                 </TableRow>
               )}
-              {!loading && allProductRows.map((product) => {
+              {!loading && pagedProductRows.map((product) => {
                 const links = linksByTarget.get(Number(product.id)) || [];
                 const target = product.genericProductId
                   ? productById.get(Number(product.genericProductId))
@@ -685,6 +799,20 @@ export default function GenericIngredientsPage() {
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePagination
+          component="div"
+          count={sortedProductRows.length}
+          page={page}
+          onPageChange={(_, p) => setPage(p)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          labelRowsPerPage="Filas"
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+        />
       </Paper>
 
       <Grid container spacing={2} sx={{ display: "none" }}>

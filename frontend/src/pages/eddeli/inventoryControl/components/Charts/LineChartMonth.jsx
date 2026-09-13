@@ -193,7 +193,6 @@ export default function LineChartMonth({ bundle = {} }) {
           ]}
           series={series}
           height={250}
-          experimentalFeatures={{ preferStrictDomainInLineCharts: true }}
           margin={{ left: 4, right: 8, top: 8, bottom: 24 }}
           slotProps={{
             axisLine: { stroke: axisStroke },

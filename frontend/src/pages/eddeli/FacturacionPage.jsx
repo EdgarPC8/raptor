@@ -69,22 +69,30 @@ const PAYMENT_METHOD_FILTER_OPTIONS = [
 
 const MONEY_COL = {
   align: "right",
-  minWidth: 52,
-  cellSx: { px: 0.2, width: "1px", whiteSpace: "nowrap" },
-  headerSx: { px: 0.2, width: "1px", whiteSpace: "nowrap" },
+  minWidth: 1,
+  cellSx: { px: 0.5, width: "1px", whiteSpace: "nowrap" },
+  headerSx: { px: 0.5, width: "1px", whiteSpace: "nowrap" },
 };
 
-const TEXT_COL = (px) => ({
-  width: px,
-  maxWidth: px,
+/** Columna que se ajusta al texto (ahorra ancho). */
+const FIT_COL = {
+  minWidth: 1,
+  cellSx: { px: 0.5, width: "1px", whiteSpace: "nowrap" },
+  headerSx: { px: 0.5, width: "1px", whiteSpace: "nowrap" },
+};
+
+/** Texto largo: se ajusta pero con tope + ellipsis. */
+const TEXT_COL = (maxPx) => ({
+  minWidth: 1,
   cellSx: {
-    width: px,
-    maxWidth: px,
+    px: 0.5,
+    width: "1px",
+    maxWidth: maxPx,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
-  headerSx: { width: px, maxWidth: px },
+  headerSx: { px: 0.5, width: "1px", whiteSpace: "nowrap" },
 });
 
 const SPACER_COL = {
@@ -608,10 +616,38 @@ export default function FacturacionPage() {
         tableMaxHeight="calc(100vh - 340px)"
         columns={[
           {
+            id: "expand",
+            label: "",
+            sortable: false,
+            stopRowClick: true,
+            minWidth: 1,
+            cellSx: { width: "1px", px: 0.15 },
+            headerSx: { width: "1px", px: 0.15 },
+            render: (row) => {
+              const open = expandedRowId === row.id;
+              return (
+                <Tooltip title={open ? "Ocultar productos" : "Ver productos"}>
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    aria-label={open ? "Ocultar productos" : "Ver productos"}
+                    onClick={() => toggleExpand(row)}
+                  >
+                    {open ? (
+                      <KeyboardArrowUpIcon fontSize="small" />
+                    ) : (
+                      <KeyboardArrowDownIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </Tooltip>
+              );
+            },
+          },
+          {
             id: "keyIcon",
             label: "",
             sortable: false,
-            minWidth: 36,
+            minWidth: 1,
             cellSx: { width: "1px", px: 0.25 },
             headerSx: { width: "1px", px: 0.25 },
             render: (row) =>
@@ -626,19 +662,19 @@ export default function FacturacionPage() {
           {
             id: "emissionDateLabel",
             label: "Fecha",
-            minWidth: 88,
+            ...FIT_COL,
             getSortValue: (r) => r.dateIso || r.emissionDateLabel || "",
           },
-          { id: "estabPtoEmi", label: "Estab", minWidth: 72 },
+          { id: "estabPtoEmi", label: "Estab", ...FIT_COL },
           {
             id: "sequentialLabel",
             label: "Núm.",
-            minWidth: 72,
+            ...FIT_COL,
             getSortValue: (r) => Number(r.sri?.sequential || 0),
           },
-          { id: "customerLabel", label: "Cliente", ...TEXT_COL(120) },
-          { id: "environmentLabel", label: "Amb.", minWidth: 72, ...TEXT_COL(80) },
-          { id: "sellerLabel", label: "Vendedor", ...TEXT_COL(100) },
+          { id: "customerLabel", label: "Cliente", ...TEXT_COL(140) },
+          { id: "environmentLabel", label: "Amb.", ...FIT_COL },
+          { id: "sellerLabel", label: "Vendedor", ...TEXT_COL(110) },
           {
             id: "subtotalLabel",
             label: "Subtotal",
@@ -663,56 +699,40 @@ export default function FacturacionPage() {
             ...MONEY_COL,
             getSortValue: (r) => Number(r.total || 0),
           },
-          { id: "sriStatusLabel", label: "Estado", minWidth: 80, ...TEXT_COL(90) },
-          { id: "paymentMethodLabel", label: "Forma pago", minWidth: 88, ...TEXT_COL(96) },
-          { id: "paymentStateLabel", label: "Pago", minWidth: 72 },
+          { id: "sriStatusLabel", label: "Estado", ...FIT_COL },
+          { id: "paymentMethodLabel", label: "Forma pago", ...FIT_COL },
+          { id: "paymentStateLabel", label: "Pago", ...FIT_COL },
           {
             id: "print",
             label: "Acciones",
             sortable: false,
             stopRowClick: true,
-            minWidth: 120,
+            minWidth: 1,
             cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
             headerSx: { width: "1px", px: 0.25 },
-            render: (row) => {
-              const open = expandedRowId === row.id;
-              return (
-                <Stack
-                  direction="row"
-                  spacing={0}
-                  justifyContent="flex-end"
-                  data-tour="pos-row-actions"
-                >
-                  <Tooltip title="Ver detalle / reporte">
-                    <IconButton
-                      size="small"
-                      color="primary"
-                      onClick={() => setDetailRow(row)}
-                    >
-                      <VisibilityIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={open ? "Ocultar productos" : "Ver productos"}>
-                    <IconButton
-                      size="small"
-                      color="primary"
-                      onClick={() => toggleExpand(row)}
-                    >
-                      {open ? (
-                        <KeyboardArrowUpIcon fontSize="small" />
-                      ) : (
-                        <KeyboardArrowDownIcon fontSize="small" />
-                      )}
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Imprimir comprobante">
-                    <IconButton size="small" color="primary" onClick={() => openPrint(row)}>
-                      <PrintIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              );
-            },
+            render: (row) => (
+              <Stack
+                direction="row"
+                spacing={0}
+                justifyContent="flex-end"
+                data-tour="pos-row-actions"
+              >
+                <Tooltip title="Ver detalle / reporte">
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={() => setDetailRow(row)}
+                  >
+                    <VisibilityIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Imprimir comprobante">
+                  <IconButton size="small" color="primary" onClick={() => openPrint(row)}>
+                    <PrintIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            ),
           },
           SPACER_COL,
         ]}

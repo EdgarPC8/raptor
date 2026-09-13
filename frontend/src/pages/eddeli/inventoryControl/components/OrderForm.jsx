@@ -11,6 +11,13 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  FormControlLabel,
+  Checkbox,
+  FormControl,
+  FormLabel,
+  Radio,
+  RadioGroup,
+  MenuItem,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import AddBoxIcon from "@mui/icons-material/AddBox";
@@ -18,15 +25,27 @@ import EditIcon from "@mui/icons-material/Edit";
 import CloseIcon from "@mui/icons-material/Close";
 import PrintIcon from "@mui/icons-material/Print";
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import PaymentsIcon from "@mui/icons-material/Payments";
 import { useForm } from "react-hook-form";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   createOrderRequest,
   updateOrderRequest,
   getAllCustomersRequest,
+  markItemAsDeliveredRequest,
+  getCustomerOrderCollectionSummaryRequest,
+  payCustomerOrderRequest,
 } from "../../../../api/ordersRequest";
-import { getAllProductsAll } from "../../../../api/inventoryControlRequest";
+import { getAllProductsAll, getStoresRequest } from "../../../../api/inventoryControlRequest";
 import { useAuth } from "../../../../context/AuthContext";
+import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
+import {
+  locationKindLabel,
+  normalizeLocationKind,
+  sortStoresByKind,
+  storeHoldsInventory,
+} from "../../../../utils/storeLocationKind.js";
 import SearchableSelect from "../../../../components/SearchableSelect";
 import ProductPriceReference, {
   getDefaultDistributorPrice,
@@ -127,8 +146,23 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
   const [installments, setInstallments] = useState([]);
   const tourGenRef = useRef(0);
   const lotsRef = useRef([]);
+  const settleRef = useRef({
+    deliver: false,
+    pay: false,
+    payMethod: "efectivo",
+    storeId: null,
+  });
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmDeliver, setConfirmDeliver] = useState(true);
+  const [confirmPaid, setConfirmPaid] = useState(true);
+  const [confirmPayMethod, setConfirmPayMethod] = useState("efectivo");
+  const [confirmDeliverStoreId, setConfirmDeliverStoreId] = useState("");
+  const [inventoryStores, setInventoryStores] = useState([]);
+  const [storesLoading, setStoresLoading] = useState(false);
 
   const { toast } = useAuth();
+  const { activeApp } = useAppSettings();
+  const multiStockEnabled = activeApp?.multiStockEnabled !== false;
 
   useEffect(() => {
     lotsRef.current = lots;
@@ -465,6 +499,71 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
     setInstallments([]);
   };
 
+  const loadConfirmStores = async () => {
+    try {
+      setStoresLoading(true);
+      const { data } = await getStoresRequest();
+      const list = sortStoresByKind(
+        (Array.isArray(data) ? data : []).filter(
+          (s) => storeHoldsInventory(s.locationKind) && s.isActive !== false,
+        ),
+      );
+      setInventoryStores(list);
+      const propia = list.find((s) => normalizeLocationKind(s.locationKind) === "propia");
+      const bodega = list.find((s) => normalizeLocationKind(s.locationKind) === "bodega");
+      const preferred = propia || bodega || list[0];
+      setConfirmDeliverStoreId(preferred ? String(preferred.id) : "");
+    } catch {
+      setInventoryStores([]);
+      setConfirmDeliverStoreId("");
+    } finally {
+      setStoresLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (confirmOpen && multiStockEnabled && confirmDeliver) {
+      void loadConfirmStores();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmOpen, multiStockEnabled, confirmDeliver]);
+
+  const openConfirmDialog = ({ deliver = true, pay = true } = {}) => {
+    setConfirmDeliver(deliver);
+    setConfirmPaid(pay);
+    setConfirmPayMethod("efectivo");
+    setConfirmOpen(true);
+  };
+
+  const resolveDeliverStoreId = () => {
+    const sid = confirmDeliverStoreId;
+    return sid ? Number(sid) : null;
+  };
+
+  const handleConfirmSettle = (deliver, pay) => {
+    if (deliver && multiStockEnabled && !resolveDeliverStoreId()) {
+      void toast?.({
+        message: "Elige Bodega o una sucursal para descontar el stock.",
+        variant: "warning",
+      });
+      return;
+    }
+    settleRef.current = {
+      deliver,
+      pay,
+      payMethod: confirmPayMethod,
+      storeId: deliver && multiStockEnabled ? resolveDeliverStoreId() : null,
+    };
+    setConfirmOpen(false);
+    handleSubmit(submitOrder)();
+  };
+
+  const nowLocalDateTime = () => {
+    const d = new Date();
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
   const submitOrder = async (data) => {
     if (items.length === 0) {
       toast({ message: "Debe agregar al menos un producto al pedido", variant: "warning" });
@@ -551,12 +650,92 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
           : [],
     };
 
+    const settle = settleRef.current || {
+      deliver: false,
+      pay: false,
+      payMethod: "efectivo",
+      storeId: null,
+    };
+
     try {
+      let orderId = isEditing ? datos?.id : null;
+      let savedItems = [];
       if (isEditing) {
-        await toast({ promise: updateOrderRequest(datos.id, payload) });
+        const result = await toast({ promise: updateOrderRequest(datos.id, payload) });
+        orderId = orderId || result?.data?.order?.id || result?.data?.id;
+        savedItems =
+          result?.data?.items ||
+          result?.data?.order?.ERP_order_items ||
+          [];
       } else {
-        await toast({ promise: createOrderRequest(payload) });
+        const result = await toast({ promise: createOrderRequest(payload) });
+        orderId = result?.data?.order?.id || result?.data?.id || orderId;
+        savedItems = result?.data?.items || [];
       }
+
+      if (!Array.isArray(savedItems) || !savedItems.length) {
+        savedItems = (items || []).filter((it) => it?.id);
+      }
+
+      if (orderId && settle.deliver) {
+        const pending = savedItems.filter((it) => it?.id && !it.deliveredAt);
+        if (!pending.length) {
+          toast({
+            message: "Pedido guardado; no había ítems pendientes de entrega.",
+            variant: "info",
+          });
+        } else {
+          try {
+            const deliverPayload =
+              settle.storeId != null ? { storeId: settle.storeId } : {};
+            await Promise.all(
+              pending.map((it) => markItemAsDeliveredRequest(it.id, deliverPayload)),
+            );
+          } catch (err) {
+            toast({
+              message:
+                err?.response?.data?.message ||
+                "Pedido guardado, pero no se pudo marcar la entrega.",
+              variant: "warning",
+            });
+          }
+        }
+      }
+
+      if (orderId && settle.pay) {
+        try {
+          const summaryRes = await getCustomerOrderCollectionSummaryRequest(orderId);
+          const suggested = Number(summaryRes?.data?.suggestedAmount || 0);
+          if (suggested > 0.009) {
+            await payCustomerOrderRequest(orderId, {
+              amount: suggested,
+              date: nowLocalDateTime(),
+              method: settle.payMethod || "efectivo",
+              note: `Abono pedido #${orderId}`,
+            });
+          } else {
+            toast({
+              message: "Pedido guardado; no había saldo pendiente de cobro.",
+              variant: "info",
+            });
+          }
+        } catch (err) {
+          toast({
+            message:
+              err?.response?.data?.message ||
+              "Pedido guardado, pero no se pudo registrar el cobro.",
+            variant: "warning",
+          });
+        }
+      }
+
+      settleRef.current = {
+        deliver: false,
+        pay: false,
+        payMethod: "efectivo",
+        storeId: null,
+      };
+      setConfirmOpen(false);
       resetForm();
       if (reload) await reload();
       if (onClose) await onClose();
@@ -699,9 +878,26 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
     <Box
       component="form"
       data-tour="pedido-cliente-form"
-      sx={{ mt: 1 }}
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        height: { xs: "auto", md: "min(78vh, 820px)" },
+        mt: 0,
+      }}
       onSubmit={handleSubmit(submitOrder)}
     >
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflow: "auto",
+          px: { xs: 0.5, sm: 1 },
+          pt: 0.5,
+          pb: 1,
+        }}
+      >
       <Alert severity="info" sx={{ mb: 2, py: 0.75 }}>
         <strong>Pedido de cliente</strong>
         {isEditing ? ` · #${datos?.id ?? ""}` : " · nuevo"}: a la izquierda armás cada línea; a la
@@ -845,32 +1041,6 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
             <Grid item xs={12}>
               <TextField label="Notas" fullWidth multiline rows={2} {...register("notes")} />
             </Grid>
-
-            <Grid
-              item
-              xs={12}
-              display="flex"
-              justifyContent="flex-end"
-              alignItems="center"
-              gap={1}
-              flexWrap="wrap"
-            >
-              {isEditing && printReceipt && (
-                <Tooltip title="Comprobante / factura">
-                  <IconButton color="primary" onClick={() => setPrintOpen(true)}>
-                    <PrintIcon />
-                  </IconButton>
-                </Tooltip>
-              )}
-              <Button
-                data-tour="pedido-cliente-save"
-                variant="contained"
-                fullWidth
-                type="submit"
-              >
-                {!isEditing ? "Guardar pedido de cliente" : "Actualizar pedido de cliente"}
-              </Button>
-            </Grid>
           </Grid>
         </Grid>
 
@@ -944,6 +1114,221 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
           </Box>
         </Grid>
       </Grid>
+      </Box>
+
+      <Box
+        sx={{
+          flexShrink: 0,
+          borderTop: 1,
+          borderColor: "divider",
+          bgcolor: "background.paper",
+          px: { xs: 1, sm: 1.5 },
+          py: 1,
+          position: "sticky",
+          bottom: 0,
+          zIndex: 2,
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 1,
+          }}
+        >
+          {isEditing && printReceipt && (
+            <Tooltip title="Comprobante / factura">
+              <IconButton color="primary" onClick={() => setPrintOpen(true)}>
+                <PrintIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Button
+            data-tour="pedido-cliente-save"
+            type="submit"
+            variant="outlined"
+            size="small"
+            color="inherit"
+            sx={{ minWidth: 130, px: 2 }}
+            onClick={() => {
+              settleRef.current = {
+                deliver: false,
+                pay: false,
+                payMethod: "efectivo",
+                storeId: null,
+              };
+            }}
+          >
+            Solo guardar
+          </Button>
+          <Button
+            type="button"
+            variant="outlined"
+            size="small"
+            color="warning"
+            startIcon={<LocalShippingIcon />}
+            sx={{ minWidth: 130, px: 2 }}
+            onClick={() => openConfirmDialog({ deliver: true, pay: false })}
+          >
+            Solo entregar
+          </Button>
+          <Button
+            type="button"
+            variant="outlined"
+            size="small"
+            color="secondary"
+            startIcon={<PaymentsIcon />}
+            sx={{ minWidth: 120, px: 2 }}
+            onClick={() => openConfirmDialog({ deliver: false, pay: true })}
+          >
+            Solo pagar
+          </Button>
+          <Button
+            type="button"
+            variant="contained"
+            size="small"
+            color="secondary"
+            startIcon={<PaymentsIcon />}
+            sx={{ minWidth: 160, px: 2, fontWeight: 700 }}
+            onClick={() => openConfirmDialog({ deliver: true, pay: true })}
+          >
+            Entregar y pagar
+          </Button>
+        </Box>
+      </Box>
+
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ fontWeight: 700, fontSize: "1.05rem" }}>
+          {confirmDeliver && confirmPaid
+            ? "Entregar y pagar pedido"
+            : confirmDeliver
+              ? "Entregar pedido"
+              : confirmPaid
+                ? "Registrar cobro"
+                : "Confirmar acción"}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Elegí qué registrar ahora. Lo demás queda pendiente para después.
+          </Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={confirmDeliver}
+                onChange={(e) => setConfirmDeliver(e.target.checked)}
+              />
+            }
+            label="Entregado (sale del inventario)"
+          />
+          {confirmDeliver && multiStockEnabled ? (
+            <Box sx={{ mt: 1, mb: 1.5 }}>
+              <Alert severity="warning" sx={{ py: 0.75, mb: 1.5 }}>
+                Multistock activo: elegí <strong>de dónde sale</strong> la mercadería antes de
+                confirmar.
+              </Alert>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="Entregar desde"
+                value={confirmDeliverStoreId}
+                onChange={(e) => setConfirmDeliverStoreId(e.target.value)}
+                disabled={storesLoading}
+                helperText={
+                  storesLoading
+                    ? "Cargando locales…"
+                    : "Recomendado: la sucursal donde abrís caja."
+                }
+              >
+                {inventoryStores.map((s) => (
+                  <MenuItem key={s.id} value={String(s.id)}>
+                    {s.name} ({locationKindLabel(s.locationKind)})
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+          ) : null}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={confirmPaid}
+                onChange={(e) => setConfirmPaid(e.target.checked)}
+              />
+            }
+            label="Cobrado"
+          />
+          {confirmPaid ? (
+            <FormControl sx={{ mt: 1.5, display: "block" }}>
+              <FormLabel sx={{ fontSize: "0.8rem" }}>Cómo se cobró</FormLabel>
+              <RadioGroup
+                row
+                value={confirmPayMethod}
+                onChange={(e) => setConfirmPayMethod(e.target.value)}
+              >
+                <FormControlLabel value="efectivo" control={<Radio size="small" />} label="Efectivo" />
+                <FormControlLabel
+                  value="transferencia"
+                  control={<Radio size="small" />}
+                  label="Transferencia"
+                />
+              </RadioGroup>
+            </FormControl>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ flexWrap: "wrap", gap: 0.5, px: 2, pb: 1.5 }}>
+          <Button onClick={() => setConfirmOpen(false)} color="inherit">
+            Cancelar
+          </Button>
+          <Box sx={{ flex: 1 }} />
+          {confirmDeliver ? (
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<LocalShippingIcon />}
+              disabled={
+                storesLoading || (multiStockEnabled && !confirmDeliverStoreId)
+              }
+              onClick={() => handleConfirmSettle(true, false)}
+            >
+              Solo entregar
+            </Button>
+          ) : null}
+          {confirmPaid && !confirmDeliver ? (
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={<PaymentsIcon />}
+              onClick={() => handleConfirmSettle(false, true)}
+            >
+              Solo pagar
+            </Button>
+          ) : null}
+          {confirmDeliver && confirmPaid ? (
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<PaymentsIcon />}
+              disabled={
+                storesLoading || (multiStockEnabled && !confirmDeliverStoreId)
+              }
+              onClick={() => handleConfirmSettle(true, true)}
+            >
+              Entregar y pagar
+            </Button>
+          ) : null}
+          {!confirmDeliver && !confirmPaid ? (
+            <Button
+              variant="outlined"
+              color="inherit"
+              onClick={() => handleConfirmSettle(false, false)}
+            >
+              Solo guardar
+            </Button>
+          ) : null}
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={productDialogOpen}
@@ -1009,4 +1394,25 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
 }
 
 const OrderForm = forwardRef(OrderFormInner);
+
+/** Estilos para que el modal deje los botones fijos abajo. */
+export const CUSTOMER_ORDER_DIALOG_PAPER_SX = {
+  display: "flex",
+  flexDirection: "column",
+  height: { xs: "100%", sm: "min(90vh, 900px)" },
+  maxHeight: "92vh",
+  width: { sm: "min(96vw, 1200px)" },
+  maxWidth: { sm: "1200px" },
+};
+
+export const CUSTOMER_ORDER_DIALOG_CONTENT_SX = {
+  p: { xs: 1, sm: 1.5 },
+  pt: { xs: 0.5, sm: 1 },
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  flex: 1,
+  minHeight: 0,
+};
+
 export default OrderForm;

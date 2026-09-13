@@ -47,7 +47,7 @@ export function getCajaQuickTourSteps(hooks = {}) {
       popover: {
         title: "Canasta de ejemplo",
         description:
-          "En modo canasta, cada clic suma unidades. Aquí ya entramos a «Galletas saladas» con 3 unidades (una de cada sabor) para el tramo 3×$1.00.",
+          "En modo canasta, clic o + suma unidades; − o el chip resta. Aquí ya entramos a «Galletas saladas» con 3 unidades (una de cada sabor) para el tramo 3×$1.00.",
         side: "top",
         align: "center",
       },

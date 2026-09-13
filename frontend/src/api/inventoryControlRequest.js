@@ -226,6 +226,15 @@ export const updateProduct = async (id, data) => {
   });
 };
 
+/** Resumen de ventas por producto (pestaña Revisión). days=0 → todo el historial. */
+export const getProductSalesSummaryRequest = async ({ days = 365 } = {}) => {
+  if (isGuestDataMode()) return guestOk({ days, byProductId: {} });
+  return await axios.get("/inventory/products-sales-summary", {
+    params: { days },
+    headers: { Authorization: jwt() },
+  });
+};
+
 /** Ajuste directo de stock/minStock (solo Programador, sin movimiento). */
 export const patchProductStockRequest = async (id, data) => {
   if (isGuestDataMode()) return guestDenied();

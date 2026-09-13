@@ -20,6 +20,8 @@ import CloseIcon from "@mui/icons-material/Close";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import ShoppingBasketIcon from "@mui/icons-material/ShoppingBasket";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
 import {
   hasPackageTiers,
   normalizePackageTiers,
@@ -302,7 +304,7 @@ export default function CajaQuickProductsDialog({
       if (basketTotalUnits > 0) {
         return `${surtidoLabel}: ${basketTotalUnits} u. en canasta`;
       }
-      return `Clic en pan suma ${selectedQty} a la canasta`;
+      return `Clic suma ${selectedQty} · botones −/+ o chip para restar`;
     }
     if (!previewProduct) {
       return `Clic suma ${selectedQty} u. al carrito`;
@@ -310,28 +312,40 @@ export default function CajaQuickProductsDialog({
     return `${previewProduct.name || "Producto"} · +${selectedQty}`;
   }, [surtidoMode, surtidoLabel, basketTotalUnits, previewProduct, selectedQty]);
 
-  const addToBasket = (product) => {
+  const adjustBasketQty = (product, delta) => {
     const id = Number(product.id);
     const stock = Number(product.stock || 0);
+    const step = Math.floor(Number(delta) || 0);
+    if (!step) return;
     setBasketQtyById((prev) => {
       const current = Math.floor(Number(prev[id] || 0));
-      const next = allowBasketOverStock
-        ? current + selectedQty
-        : stock > 0
-          ? Math.min(current + selectedQty, stock)
-          : current + selectedQty;
-      if (next <= current) return prev;
+      let next = current + step;
+      if (step > 0 && !allowBasketOverStock && stock > 0) {
+        next = Math.min(next, stock);
+      }
+      next = Math.max(0, next);
+      if (next === current) return prev;
+      if (next <= 0) {
+        const { [id]: _removed, ...rest } = prev;
+        return rest;
+      }
       return { ...prev, [id]: next };
     });
   };
 
   const handleProductClick = (product) => {
     if (surtidoMode) {
-      addToBasket(product);
+      adjustBasketQty(product, selectedQty);
       return;
     }
     onAdd(product, selectedQty);
     onClose();
+  };
+
+  const handleProductContextMenu = (e, product) => {
+    if (!surtidoMode) return;
+    e.preventDefault();
+    adjustBasketQty(product, -selectedQty);
   };
 
   const handleConfirmSurtido = () => {
@@ -396,7 +410,7 @@ export default function CajaQuickProductsDialog({
             </Typography>
             <Typography variant="caption" color="text.secondary">
               {surtidoMode
-                ? "Teclado 1-9 · clic suma a la canasta · confirmar abajo para el carrito"
+                ? "Teclado 1-9 · clic/+ suma · − o chip resta · confirmar abajo"
                 : "Teclado 1-9 o ↑↓ · clic en producto agrega"}
             </Typography>
           </Box>
@@ -507,6 +521,10 @@ export default function CajaQuickProductsDialog({
                         size="small"
                         label={`${product.name} ×${quantity}`}
                         variant="outlined"
+                        color="secondary"
+                        onClick={() => adjustBasketQty(product, -selectedQty)}
+                        onDelete={() => adjustBasketQty(product, -quantity)}
+                        title={`Clic: −${selectedQty} · × quita todo`}
                       />
                     ))}
                   </Stack>
@@ -644,8 +662,9 @@ export default function CajaQuickProductsDialog({
                   >
                     <CardActionArea
                       onClick={() => handleProductClick(product)}
+                      onContextMenu={(e) => handleProductContextMenu(e, product)}
                       disabled={atStockLimit}
-                      sx={{ height: "100%" }}
+                      sx={{ height: surtidoMode ? "auto" : "100%" }}
                     >
                       <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
                         <Typography
@@ -677,42 +696,76 @@ export default function CajaQuickProductsDialog({
                             {tierPrices}
                           </Typography>
                         ) : null}
-                        <Box
-                          sx={{
-                            mt: 1,
-                            py: 0.5,
-                            px: 0.75,
-                            borderRadius: 1,
-                            bgcolor:
-                              surtidoMode && inBasket > 0
-                                ? alpha(theme.palette.secondary.main, 0.12)
-                                : theme.palette.mode === "dark"
+                        {!surtidoMode ? (
+                          <Box
+                            sx={{
+                              mt: 1,
+                              py: 0.5,
+                              px: 0.75,
+                              borderRadius: 1,
+                              bgcolor:
+                                theme.palette.mode === "dark"
                                   ? alpha(theme.palette.success.main, 0.16)
                                   : alpha(theme.palette.success.main, 0.1),
-                            border: 1,
-                            borderColor:
-                              surtidoMode && inBasket > 0
-                                ? alpha(theme.palette.secondary.main, 0.35)
-                                : alpha(theme.palette.success.main, 0.35),
-                          }}
-                        >
-                          <Typography
-                            variant="body2"
-                            fontWeight={700}
-                            color={surtidoMode && inBasket > 0 ? "secondary.main" : "success.main"}
+                              border: 1,
+                              borderColor: alpha(theme.palette.success.main, 0.35),
+                            }}
                           >
-                            {surtidoMode
-                              ? inBasket > 0
-                                ? `En canasta: ${inBasket}`
-                                : `+${selectedQty} al clic`
-                              : `+${selectedQty} → $${cardTotal.toFixed(2)}`}
-                          </Typography>
-                        </Box>
+                            <Typography variant="body2" fontWeight={700} color="success.main">
+                              {`+${selectedQty} → $${cardTotal.toFixed(2)}`}
+                            </Typography>
+                          </Box>
+                        ) : null}
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
                           Stock: {stock}
                         </Typography>
                       </CardContent>
                     </CardActionArea>
+                    {surtidoMode ? (
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        sx={{
+                          px: 0.75,
+                          py: 0.5,
+                          borderTop: 1,
+                          borderColor: "divider",
+                          bgcolor:
+                            inBasket > 0
+                              ? alpha(theme.palette.secondary.main, 0.08)
+                              : "background.paper",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <IconButton
+                          size="small"
+                          color="secondary"
+                          aria-label={`Restar ${selectedQty}`}
+                          disabled={inBasket <= 0}
+                          onClick={() => adjustBasketQty(product, -selectedQty)}
+                        >
+                          <RemoveIcon fontSize="small" />
+                        </IconButton>
+                        <Typography
+                          variant="body2"
+                          fontWeight={800}
+                          color={inBasket > 0 ? "secondary.main" : "text.secondary"}
+                          sx={{ minWidth: 28, textAlign: "center" }}
+                        >
+                          {inBasket}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          color="secondary"
+                          aria-label={`Sumar ${selectedQty}`}
+                          disabled={atStockLimit}
+                          onClick={() => adjustBasketQty(product, selectedQty)}
+                        >
+                          <AddIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    ) : null}
                   </Card>
                 </Grid>
               );

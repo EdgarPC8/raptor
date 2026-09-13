@@ -17,7 +17,10 @@ import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { useCallback, useRef, useState } from "react";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 import TourHelpButton from "../../../components/TourHelpButton.jsx";
-import OrderForm from "./components/OrderForm";
+import OrderForm, {
+  CUSTOMER_ORDER_DIALOG_CONTENT_SX,
+  CUSTOMER_ORDER_DIALOG_PAPER_SX,
+} from "./components/OrderForm";
 import SupplierOrderForm, {
   SUPPLIER_ORDER_DIALOG_CONTENT_SX,
   SUPPLIER_ORDER_DIALOG_PAPER_SX,
@@ -475,6 +478,8 @@ function OrderPage() {
         tittle={titleDialog}
         maxWidth="lg"
         fullWidth
+        paperSx={CUSTOMER_ORDER_DIALOG_PAPER_SX}
+        contentSx={CUSTOMER_ORDER_DIALOG_CONTENT_SX}
         titleExtra={
           !isEditing ? (
             <TourHelpButton

@@ -59,7 +59,7 @@ export function getComprobantesPosTourSteps() {
       popover: {
         title: "Acciones de la fila",
         description:
-          "Ojo = modal de reporte. Flecha = despliega los productos debajo de la fila. Impresora = formato de impresión.",
+          "La flecha al inicio de la fila despliega los productos. En Acciones: ojo = detalle/reporte, impresora = formato de impresión.",
         side: "left",
         align: "center",
       },

@@ -62,7 +62,10 @@ import ItemsTable from "./ItemsTable.jsx";
 import CollectionsDialogs from "./CollectionsDialogs.jsx";
 import CollectionsPendingViewTab from "./CollectionsPendingViewTab.jsx";
 import CreditOrdersTab from "./CreditOrdersTab.jsx";
-import OrderForm from "../components/OrderForm.jsx";
+import OrderForm, {
+  CUSTOMER_ORDER_DIALOG_CONTENT_SX,
+  CUSTOMER_ORDER_DIALOG_PAPER_SX,
+} from "../components/OrderForm.jsx";
 import CustomerOrderPayDialog from "../components/CustomerOrderPayDialog.jsx";
 import SimpleDialog from "../../../../components/Dialogs/SimpleDialog.jsx";
 import DebtReportDialog from "./DebtReportDialog.jsx";
@@ -1621,6 +1624,8 @@ export default function CollectionsWorkbench() {
         }
         maxWidth="lg"
         fullWidth
+        paperSx={CUSTOMER_ORDER_DIALOG_PAPER_SX}
+        contentSx={CUSTOMER_ORDER_DIALOG_CONTENT_SX}
       >
         {orderToEdit ? (
           <OrderForm
