@@ -91,7 +91,7 @@ const emptyTemplateForm = () => ({
   amountType: "fixed",
   frequency: "monthly",
   baseAmount: "",
-  dueDayOfMonth: 5,
+  dueDayOfMonth: Math.min(28, Math.max(1, new Date().getDate())),
   dueMonth: 1,
   providerName: "",
   reminderDaysBefore: 7,
@@ -282,6 +282,9 @@ export default function RecurringExpensesPage() {
           setCreateOpen(false);
           setEditTemplate(null);
           setForm(emptyTemplateForm());
+          // Tras crear, mostrar cuotas (ya se genera la del mes) y también
+          // dejar claro que la plantilla quedó registrada.
+          if (!editTemplate) setTab("occurrences");
         },
         successMessage: editTemplate ? "Plantilla actualizada" : "Plantilla creada",
       });
@@ -746,8 +749,14 @@ export default function RecurringExpensesPage() {
           sx={{ px: 2, pt: 1, borderBottom: 1, borderColor: "divider" }}
         >
           <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-            <Tab value="occurrences" label="Cuotas del mes" />
-            <Tab value="templates" label="Plantillas" />
+            <Tab
+              value="occurrences"
+              label={`Cuotas del mes${occurrences.length ? ` (${occurrences.length})` : ""}`}
+            />
+            <Tab
+              value="templates"
+              label={`Plantillas${templates.length ? ` (${templates.length})` : ""}`}
+            />
           </Tabs>
           {tab === "occurrences" && (
             <TextField
@@ -768,7 +777,7 @@ export default function RecurringExpensesPage() {
               columns={occurrenceColumns}
               rows={occurrences}
               loading={loading}
-              emptyMessage="No hay cuotas para este mes. Crea plantillas o pulsa «Generar cuotas»."
+              emptyMessage="No hay cuotas para este mes. Revisá la pestaña Plantillas o pulsá «Generar cuotas». Si el vencimiento es de otro mes, cambiá el selector de mes."
             />
           ) : (
             <TablePro
