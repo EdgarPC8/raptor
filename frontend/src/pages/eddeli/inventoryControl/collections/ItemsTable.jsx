@@ -42,7 +42,7 @@ export default function ItemsTable({
         width: "100%",
         maxWidth: "100%",
         overflowX: "auto",
-        "-webkitOverflowScrolling": "touch",
+        WebkitOverflowScrolling: "touch",
         "&::-webkit-scrollbar": { height: 6 },
         "&::-webkit-scrollbar-thumb": { backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 3 },
         boxSizing: "border-box",

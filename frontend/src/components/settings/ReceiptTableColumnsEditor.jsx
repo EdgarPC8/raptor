@@ -30,7 +30,9 @@ import {
 import { getReceiptLayout, normalizePrintFormat } from "../../utils/receiptFormats.js";
 import {
   DEFAULT_RECEIPT_TABLE_LAYOUTS,
-  normalizeReceiptTableColumns,
+  layoutColumnsForDocument,
+  mirrorReceiptColumns,
+  normalizeReceiptTableLayouts,
   patchReceiptTableLayout,
   RECEIPT_COLUMN_META,
   receiptTableLayoutKey,
@@ -77,12 +79,10 @@ export default function ReceiptTableColumnsEditor({
     };
   }, []);
 
-  const layoutKey = receiptTableLayoutKey(docType, format);
-  const cols = useMemo(
-    () =>
-      normalizeReceiptTableColumns(cfg.tableLayouts?.[layoutKey], layoutKey),
-    [cfg.tableLayouts, layoutKey],
-  );
+  const cols = useMemo(() => {
+    const layouts = normalizeReceiptTableLayouts(cfg.tableLayouts);
+    return layoutColumnsForDocument(layouts, docType, format);
+  }, [cfg.tableLayouts, docType, format]);
 
   const visibleSum = cols
     .filter((c) => c.visible)
@@ -94,8 +94,9 @@ export default function ReceiptTableColumnsEditor({
         documentType: docType,
         businessName,
         sriSettings,
+        ignoreProductIva: cfg.ignoreProductIva,
       }),
-    [docType, businessName, sriSettings],
+    [docType, businessName, sriSettings, cfg.ignoreProductIva],
   );
   const usingSri = hasSriPreviewData(sriSettings);
   const layout = getReceiptLayout(format);
@@ -107,10 +108,21 @@ export default function ReceiptTableColumnsEditor({
         : "100%";
 
   const commitCols = (nextCols) => {
-    const nextLayouts = patchReceiptTableLayout(cfg.tableLayouts, layoutKey, nextCols);
+    const facturaCols = mirrorReceiptColumns(nextCols, "factura");
+    const notaCols = mirrorReceiptColumns(nextCols, "nota_venta");
+    let layouts = patchReceiptTableLayout(
+      cfg.tableLayouts,
+      receiptTableLayoutKey("factura", format),
+      facturaCols,
+    );
+    layouts = patchReceiptTableLayout(
+      layouts,
+      receiptTableLayoutKey("nota_venta", format),
+      notaCols,
+    );
     onChange({
       ...cfg,
-      tableLayouts: nextLayouts,
+      tableLayouts: layouts,
     });
   };
 
@@ -142,7 +154,8 @@ export default function ReceiptTableColumnsEditor({
   };
 
   const resetLayout = () => {
-    commitCols(DEFAULT_RECEIPT_TABLE_LAYOUTS[layoutKey].map((c) => ({ ...c })));
+    const facturaKey = receiptTableLayoutKey("factura", format);
+    commitCols(DEFAULT_RECEIPT_TABLE_LAYOUTS[facturaKey].map((c) => ({ ...c })));
   };
 
   const toggleSetting = (key, checked) => {
@@ -218,6 +231,22 @@ export default function ReceiptTableColumnsEditor({
             Nota
           </ToggleButton>
         </ToggleButtonGroup>
+        <FormControlLabel
+          sx={{ ...checkLabelSx, mb: 0.5, alignItems: "flex-start" }}
+          labelPlacement="start"
+          control={
+            <Switch
+              size="small"
+              sx={switchSx}
+              checked={Boolean(cfg.ignoreProductIva)}
+              onChange={(e) => toggleSetting("ignoreProductIva", e.target.checked)}
+            />
+          }
+          label="No tomar en cuenta el IVA del producto"
+        />
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+          El orden y los anchos de este tamaño valen para factura y nota de venta. En la nota, Subtotal se imprime como Total. La columna IVA sale apagada hasta que la actives. Si enciendes la opción de arriba, el comprobante no desglosa el IVA aunque el producto lo tenga.
+        </Typography>
 
         <Typography variant="caption" fontWeight={800} display="block" sx={{ mb: 0.75 }}>
           {editingLabel}

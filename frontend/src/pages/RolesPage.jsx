@@ -88,7 +88,7 @@ import UserForm from "../components/Forms/UserForm.jsx";
       { id: "name", label: "Nombre" },
       {
         id: "actions",
-        label: "Actions",
+        label: "Acciones",
         render: (row) => (
           <>
             <IconButton
@@ -117,10 +117,12 @@ import UserForm from "../components/Forms/UserForm.jsx";
       try {
         const { data } = await getRolRequest();
         const rows = Array.isArray(data) ? data : [];
+        const canSeeInternal =
+          user?.loginRol === "Propietario" || user?.loginRol === "Programador";
         setData(
-          user?.loginRol === "Programador"
+          canSeeInternal
             ? rows
-            : rows.filter((r) => r.name !== "Programador"),
+            : rows.filter((r) => r.name !== "Propietario" && r.name !== "Programador"),
         );
       } finally {
         setLoading(false);

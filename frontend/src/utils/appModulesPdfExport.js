@@ -173,7 +173,7 @@ function sectionRows(sections, { includeInternal = false } = {}) {
   return sections.map((s) => {
     const roles = includeInternal
       ? s.roles || []
-      : (s.roles || []).filter((r) => r !== "Programador");
+      : (s.roles || []).filter((r) => r !== "Propietario" && r !== "Programador");
     return {
       name: s.name,
       path: s.path,

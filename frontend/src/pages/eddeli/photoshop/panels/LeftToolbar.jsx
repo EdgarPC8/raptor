@@ -4,37 +4,42 @@ import NearMeIcon from "@mui/icons-material/NearMe";
 import TextFieldsIcon from "@mui/icons-material/TextFields";
 import ImageIcon from "@mui/icons-material/Image";
 import CropSquareIcon from "@mui/icons-material/CropSquare";
+import CropDinIcon from "@mui/icons-material/CropDin";
+import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import WallpaperIcon from "@mui/icons-material/Wallpaper";
-import CropIcon from "@mui/icons-material/Crop";
 import ColorizeIcon from "@mui/icons-material/Colorize";
-import ContentCutIcon from "@mui/icons-material/ContentCut";
-import CropFreeIcon from "@mui/icons-material/CropFree";
-import PanoramaFishEyeIcon from "@mui/icons-material/PanoramaFishEye";
-import GestureIcon from "@mui/icons-material/Gesture";
-import PolylineIcon from "@mui/icons-material/Timeline";
-import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import FormatColorFillIcon from "@mui/icons-material/FormatColorFill";
+import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
+import PolylineIcon from "@mui/icons-material/Polyline";
 import { useEditor } from "../EditorProvider";
-import { useImageCropCtx } from "../useImageCrop.jsx";
 import { PE } from "../editorTheme";
 import { useEditorImageUpload } from "../useEditorImageUpload.jsx";
-import { isSelectionTool, SELECTION_TOOL_IDS } from "../editorCursors.js";
+import { fetchMediaCatalog } from "../../../../api/publicidadRequest.js";
 import ColorSwatches from "./ColorSwatches";
 import ToolGroupButton from "./ToolGroupButton";
 
-const SELECTION_TOOLS = [
-  { id: "select-rect", icon: CropFreeIcon, label: "Selección rectangular", shortcut: "M" },
-  { id: "select-ellipse", icon: PanoramaFishEyeIcon, label: "Selección elíptica", shortcut: "M" },
-  { id: "select-lasso", icon: GestureIcon, label: "Selección de lazo", shortcut: "L" },
-  { id: "select-poly", icon: PolylineIcon, label: "Selección de lazo poligonal", shortcut: "L" },
-  { id: "select-magnetic", icon: AutoFixHighIcon, label: "Selección de lazo magnético", shortcut: "L" },
+const SELECT_TOOLS = [
+  {
+    id: "select-rect",
+    icon: CropDinIcon,
+    label: "Selección rectangular — separar capas",
+    shortcut: "M",
+  },
+  {
+    id: "select-ellipse",
+    icon: RadioButtonUncheckedIcon,
+    label: "Selección elíptica — separar capas",
+    shortcut: "Shift+M",
+  },
 ];
 
-const OTHER_TOOLS = [
+const TOOLS = [
   { id: "text", icon: TextFieldsIcon, label: "Texto (T)" },
-  { id: "shape", icon: CropSquareIcon, label: "Forma / Fondo (U)" },
-  { id: "image", icon: ImageIcon, label: "Subir imagen PNG/JPG/SVG (I)" },
-  { id: "crop", icon: CropIcon, label: "Recortar capa (C)" },
-  { id: "cut", icon: ContentCutIcon, label: "Cortar selección (Ctrl+Shift+J)" },
+  { id: "shape", icon: CropSquareIcon, label: "Capa de color / fondo (U)" },
+  { id: "svg", icon: PolylineIcon, label: "Subir SVG — vector (S)" },
+  { id: "image", icon: ImageIcon, label: "Subir imagen PNG/JPG/WebP (I)" },
+  { id: "gallery", icon: PhotoLibraryIcon, label: "Usar imagen del sistema" },
+  { id: "paint-bucket", icon: FormatColorFillIcon, label: "Bote de pintura — rellenar capa (K)" },
   { id: "eyedropper", icon: ColorizeIcon, label: "Gotero — tomar color (G)" },
 ];
 
@@ -44,7 +49,6 @@ export default function LeftToolbar() {
     setActiveTool,
     dispatch,
     addBackgroundLayer,
-    state,
     foregroundColor,
     backgroundColor,
     activeColorSlot,
@@ -53,48 +57,14 @@ export default function LeftToolbar() {
     setActiveColorSlot,
     swapColors,
   } = useEditor();
-  const { startCropSelected, cancelCrop, clearDocSelection, cancelSelection, cutSelectionWithToast, cropDraft, cropBusy } =
-    useImageCropCtx();
   const { uploading, openFilePicker, HiddenFileInput } = useEditorImageUpload();
 
-  const activeSelectionId = SELECTION_TOOL_IDS.includes(activeTool) ? activeTool : null;
-
-  const activateSelectionTool = (toolId) => {
-    cancelCrop();
-    clearDocSelection();
-    setActiveTool(toolId);
-  };
-
-  const onToolClick = (toolId) => {
-    if (toolId === "cut") {
-      if (cropDraft) {
-        cutSelectionWithToast();
-      } else {
-        activateSelectionTool("select-rect");
-      }
+  const onToolClick = async (toolId) => {
+    if (toolId === "eyedropper" || toolId === "paint-bucket") {
+      setActiveTool(toolId);
       return;
     }
 
-    if (toolId === "crop") {
-      cancelCrop();
-      setActiveTool("crop");
-      const selected = state.selected?.kind === "layer" ? state.selected.id : null;
-      if (selected) startCropSelected("crop");
-      return;
-    }
-
-    if (toolId === "eyedropper") {
-      cancelCrop();
-      setActiveTool("eyedropper");
-      return;
-    }
-
-    if (isSelectionTool(toolId)) {
-      activateSelectionTool(toolId);
-      return;
-    }
-
-    cancelCrop();
     setActiveTool(toolId);
     if (toolId === "text") dispatch({ type: "ADD_LAYER", layerType: "text" });
     if (toolId === "shape") {
@@ -102,9 +72,31 @@ export default function LeftToolbar() {
         type: "ADD_LAYER",
         layerType: "shape",
         propsPatch: { fill: foregroundColor },
+        layerPatch: { w: 500, h: 180, name: "Capa de color" },
       });
     }
-    if (toolId === "image") openFilePicker("add");
+    if (toolId === "svg") openFilePicker("add-svg");
+    if (toolId === "image") openFilePicker("add-raster");
+    if (toolId === "gallery") {
+      try {
+        const data = await fetchMediaCatalog();
+        const items = [...(data?.products || []), ...(data?.images || [])]
+          .filter((item) => item?.previewUrl || item?.mediaPath)
+          .slice(0, 40);
+        const item = items[0];
+        if (!item) return;
+        const src = item.previewUrl || item.mediaPath || "";
+        dispatch({
+          type: "ADD_LAYER",
+          layerType: "image",
+          propsPatch: { src, fit: "contain" },
+          layerPatch: { w: 500, h: 500, name: item.title || item.subtitle || "Imagen del sistema" },
+          clearBind: true,
+        });
+      } catch (err) {
+        console.error("No se pudo cargar imagen del sistema", err);
+      }
+    }
   };
 
   const btnSx = (active) => ({
@@ -115,6 +107,11 @@ export default function LeftToolbar() {
     background: active ? PE.accent : "transparent",
     "&:hover": { background: active ? PE.accentHover : "rgba(255,255,255,0.08)" },
   });
+
+  const selectToolActive =
+    activeTool === "select-rect" || activeTool === "select-ellipse"
+      ? activeTool
+      : null;
 
   return (
     <Box
@@ -133,36 +130,28 @@ export default function LeftToolbar() {
     >
       <HiddenFileInput />
 
-      <Tooltip title="Mover (V)" placement="right">
-        <IconButton
-          size="small"
-          onClick={() => {
-            cancelSelection();
-            setActiveTool("move");
-          }}
-          sx={btnSx(activeTool === "move")}
-        >
+      <Tooltip title="Seleccionar capa (V) — posición/tamaño en el inspector" placement="right">
+        <IconButton size="small" onClick={() => setActiveTool("select")} sx={btnSx(activeTool === "select" || activeTool === "move")}>
           <NearMeIcon sx={{ fontSize: 20 }} />
         </IconButton>
       </Tooltip>
 
       <ToolGroupButton
-        tools={SELECTION_TOOLS}
-        activeId={activeSelectionId}
-        onSelect={activateSelectionTool}
-        disabled={cropBusy}
+        tools={SELECT_TOOLS}
+        activeId={selectToolActive}
+        onSelect={(id) => setActiveTool(id)}
       />
 
-      {OTHER_TOOLS.map(({ id, icon: Icon, label }) => (
+      {TOOLS.map(({ id, icon: Icon, label }) => (
         <Tooltip key={id} title={label} placement="right">
           <span>
             <IconButton
               size="small"
-              disabled={(uploading && id === "image") || (cropBusy && id === "cut")}
+              disabled={uploading && (id === "image" || id === "svg")}
               onClick={() => onToolClick(id)}
               sx={btnSx(activeTool === id)}
             >
-              {uploading && id === "image" ? (
+              {uploading && (id === "image" || id === "svg") ? (
                 <CircularProgress size={18} sx={{ color: "#fff" }} />
               ) : (
                 <Icon sx={{ fontSize: 20 }} />

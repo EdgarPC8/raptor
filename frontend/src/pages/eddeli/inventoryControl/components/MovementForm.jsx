@@ -136,7 +136,7 @@ function MovementForm({
   const { toast: toastAuth, user } = useAuth();
   const { activeApp } = useAppSettings();
   const multiStockEnabled = activeApp?.multiStockEnabled !== false;
-  const isProgrammer = user?.loginRol === "Programador";
+  const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const isEdit = Boolean(movementToEdit?.id);
 
   const { handleSubmit, register, reset, setValue, watch, getValues } = useForm({
@@ -698,6 +698,9 @@ function MovementForm({
         description:
           formData.description?.trim() ||
           `Producción final de ${simulatedData.producto || selectedProduct?.name || "producto"}`,
+        abrirEmpaques: simulatedData.abrirEmpaques || [],
+        mermas: simulatedData.mermas || [],
+        ...(simulatedData.autocompletarStock ? { autocompletarStock: true } : {}),
         ...(dateApi ? { movementDate: dateApi } : {}),
       });
       toastAuth({

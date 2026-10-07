@@ -5,7 +5,6 @@ import {
   Button,
   MenuItem,
   Typography,
-  Stack,
 } from "@mui/material";
 
 import { useEffect, useMemo, useState } from "react";
@@ -19,39 +18,61 @@ import {
 import { useForm } from "react-hook-form";
 import SearchableSelect from "../../../../components/SearchableSelect";
 import {
-  inputUnitsForProduct,
   defaultInputUnit,
-  toStorageAmount,
-  fromStorageAmount,
   measureKind,
-  storageBaseLabel,
 } from "../../../../utils/weightUnits.js";
+import { productIsRaw, productIsRecipe, productIsSellable } from "../../../../utils/productRoleFlags.js";
 
+function asProductList(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.products)) return data.products;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.rows)) return data.rows;
+  return [];
+}
+
+/** Insumo contado por unidad (ej. huevo), no por g/ml. */
+function isUnitIngredient(p) {
+  if (!p) return false;
+  if (Number(p.unitId) === 1) return true;
+  return measureKind(p) === "other";
+}
+
+function componentKindOf(p) {
+  const t = String(p?.type || "").toLowerCase();
+  if (t === "intermediate") return "intermediate";
+  if (t === "raw") return "raw";
+  if (t === "final") return "final";
+  if (productIsRecipe(p) && productIsRaw(p) && !productIsSellable(p)) return "intermediate";
+  if (productIsRaw(p)) return "raw";
+  return "final";
+}
+
+function componentOptionLabel(p, kind) {
+  if (kind === "intermediate") return `${p.name} (intermedio)`;
+  if (kind === "final") return `${p.name} (final)`;
+  return isUnitIngredient(p) ? `${p.name} (insumo · unidad)` : `${p.name} (insumo)`;
+}
+
+/** Cualquier producto salvo el dueño de la receta: insumo, intermedio o final. */
 function buildComponentOptions(products, productFinalId) {
-  const others = products.filter((p) => String(p.id) !== String(productFinalId));
-
-  const generics = others.filter(
-    (p) => p.type === "raw" && p.isGenericIngredient && !p.genericProductId,
-  );
-  const genericFallback = others.filter(
-    (p) => p.type === "raw" && !p.genericProductId,
-  );
-  const rawOptions = generics.length > 0 ? generics : genericFallback;
-
-  const intermediates = others.filter((p) => p.type === "intermediate");
-
-  return [
-    ...intermediates.map((p) => ({
-      ...p,
-      optionLabel: `${p.name} (intermedio)`,
-      componentKind: "intermediate",
-    })),
-    ...rawOptions.map((p) => ({
-      ...p,
-      optionLabel: `${p.name} (insumo genérico)`,
-      componentKind: "raw",
-    })),
-  ];
+  const list = Array.isArray(products) ? products : [];
+  const order = { raw: 0, intermediate: 1, final: 2 };
+  return list
+    .filter((p) => String(p.id) !== String(productFinalId))
+    .map((p) => {
+      const componentKind = componentKindOf(p);
+      return {
+        ...p,
+        componentKind,
+        optionLabel: componentOptionLabel(p, componentKind),
+      };
+    })
+    .sort((a, b) => {
+      const byKind = (order[a.componentKind] ?? 9) - (order[b.componentKind] ?? 9);
+      if (byKind !== 0) return byKind;
+      return String(a.name || "").localeCompare(String(b.name || ""), "es");
+    });
 }
 
 function RecipeForm({ isEditing = false, datos = [], onClose, reload, productFinalId }) {
@@ -78,18 +99,9 @@ function RecipeForm({ isEditing = false, datos = [], onClose, reload, productFin
     (p) => String(p.id) === String(selectedRawId),
   );
   const isIntermediate = selectedComponent?.componentKind === "intermediate";
-  const isMeasureInsumo = !isIntermediate && watch("itemType") !== "material";
-  const measureUnit = watch("measureUnit") || defaultInputUnit(selectedComponent);
-  const quantity = watch("quantity");
-  const inputUnits = inputUnitsForProduct(selectedComponent);
-
-  const storagePreview = useMemo(() => {
-    if (!isMeasureInsumo || !selectedComponent) return null;
-    const stored = toStorageAmount(quantity, measureUnit, selectedComponent);
-    if (!Number.isFinite(stored) || stored <= 0) return null;
-    return stored;
-  }, [isMeasureInsumo, selectedComponent, quantity, measureUnit]);
-
+  const isFinal = selectedComponent?.componentKind === "final";
+  const isPieceComponent = isIntermediate || isFinal;
+  const isGramInsumo = Boolean(selectedComponent) && !isPieceComponent && watch("itemType") !== "material";
   const resetForm = () => {
     reset({
       productRawId: "",
@@ -103,29 +115,21 @@ function RecipeForm({ isEditing = false, datos = [], onClose, reload, productFin
     const body = {
       productFinalId,
       productRawId: formData.productRawId,
-      itemType: isIntermediate ? "insumo" : formData.itemType,
+      itemType: isGramInsumo || isPieceComponent ? "insumo" : formData.itemType,
     };
 
-    if (isIntermediate || formData.itemType === "material") {
-      body.quantity = Number(formData.quantity);
-      body.isQuantityInGrams = false;
-    } else {
-      const stored = toStorageAmount(
-        formData.quantity,
-        formData.measureUnit || defaultInputUnit(selectedComponent),
-        selectedComponent,
-      );
-      if (!Number.isFinite(stored) || stored <= 0) {
-        toastAuth({
-          message: "Indica una cantidad válida (g/kg/lb o ml/L según el insumo).",
-          variant: "error",
-        });
-        return;
-      }
-      body.quantity = stored;
-      // true = cantidad en la unidad continua del insumo (g o ml), no en piezas.
-      body.isQuantityInGrams = true;
+    const qty = Number(formData.quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      toastAuth({
+        message: isGramInsumo
+          ? "Indica los gramos del componente, mayores que 0."
+          : "Indica una cantidad mayor que 0.",
+        variant: "error",
+      });
+      return;
     }
+    body.quantity = qty;
+    body.isQuantityInGrams = isGramInsumo;
 
     if (isEditing) {
       toastAuth({
@@ -155,19 +159,30 @@ function RecipeForm({ isEditing = false, datos = [], onClose, reload, productFin
   };
 
   const loadData = async () => {
-    const { data } = await getAllProductsAll();
-    setAllProducts(data);
+    try {
+      const { data } = await getAllProductsAll();
+      const list = asProductList(data);
+      setAllProducts(list);
 
-    if (isEditing && datos) {
-      setValue("productRawId", datos.productRawId);
-      setValue("itemType", datos.itemType || "insumo");
-      const prod =
-        (Array.isArray(data) ? data : []).find(
-          (p) => Number(p.id) === Number(datos.productRawId),
-        ) || null;
-      const defUnit = defaultInputUnit(prod);
-      setValue("measureUnit", defUnit);
-      setValue("quantity", datos.quantity);
+      if (isEditing && datos) {
+        setValue("productRawId", datos.productRawId);
+        setValue("itemType", datos.itemType || "insumo");
+        const prod =
+          list.find((p) => Number(p.id) === Number(datos.productRawId)) || null;
+        const defUnit = defaultInputUnit(prod);
+        setValue("measureUnit", defUnit);
+        setValue("quantity", datos.quantity);
+        if (datos.isQuantityInGrams && prod && !isUnitIngredient(prod)) {
+          setValue("measureUnit", defUnit);
+        }
+      }
+    } catch (e) {
+      console.error("RecipeForm loadData:", e);
+      setAllProducts([]);
+      toastAuth?.({
+        message: e?.response?.data?.message || "No se pudieron cargar componentes",
+        variant: "error",
+      });
     }
   };
 
@@ -178,28 +193,6 @@ function RecipeForm({ isEditing = false, datos = [], onClose, reload, productFin
   useEffect(() => {
     if (isIntermediate) setValue("itemType", "insumo");
   }, [isIntermediate, setValue]);
-
-  useEffect(() => {
-    if (!selectedComponent || !isMeasureInsumo) return;
-    const allowed = inputUnitsForProduct(selectedComponent).map((u) => u.value);
-    if (!allowed.includes(measureUnit)) {
-      setValue("measureUnit", defaultInputUnit(selectedComponent));
-    }
-  }, [selectedComponent, isMeasureInsumo, measureUnit, setValue]);
-
-  const onMeasureUnitChange = (nextUnit) => {
-    const prev = measureUnit;
-    const qty = Number(quantity);
-    if (Number.isFinite(qty) && qty > 0 && isMeasureInsumo && selectedComponent) {
-      const stored = toStorageAmount(qty, prev, selectedComponent);
-      const converted = fromStorageAmount(stored, nextUnit, selectedComponent);
-      setValue("quantity", Number(converted.toFixed(6)));
-    }
-    setValue("measureUnit", nextUnit, { shouldDirty: true });
-  };
-
-  const kind = measureKind(selectedComponent);
-  const baseLabel = storageBaseLabel(selectedComponent);
 
   return (
     <Box component="form" sx={{ mt: 1 }} onSubmit={handleSubmit(submitForm)}>
@@ -217,78 +210,25 @@ function RecipeForm({ isEditing = false, datos = [], onClose, reload, productFin
           />
         </Grid>
 
-        {isMeasureInsumo ? (
-          <>
-            <Grid item xs={12} sm={7}>
-              <TextField
-                label="Cantidad"
-                type="number"
-                fullWidth
-                variant="standard"
-                inputProps={{ step: "any", min: 0 }}
-                value={watch("quantity")}
-                {...register("quantity", { required: true, min: 0.0001 })}
-                InputLabelProps={idData ? { shrink: true } : {}}
-                helperText={
-                  kind === "volume"
-                    ? "Ej. 900 ml o 0,9 L — se guarda en la unidad del insumo (ml/L)."
-                    : "Ej. 1 lb o 0,5 kg — se guarda en gramos."
-                }
-              />
-            </Grid>
-            <Grid item xs={12} sm={5}>
-              <TextField
-                label="Unidad de entrada"
-                select
-                fullWidth
-                variant="standard"
-                value={measureUnit}
-                onChange={(e) => onMeasureUnitChange(e.target.value)}
-                InputLabelProps={idData ? { shrink: true } : {}}
-              >
-                {inputUnits.map((u) => (
-                  <MenuItem key={u.value} value={u.value}>
-                    {u.label}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            {storagePreview != null && (
-              <Grid item xs={12}>
-                <Stack spacing={0.25}>
-                  <Typography variant="caption" color="text.secondary">
-                    Se guardará como{" "}
-                    <strong>
-                      {Number.isInteger(storagePreview)
-                        ? storagePreview
-                        : Number(storagePreview.toFixed(2))}{" "}
-                      {baseLabel}
-                    </strong>
-                    {measureUnit !== baseLabel.toLowerCase()
-                      ? ` (entrada: ${quantity} ${measureUnit})`
-                      : ""}
-                    .
-                  </Typography>
-                </Stack>
-              </Grid>
-            )}
-          </>
-        ) : (
-          <Grid item xs={12}>
-            <TextField
-              label="Cantidad (unidades)"
-              type="number"
-              fullWidth
-              variant="standard"
-              inputProps={{ step: "any", min: 0 }}
-              value={watch("quantity")}
-              {...register("quantity", { required: true, min: 0.0001 })}
-              InputLabelProps={idData ? { shrink: true } : {}}
-            />
-          </Grid>
-        )}
+        <Grid item xs={12}>
+          <TextField
+            label={isGramInsumo ? "Gramos" : isFinal ? "Unidades del producto final" : "Unidades"}
+            type="number"
+            fullWidth
+            variant="standard"
+            inputProps={{ step: "any", min: 0 }}
+            value={watch("quantity")}
+            {...register("quantity", { required: true, min: 0.0001 })}
+            InputLabelProps={idData ? { shrink: true } : {}}
+            helperText={
+              isGramInsumo
+                ? "Gramos que lleva cada unidad producida. Ej. 450 para una funda de harina."
+                : ""
+            }
+          />
+        </Grid>
 
-        {!isIntermediate && (
+        {!isPieceComponent && (
           <Grid item xs={12}>
             <TextField
               label="Tipo de ítem"
@@ -299,16 +239,18 @@ function RecipeForm({ isEditing = false, datos = [], onClose, reload, productFin
               {...register("itemType", { required: true })}
               InputLabelProps={idData ? { shrink: true } : {}}
             >
-              <MenuItem value="insumo">Insumo (peso g/kg/lb o volumen ml/L)</MenuItem>
+              <MenuItem value="insumo">Insumo (gramos)</MenuItem>
               <MenuItem value="material">Material (costo por unidad de empaque)</MenuItem>
             </TextField>
           </Grid>
         )}
 
-        {isIntermediate && (
+        {(isIntermediate || isFinal) && (
           <Grid item xs={12}>
             <Typography variant="caption" color="text.secondary">
-              Los productos intermedios (masas) se registran como insumo en la cadena de costos.
+              {isFinal
+                ? "El producto final entra a la receta por unidades."
+                : "Los productos intermedios (masas) se registran como insumo en la cadena de costos."}
             </Typography>
           </Grid>
         )}

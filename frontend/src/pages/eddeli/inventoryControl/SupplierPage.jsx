@@ -103,6 +103,26 @@ function SupplierPage() {
     { label: "Correo", id: "email", width: 180, render: (row) => row.email || "—" },
     { label: "Ciudad", id: "city", width: 120, render: (row) => row.city || "—" },
     {
+      label: "App enlazada",
+      id: "remoteApp",
+      width: 110,
+      render: (row) => {
+        const map = { eddeli: "EdDeli", tienda: "Tienda", store: "Store" };
+        const key = String(row.remoteApp || "").toLowerCase();
+        return map[key] || "—";
+      },
+    },
+    {
+      label: "Usuario Proveedor",
+      id: "linkedAccounts",
+      width: 160,
+      render: (row) => {
+        const links = row.linkedAccounts || [];
+        if (!links.length) return "—";
+        return links.map((a) => a.username).join(", ");
+      },
+    },
+    {
       label: "Estado",
       id: "isActive",
       width: 100,

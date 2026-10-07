@@ -42,6 +42,7 @@ export const RAPTOR_UNCONFIGURED_FALLBACK = {
   ordersAllowDeliverStockAdjust: true,
   financeAllowAdminCorrections: true,
   suggestOpenPackOnPosShortage: false,
+  productionOpenPackaging: false,
   cajaAllowCreateProductFromSelect: false,
   cajaAllowCreateProductFromScan: false,
   cajaAllowEditProductFromCart: false,
@@ -53,6 +54,7 @@ export const RAPTOR_UNCONFIGURED_FALLBACK = {
   notificationsToastExpiry: false,
   notificationsCreditEnabled: true,
   notificationsExpiryEnabled: false,
+  toastPosition: "bottom-right",
   receiptDetailSettings: {
     productNameCase: "as_stored",
     showLineNumber: false,
@@ -67,6 +69,13 @@ export const RAPTOR_UNCONFIGURED_FALLBACK = {
     showAccountingRequired: true,
     showSpecialTaxpayer: true,
     defaultPrintFormat: "a4",
+  },
+  tableColumnVisibility: {
+    comprobantesPos: { hidden: [] },
+    ventas: { hidden: [] },
+    compras: { hidden: [] },
+    locales: { hidden: [] },
+    prestamos: { hidden: [] },
   },
   themePalette: null,
 };
@@ -103,6 +112,7 @@ export const EDDELI_FALLBACK = {
   ordersAllowDeliverStockAdjust: true,
   financeAllowAdminCorrections: true,
   suggestOpenPackOnPosShortage: false,
+  productionOpenPackaging: false,
   cajaAllowCreateProductFromSelect: false,
   cajaAllowCreateProductFromScan: false,
   cajaAllowEditProductFromCart: false,
@@ -114,6 +124,7 @@ export const EDDELI_FALLBACK = {
   notificationsToastExpiry: false,
   notificationsCreditEnabled: true,
   notificationsExpiryEnabled: false,
+  toastPosition: "bottom-right",
   receiptDetailSettings: {
     productNameCase: "as_stored",
     showLineNumber: false,
@@ -128,6 +139,13 @@ export const EDDELI_FALLBACK = {
     showAccountingRequired: true,
     showSpecialTaxpayer: true,
     defaultPrintFormat: "a4",
+  },
+  tableColumnVisibility: {
+    comprobantesPos: { hidden: [] },
+    ventas: { hidden: [] },
+    compras: { hidden: [] },
+    locales: { hidden: [] },
+    prestamos: { hidden: [] },
   },
   themePalette: null,
 };

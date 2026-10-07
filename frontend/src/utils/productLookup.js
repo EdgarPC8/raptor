@@ -298,9 +298,15 @@ export function findProductByAnyCode(products, rawCode, supplierCodeIndex = null
   );
 }
 
-/** Productos que se pueden vender en caja (final o insumo con barcode escaneable). */
+/** Productos que se pueden vender en caja. */
 export function isSellableInCaja(product) {
   if (!product || product.isActive === false || product.isActive === 0) return false;
+  if (product.isSellable === true || product.isSellable === 1 || product.isSellable === "1") {
+    return true;
+  }
+  if (product.isSellable === false || product.isSellable === 0 || product.isSellable === "0") {
+    return false;
+  }
   const type = String(product.type || "final").toLowerCase();
   if (type === "final") return true;
   if (type === "raw" || type === "intermediate") {

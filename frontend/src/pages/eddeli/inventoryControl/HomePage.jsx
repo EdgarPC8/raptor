@@ -85,11 +85,11 @@ export const HomePage = () => {
             status: "Ingreso",
           })),
           ...resExpenses.data.map((e) => ({
-            name: "Gasto",
+            name: "Egreso",
             description: e.concept,
             date: e.date,
             amount: e.amount,
-            status: "Gasto",
+            status: "Egreso",
           })),
         ];
 
@@ -127,7 +127,7 @@ export const HomePage = () => {
         </Grid>
         <Grid item xs={12} md={3}>
           <Paper style={paperStyle}>
-            <Typography variant="h6">📉 Total Gastos</Typography>
+            <Typography variant="h6">📉 Total Egresos</Typography>
             <Typography variant="h5">${summary.totalExpense}</Typography>
           </Paper>
         </Grid>

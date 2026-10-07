@@ -18,12 +18,17 @@ import {
   cropSelectionToLayerRect,
   splitCropHorizontal,
   splitCropVertical,
+  blobHasVisiblePixels,
 } from "./imageCrop.js";
 import {
   uploadEditorImageFile,
   loadImageDimensions,
 } from "./editorImageUpload.js";
 import { ensureUniqueId } from "./editorActions.js";
+import {
+  bakeSvgRegionFromDocSel,
+  bakeSvgWithDocSelHole,
+} from "./mergeSvgLayers.js";
 import {
   ETIQUETA_CROP,
   getEtiquetaLayerLayout,
@@ -73,18 +78,21 @@ export function useImageCrop() {
     setDocSelection(null);
     endMarquee();
     endDocMarquee();
-    setActiveTool("move");
+    setActiveTool("select");
   }, [endDocMarquee, endMarquee, setActiveTool]);
 
   const beginDocMarqueeFromEvent = useCallback(
-    (e, scale, canvasW, canvasH, toolId) => {
+    (e, scale, canvasW, canvasH, toolId, stageEl = null) => {
       if (toolId !== "select-rect" && toolId !== "select-ellipse") return false;
 
       e.preventDefault();
       e.stopPropagation();
 
+      const el = stageEl || e.currentTarget;
+      if (!el?.getBoundingClientRect) return false;
+
       setCropDraft(null);
-      const rect = e.currentTarget.getBoundingClientRect();
+      const rect = el.getBoundingClientRect();
       const ax = (e.clientX - rect.left) * scale;
       const ay = (e.clientY - rect.top) * scale;
       const shape = selectionShapeFor(toolId);
@@ -93,7 +101,7 @@ export function useImageCrop() {
 
       docMarqueeRef.current = {
         anchor: { x: ax, y: ay },
-        stageEl: e.currentTarget,
+        stageEl: el,
         scale,
         canvasW,
         canvasH,
@@ -322,155 +330,252 @@ export function useImageCrop() {
   }, [applyCrop, toast]);
 
   /**
-   * Contexto estilo Photoshop: selección en coords de documento + capa activa.
-   * Si hay cropDraft en capa, lo convierte a docSelection.
+   * Solo la capa seleccionada + el cuadro del lienzo.
+   * Devuelve { layer, group, docSel } o { error: string }.
    */
   const resolveLayerViaCopyContext = useCallback(async () => {
+    const docSel = docSelection;
+    if (!docSel || docSel.w < 2 || docSel.h < 2) {
+      return { error: "Dibuja un cuadro o círculo en el lienzo primero." };
+    }
+
     const selectedId =
-      state.selected?.kind === "layer"
-        ? state.selected.id
-        : cropDraft?.layerId;
-    if (!selectedId) return null;
-
-    const layer = layers.find((l) => l.id === selectedId);
-    if (!layer || layer.type !== "image" || !layer.props?.src || layer.locked) return null;
-
-    const group = (state.doc?.groups || []).find((g) => g.id === layer.groupId);
-
-    let docSel = docSelection;
-    if ((!docSel || docSel.w < 2 || docSel.h < 2) && cropDraft?.layerId === layer.id) {
-      const natural = await loadImageDimensions(layer.props.src);
-      docSel = {
-        ...cropNormToDocRect(
-          cropDraft.cropNorm,
-          layer,
-          group,
-          natural.width,
-          natural.height,
-          layer.props?.fit || "contain"
-        ),
-        shape: cropDraft.selectionShape || "rect",
+      state.selected?.kind === "layer" ? state.selected.id : null;
+    if (!selectedId) {
+      return {
+        error: "Selecciona una capa SVG o imagen en el panel de capas.",
       };
     }
 
-    if (!docSel || docSel.w < 2 || docSel.h < 2) return null;
-    if (!docRectIntersectLayer(docSel, layer, group)) return null;
+    const layer = layers.find((l) => l.id === selectedId);
+    if (!layer) {
+      return { error: "No hay capa seleccionada." };
+    }
+    if (layer.locked) {
+      return { error: "La capa está bloqueada." };
+    }
+    if (layer.type !== "image" && layer.type !== "svg") {
+      return { error: "La capa seleccionada no es SVG ni imagen." };
+    }
+    if (!layer.props?.src) {
+      return { error: "La capa no tiene archivo SVG/imagen." };
+    }
+
+    const group = (state.doc?.groups || []).find((g) => g.id === layer.groupId);
+    if (!docRectIntersectLayer(docSel, layer, group)) {
+      return {
+        error:
+          "El cuadro no toca la capa seleccionada. Ajusta el área o elige otra capa.",
+      };
+    }
 
     return { layer, group, docSel };
-  }, [cropDraft, docSelection, layers, state.doc?.groups, state.selected]);
+  }, [docSelection, layers, state.doc?.groups, state.selected]);
 
   const copySelectionToLayer = useCallback(async () => {
     const ctx = await resolveLayerViaCopyContext();
-    if (!ctx) return false;
+    if (ctx?.error) {
+      const err = new Error(ctx.error);
+      err.code = "selection";
+      throw err;
+    }
 
     const { layer, group, docSel } = ctx;
     const gx = group?.x || 0;
     const gy = group?.y || 0;
+    const asSvg = layer.type === "svg";
 
     setBusy(true);
     try {
-      const blob = await bakeLayerRegionFromDocSel(layer, group, docSel);
-      if (!blob) return false;
+      let file;
+      let layerType = "image";
 
-      const relPath = await uploadEditorImageFile(blobToFile(blob, `${layer.name || "sel"}_copy`));
-      const maxZ = Math.max(...layers.map((l) => l.zIndex || 0), 0);
+      if (asSvg) {
+        file = await bakeSvgRegionFromDocSel(layer, group, docSel);
+        if (!file) {
+          throw new Error("No hay nada para seleccionar en esa capa.");
+        }
+        // comprobar que el recorte no esté vacío visualmente
+        const probe = await bakeLayerRegionFromDocSel(layer, group, docSel);
+        if (probe && !(await blobHasVisiblePixels(probe))) {
+          throw new Error(
+            "No hay nada para seleccionar en esa capa (el cuadro quedó vacío)."
+          );
+        }
+        layerType = "svg";
+      } else {
+        const blob = await bakeLayerRegionFromDocSel(layer, group, docSel);
+        if (!blob) {
+          throw new Error("No hay nada para seleccionar en esa capa.");
+        }
+        if (!(await blobHasVisiblePixels(blob))) {
+          throw new Error(
+            "No hay nada para seleccionar en esa capa (el cuadro quedó vacío)."
+          );
+        }
+        file = blobToFile(blob, `${layer.name || "sel"}_copy`);
+      }
+
+      const relPath = await uploadEditorImageFile(file);
+      const baseGroupId =
+        (state.doc?.groups || []).find((g) => g.id === "group_main")?.id ||
+        layer.groupId;
 
       dispatch({
         type: "ADD_LAYER",
-        layerType: "image",
-        propsPatch: { src: relPath, fit: "fill", cropNorm: null },
+        layerType,
+        propsPatch: {
+          src: relPath,
+          fit: "fill",
+          cropNorm: null,
+        },
         layerPatch: {
-          name: `${layer.name || "Imagen"} (selección)`,
-          groupId: layer.groupId,
+          name: `${layer.name || "Capa"} (selección)`,
+          groupId: baseGroupId,
+          folderId: null,
           x: Math.round(docSel.x - gx),
           y: Math.round(docSel.y - gy),
           w: Math.round(docSel.w),
           h: Math.round(docSel.h),
-          zIndex: maxZ + 1,
         },
         clearBind: true,
+        placeNearLayerId: layer.id,
+        place: "above",
       });
+      setDocSelection(null);
+      setActiveTool("select");
       await autoSaveTemplateDoc();
       return true;
     } finally {
       setBusy(false);
     }
-  }, [dispatch, layers, autoSaveTemplateDoc, resolveLayerViaCopyContext]);
+  }, [
+    dispatch,
+    autoSaveTemplateDoc,
+    resolveLayerViaCopyContext,
+    setActiveTool,
+    state.doc?.groups,
+  ]);
 
   const cutSelectionToLayer = useCallback(async () => {
     const ctx = await resolveLayerViaCopyContext();
-    if (!ctx) return false;
+    if (ctx?.error) {
+      const err = new Error(ctx.error);
+      err.code = "selection";
+      throw err;
+    }
 
     const { layer, group, docSel } = ctx;
     const gx = group?.x || 0;
     const gy = group?.y || 0;
+    const asSvg = layer.type === "svg";
 
     setBusy(true);
     try {
-      const [selBlob, remainBlob] = await Promise.all([
-        bakeLayerRegionFromDocSel(layer, group, docSel),
-        bakeLayerWithDocSelHole(layer, group, docSel),
-      ]);
-      if (!selBlob || !remainBlob) return false;
+      let selFile;
+      let remainFile;
+      let layerType = "image";
 
-      const selPath = await uploadEditorImageFile(blobToFile(selBlob, `${layer.name || "sel"}_cut`));
-      const remainPath = await uploadEditorImageFile(
-        blobToFile(remainBlob, `${layer.name || "img"}_rest`)
-      );
-      const maxZ = Math.max(...layers.map((l) => l.zIndex || 0), 0);
+      if (asSvg) {
+        const probe = await bakeLayerRegionFromDocSel(layer, group, docSel);
+        if (!probe || !(await blobHasVisiblePixels(probe))) {
+          throw new Error(
+            "No hay nada para seleccionar en esa capa (el cuadro quedó vacío)."
+          );
+        }
+        [selFile, remainFile] = await Promise.all([
+          bakeSvgRegionFromDocSel(layer, group, docSel),
+          bakeSvgWithDocSelHole(layer, group, docSel),
+        ]);
+        if (!selFile || !remainFile) {
+          throw new Error("No hay nada para seleccionar en esa capa.");
+        }
+        layerType = "svg";
+      } else {
+        const [selBlob, remainBlob] = await Promise.all([
+          bakeLayerRegionFromDocSel(layer, group, docSel),
+          bakeLayerWithDocSelHole(layer, group, docSel),
+        ]);
+        if (!selBlob || !remainBlob) {
+          throw new Error("No hay nada para seleccionar en esa capa.");
+        }
+        if (!(await blobHasVisiblePixels(selBlob))) {
+          throw new Error(
+            "No hay nada para seleccionar en esa capa (el cuadro quedó vacío)."
+          );
+        }
+        selFile = blobToFile(selBlob, `${layer.name || "sel"}_cut`);
+        remainFile = blobToFile(remainBlob, `${layer.name || "img"}_rest`);
+      }
+
+      const selPath = await uploadEditorImageFile(selFile);
+      const remainPath = await uploadEditorImageFile(remainFile);
+      const baseGroupId =
+        (state.doc?.groups || []).find((g) => g.id === "group_main")?.id ||
+        layer.groupId;
 
       dispatch({
         type: "UPDATE_LAYER_PROPS",
         layerId: layer.id,
-        propsPatch: { src: remainPath, fit: "fill", cropNorm: null },
+        propsPatch: { src: remainPath, fit: layer.props?.fit || "contain", cropNorm: null },
       });
-      dispatch({ type: "UPDATE_LAYER", layerId: layer.id, patch: { bind: null } });
+      dispatch({
+        type: "UPDATE_LAYER",
+        layerId: layer.id,
+        patch: { bind: null, type: layerType },
+      });
 
       dispatch({
         type: "ADD_LAYER",
-        layerType: "image",
-        propsPatch: { src: selPath, fit: "fill", cropNorm: null },
+        layerType,
+        propsPatch: {
+          src: selPath,
+          fit: "fill",
+          cropNorm: null,
+        },
         layerPatch: {
-          name: `${layer.name || "Imagen"} (corte)`,
-          groupId: layer.groupId,
+          name: `${layer.name || "Capa"} (corte)`,
+          groupId: baseGroupId,
+          folderId: null,
           x: Math.round(docSel.x - gx),
           y: Math.round(docSel.y - gy),
           w: Math.round(docSel.w),
           h: Math.round(docSel.h),
-          zIndex: maxZ + 1,
         },
         clearBind: true,
+        placeNearLayerId: layer.id,
+        place: "above",
       });
 
       setCropDraft(null);
       setDocSelection(null);
-      setActiveTool("move");
+      setActiveTool("select");
       await autoSaveTemplateDoc();
       return true;
     } finally {
       setBusy(false);
     }
-  }, [dispatch, layers, setActiveTool, autoSaveTemplateDoc, resolveLayerViaCopyContext]);
+  }, [
+    dispatch,
+    setActiveTool,
+    autoSaveTemplateDoc,
+    resolveLayerViaCopyContext,
+    state.doc?.groups,
+  ]);
 
   const copySelectionWithToast = useCallback(async () => {
     await toast({
-      promise: (async () => {
-        const ok = await copySelectionToLayer();
-        if (!ok) throw new Error("Sin selección");
-      })(),
-      successMessage: "Selección copiada a nueva capa (Ctrl+J)",
-      errorMessage: "Selecciona una capa de imagen y marca un área (M o arrastra sobre la capa)",
+      promise: copySelectionToLayer(),
+      successMessage: "Copiado a nueva capa (la original se mantiene)",
+      errorMessage: "No hay nada para seleccionar",
     });
   }, [copySelectionToLayer, toast]);
 
   const cutSelectionWithToast = useCallback(async () => {
     await toast({
-      promise: (async () => {
-        const ok = await cutSelectionToLayer();
-        if (!ok) throw new Error("Sin selección");
-      })(),
-      successMessage: "Selección cortada a nueva capa (Ctrl+Shift+J)",
-      errorMessage: "Selecciona una capa de imagen y marca un área (M o arrastra sobre la capa)",
+      promise: cutSelectionToLayer(),
+      successMessage: "Cortado a nueva capa (sacado de la original)",
+      errorMessage: "No hay nada para seleccionar",
     });
   }, [cutSelectionToLayer, toast]);
 

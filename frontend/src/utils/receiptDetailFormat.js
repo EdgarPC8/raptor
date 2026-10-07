@@ -33,6 +33,8 @@ export const DEFAULT_RECEIPT_DETAIL_SETTINGS = {
   showTaxRegime: true,
   showAccountingRequired: true,
   showSpecialTaxpayer: true,
+  /** Si está activo, el comprobante no desglosa el IVA aunque el producto lo tenga. */
+  ignoreProductIva: false,
   defaultPrintFormat: "a4",
   tableLayouts: normalizeReceiptTableLayouts(DEFAULT_RECEIPT_TABLE_LAYOUTS),
 };
@@ -67,8 +69,38 @@ export function normalizeReceiptDetailSettings(raw) {
       src.showAccountingRequired !== false && src.showAccountingRequired !== "false",
     showSpecialTaxpayer:
       src.showSpecialTaxpayer !== false && src.showSpecialTaxpayer !== "false",
+    ignoreProductIva:
+      src.ignoreProductIva === true || src.ignoreProductIva === "true",
     defaultPrintFormat: normalizePrintFormat(src.defaultPrintFormat, "a4"),
     tableLayouts: normalizeReceiptTableLayouts(src.tableLayouts),
+  };
+}
+
+/**
+ * Con ignoreProductIva, el precio cobrado se queda igual y el IVA del producto no se desglosa.
+ */
+export function applyReceiptIvaSetting(receipt, settingsInput) {
+  if (!receipt) return receipt;
+  const settings = normalizeReceiptDetailSettings(settingsInput);
+  if (!settings.ignoreProductIva) return receipt;
+  const items = (receipt.items || []).map((it) => {
+    const lineTotal = Number(it?.lineTotal ?? it?.subtotal ?? 0);
+    return {
+      ...it,
+      taxRate: 0,
+      iva: 0,
+      subtotal: Number(lineTotal.toFixed(2)),
+    };
+  });
+  const subtotal = Number(
+    items.reduce((sum, it) => sum + Number(it.subtotal || 0), 0).toFixed(2),
+  );
+  return {
+    ...receipt,
+    items,
+    subtotal,
+    iva: 0,
+    total: receipt.total,
   };
 }
 
@@ -217,20 +249,33 @@ export function buildReceiptPreview({
   documentType = "nota_venta",
   businessName = "Mi negocio",
   sriSettings = null,
+  ignoreProductIva = false,
 } = {}) {
-  const items = RECEIPT_PREVIEW_SAMPLE_ITEMS.map((it) => ({
-    ...it,
-    code: it.barcode || it.code || "",
-    discount: Number(it.discount || 0),
-    subtotal: it.subtotal ?? it.lineTotal,
-    iva: 0,
-    taxRate: documentType === "factura" ? 15 : 0,
-  }));
-  const subtotal = items.reduce(
-    (a, it) => a + Number(it.subtotal ?? it.lineTotal ?? 0),
-    0,
+  const rate = 15;
+  const items = RECEIPT_PREVIEW_SAMPLE_ITEMS.map((it) => {
+    const lineTotal = Number(it.lineTotal || 0);
+    const taxRate = ignoreProductIva ? 0 : rate;
+    const subtotal = taxRate > 0
+      ? Number((lineTotal / (1 + taxRate / 100)).toFixed(2))
+      : lineTotal;
+    const iva = taxRate > 0 ? Number((lineTotal - subtotal).toFixed(2)) : 0;
+    return {
+      ...it,
+      code: it.barcode || it.code || "",
+      discount: Number(it.discount || 0),
+      taxRate,
+      subtotal,
+      iva,
+      lineTotal,
+    };
+  });
+  const subtotal = Number(
+    items.reduce((a, it) => a + Number(it.subtotal || 0), 0).toFixed(2),
   );
-  const iva = documentType === "factura" ? Number((subtotal * 0.15).toFixed(2)) : 0;
+  const iva = Number(items.reduce((a, it) => a + Number(it.iva || 0), 0).toFixed(2));
+  const total = Number(
+    items.reduce((a, it) => a + Number(it.lineTotal || 0), 0).toFixed(2),
+  );
   const isFactura = documentType === "factura";
   const fallbackName = businessName || "Mi negocio";
 
@@ -251,7 +296,7 @@ export function buildReceiptPreview({
     items,
     subtotal,
     iva,
-    total: Number((subtotal + iva).toFixed(2)),
+    total,
     paymentMethod: "Efectivo",
   };
 

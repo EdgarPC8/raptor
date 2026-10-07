@@ -44,8 +44,10 @@ import {
 } from "@mui/icons-material";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 import TablePro from "../../../components/Tables/TablePro";
+import TableColumnVisibilityControl from "../../../components/Tables/TableColumnVisibilityControl.jsx";
 import { storeSriStatus } from "../../../components/OpenShiftStoreDialog.jsx";
 import { fetchSriBillingSettings } from "../../../api/sriBillingRequest.js";
+import { useTableColumnVisibility } from "../../../hooks/useTableColumnVisibility.js";
 
 import {
   getStoresRequest,
@@ -1413,28 +1415,14 @@ function StoresPage() {
       render: (row) => {
         const filename = row?.imageUrl;
         const src = buildImageUrl(filename);
-        
-        // Debug: verificar valores
-        if (filename && !src) {
-          console.warn("⚠️ buildImageUrl retornó null para:", filename, "store:", row?.name);
-        }
-        if (src) {
-          console.log("🖼️ Cargando imagen:", src, "para store:", row?.name);
-        }
-        
+
         return src ? (
           <img
             src={src}
             alt={row?.name || "img"}
             style={{ width: 70, height: 56, objectFit: "cover", borderRadius: 8 }}
             onError={(e) => {
-              console.error("❌ Error cargando imagen:", src, "para store:", row?.name);
-              console.error("   imageUrl original:", filename);
-              console.error("   pathImg base:", pathImg);
               e.currentTarget.style.visibility = "hidden";
-            }}
-            onLoad={() => {
-              console.log("✅ Imagen cargada exitosamente:", src);
             }}
           />
         ) : (
@@ -1556,6 +1544,14 @@ function StoresPage() {
       },
     },
   ];
+
+  // Columnas Locales → app_settings.tableColumnVisibility (BD)
+  const {
+    visibleColumns,
+    hiddenIds,
+    requiredIds,
+    toggleColumn,
+  } = useTableColumnVisibility("locales", columns);
 
   return (
     <Container sx={{ py: 2 }}>
@@ -1705,7 +1701,15 @@ function StoresPage() {
 
       <TablePro
         rows={visibleRows}
-        columns={columns}
+        columns={visibleColumns}
+        toolbarExtra={
+          <TableColumnVisibilityControl
+            tableKey="locales"
+            hiddenIds={hiddenIds}
+            requiredIds={requiredIds}
+            onToggle={toggleColumn}
+          />
+        }
         loading={loading}
         defaultRowsPerPage={10}
         title={

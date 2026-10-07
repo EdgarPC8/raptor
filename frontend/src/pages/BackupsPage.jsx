@@ -1,4 +1,4 @@
-/** Gestión de backups JSON — solo Programador. */
+/** Gestión de backups JSON — módulo Desarrollador (Programador); embebido en Configuración para Propietario. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -319,6 +319,7 @@ export default function BackupsPage({ embedded = false }) {
     []
   );
 
+  // Página del menú Desarrollador: solo Programador. Embebida en Configuración: Propietario.
   if (!embedded && user?.loginRol !== "Programador") {
     return <Navigate to="/" replace />;
   }

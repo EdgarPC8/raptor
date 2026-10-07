@@ -10,6 +10,7 @@ import { isFacturaDocument } from "../../utils/invoiceFiscalUtils.js";
 import {
   formatReceiptItemDescription,
   normalizeReceiptDetailSettings,
+  applyReceiptIvaSetting,
 } from "../../utils/receiptDetailFormat.js";
 import {
   formatReceiptQuantity,
@@ -67,12 +68,13 @@ export default function SaleReceiptContent({
   const detailCfg = normalizeReceiptDetailSettings(
     detailSettings ?? activeApp?.receiptDetailSettings,
   );
+  const shown = applyReceiptIvaSetting(receipt, detailCfg);
 
-  if (!receipt) return null;
-  if (isFacturaDocument(receipt)) {
+  if (!shown) return null;
+  if (isFacturaDocument(shown)) {
     return (
       <InvoiceRideContent
-        receipt={receipt}
+        receipt={shown}
         format={format}
         detailSettings={detailCfg}
       />
@@ -80,9 +82,9 @@ export default function SaleReceiptContent({
   }
   const layout = getReceiptLayout(format);
   const isTicket = layout.isTicket;
-  const items = receipt.items || [];
+  const items = shown.items || [];
   const totalQuantity = items.reduce((acc, it) => acc + Number(it.quantity || 0), 0);
-  const docType = receipt.documentType || "nota_venta";
+  const docType = shown.documentType || "nota_venta";
   const tableCols = resolveReceiptTableColumns(detailCfg, docType, format);
   const cellFormatters = {
     money: formatMoneyReceipt,
@@ -112,18 +114,18 @@ export default function SaleReceiptContent({
     >
       <Box sx={{ textAlign: "center", mb: isTicket ? 1 : 2 }}>
         <Typography fontWeight={800} fontSize={layout.businessName} color={BLACK}>
-          {receipt.businessName}
+          {shown.businessName}
         </Typography>
-        {receipt.businessDescription ? (
+        {shown.businessDescription ? (
           <Typography fontWeight={800} fontSize={layout.businessDesc} display="block" sx={{ mt: 0.5 }}>
-            {receipt.businessDescription}
+            {shown.businessDescription}
           </Typography>
         ) : null}
         <Typography fontWeight={800} sx={{ mt: 1 }} fontSize={layout.docTitle} color={BLACK}>
-          {receipt.documentTitle}
+          {shown.documentTitle}
         </Typography>
         <Typography fontWeight={800} fontSize={layout.meta} display="block" sx={{ mt: 0.5 }}>
-          N° {receipt.id || "—"}
+          N° {shown.id || "—"}
         </Typography>
         <Typography
           fontWeight={900}
@@ -131,7 +133,7 @@ export default function SaleReceiptContent({
           display="block"
           sx={{ mt: 0.35, letterSpacing: 0.2 }}
         >
-          {receipt.date}
+          {shown.date}
         </Typography>
       </Box>
 
@@ -140,37 +142,37 @@ export default function SaleReceiptContent({
           <Box component="span" sx={{ fontWeight: 800 }}>
             {RECEIPT_FIELD_LABELS.name}
           </Box>{" "}
-          {receipt.customerName}
+          {shown.customerName}
         </Typography>
-        {receipt.customerCedula ? (
+        {shown.customerCedula ? (
           <Typography variant="body2" color={BLACK} sx={{ mb: 0.35 }}>
             <Box component="span" sx={{ fontWeight: 800 }}>
               {RECEIPT_FIELD_LABELS.cedula}
             </Box>{" "}
-            {receipt.customerCedula}
+            {shown.customerCedula}
           </Typography>
         ) : null}
-        {receipt.customerPhone ? (
+        {shown.customerPhone ? (
           <Typography variant="body2" color={BLACK} sx={{ mb: 0.35 }}>
             <Box component="span" sx={{ fontWeight: 800 }}>
               {RECEIPT_FIELD_LABELS.phone}
             </Box>{" "}
-            {receipt.customerPhone}
+            {shown.customerPhone}
           </Typography>
         ) : null}
-        {receipt.customerAddress ? (
+        {shown.customerAddress ? (
           <Typography variant="body2" color={BLACK} sx={{ mb: 0.35 }}>
             <Box component="span" sx={{ fontWeight: 800 }}>
               {RECEIPT_FIELD_LABELS.address}
             </Box>{" "}
-            {receipt.customerAddress}
+            {shown.customerAddress}
           </Typography>
         ) : null}
         <Typography variant="body2" color={BLACK}>
           <Box component="span" sx={{ fontWeight: 800 }}>
             {RECEIPT_FIELD_LABELS.payment}
           </Box>{" "}
-          {receipt.paymentMethod}
+          {shown.paymentMethod}
         </Typography>
       </Box>
 
@@ -277,12 +279,12 @@ export default function SaleReceiptContent({
       <Box sx={{ borderTop: "1px dashed", borderColor: "#999", pt: 1, color: BLACK, fontWeight: 700 }}>
         <Box sx={{ display: "flex", justifyContent: "space-between" }}>
           <span>Subtotal</span>
-          <span>{formatMoneyReceipt(receipt.subtotal)}</span>
+          <span>{formatMoneyReceipt(shown.subtotal)}</span>
         </Box>
-        {receipt.iva > 0 ? (
+        {shown.iva > 0 ? (
           <Box sx={{ display: "flex", justifyContent: "space-between" }}>
             <span>IVA</span>
-            <span>{formatMoneyReceipt(receipt.iva)}</span>
+            <span>{formatMoneyReceipt(shown.iva)}</span>
           </Box>
         ) : null}
         <Box
@@ -295,13 +297,25 @@ export default function SaleReceiptContent({
           }}
         >
           <span>TOTAL</span>
-          <span>{formatMoneyReceipt(receipt.total)}</span>
+          <span>{formatMoneyReceipt(shown.total)}</span>
         </Box>
+        {shown.amountReceived != null ? (
+          <Box sx={{ display: "flex", justifyContent: "space-between", mt: 0.35 }}>
+            <span>{RECEIPT_FIELD_LABELS.received}</span>
+            <span>{formatMoneyReceipt(shown.amountReceived)}</span>
+          </Box>
+        ) : null}
+        {shown.amountReceived != null && shown.changeDue != null ? (
+          <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+            <span>{RECEIPT_FIELD_LABELS.change}</span>
+            <span>{formatMoneyReceipt(shown.changeDue)}</span>
+          </Box>
+        ) : null}
       </Box>
 
-      {showNotes && receipt.notes ? (
+      {showNotes && shown.notes ? (
         <Typography variant="body2" display="block" sx={{ mt: 1, color: BLACK, fontWeight: 700 }}>
-          {receipt.notes}
+          {shown.notes}
         </Typography>
       ) : null}
       <Typography

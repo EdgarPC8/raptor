@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Box,
   Button,
@@ -22,10 +22,15 @@ import AssignmentIcon from "@mui/icons-material/Assignment";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import PrintIcon from "@mui/icons-material/Print";
 import EditIcon from "@mui/icons-material/Edit";
+import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
+import LinkIcon from "@mui/icons-material/Link";
 import TablePro from "../../../components/Tables/TablePro.jsx";
+import TableColumnVisibilityControl from "../../../components/Tables/TableColumnVisibilityControl.jsx";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog.jsx";
 import TourHelpButton from "../../../components/TourHelpButton.jsx";
+import { useTableColumnVisibility } from "../../../hooks/useTableColumnVisibility.js";
 import InvoiceHubDetailDialog from "./components/InvoiceHubDetailDialog.jsx";
+import SupplierOrderPayDialog from "./components/SupplierOrderPayDialog.jsx";
 import { getAllSupplierOrdersRequest } from "../../../api/ordersRequest.js";
 import { useAuth } from "../../../context/AuthContext.jsx";
 import { APP_ROUTES } from "../../../config/appRoutes.js";
@@ -39,8 +44,17 @@ import SupplierOrderForm, {
   SUPPLIER_ORDER_DIALOG_CONTENT_SX,
   SUPPLIER_ORDER_DIALOG_PAPER_SX,
 } from "./components/SupplierOrderForm.jsx";
+import PeerSupplierOrderAcceptDialog from "./components/PeerSupplierOrderAcceptDialog.jsx";
+import { usePeerOrderRealtime } from "../../../hooks/usePeerOrderRealtime.js";
 import { exportPurchasesInvoicesExcel } from "../../../utils/exportInvoiceReportExcel.js";
-import { getPurchaseHubStatus, InvoiceHubStatusIcon, PURCHASE_HUB_FILTER_OPTIONS, purchaseHubStatusByKey } from "./components/invoiceHubStatus.jsx";
+import {
+  canAbonarHubRow,
+  getPurchaseHubStatus,
+  InvoiceHubStatusIcon,
+  PURCHASE_HUB_FILTER_OPTIONS,
+  purchaseHubStatusByKey,
+} from "./components/invoiceHubStatus.jsx";
+import { formatDateTime } from "../../../helpers/functions.js";
 
 const MONEY_COL = {
   align: "right",
@@ -134,11 +148,6 @@ function todayIso() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function monthStartIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
-
 function orderDateIso(order) {
   const raw = order?.date || order?.receivedAt || order?.paidAt || "";
   if (!raw) return "";
@@ -205,6 +214,7 @@ function splitSupplierInvoiceNumber(raw) {
 /** Normaliza un pedido a proveedor para la tabla y el modal de detalle. */
 function mapPurchaseRow(o) {
   const dateIso = orderDateIso(o);
+  const dateRaw = o?.date || o?.receivedAt || o?.paidAt || "";
   const total = Number(o.totalAmount ?? o.total ?? 0);
   const supplierName = String(
     o.ERP_supplier?.name || o.supplier?.name || o.supplierName || "—",
@@ -236,7 +246,7 @@ function mapPurchaseRow(o) {
   return {
     ...o,
     dateIso,
-    emissionDate: dateIso || "—",
+    emissionDate: dateRaw ? formatDateTime(dateRaw) : "—",
     invoiceNumber: inv.invoiceNumber || o.invoiceNumber || "",
     estabPtoEmi: inv.estabPtoEmi,
     numero: inv.numero,
@@ -260,6 +270,7 @@ function mapPurchaseRow(o) {
     otherLabel: money(pay.other),
     retentionLabel: money(retention),
     hubStatus: getPurchaseHubStatus(o),
+    peerAcceptStatus: o.peerAcceptStatus || null,
   };
 }
 
@@ -267,20 +278,33 @@ function mapPurchaseRow(o) {
 export default function PurchasesHubPage() {
   const { toast } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [orderToEdit, setOrderToEdit] = useState(null);
   const [detailRow, setDetailRow] = useState(null);
+  const [payOrder, setPayOrder] = useState(null);
+  const [peerAcceptOrderId, setPeerAcceptOrderId] = useState(null);
   /** Historial completo (sin rango de fechas) para la pestaña general del proveedor. */
   const [historyRows, setHistoryRows] = useState(null);
   const supplierFormTourRef = useRef(null);
   const [filters, setFilters] = useState({
-    dateFrom: monthStartIso(),
-    dateTo: todayIso(),
+    dateFrom: "",
+    dateTo: "",
     status: "all",
   });
+
+  useEffect(() => {
+    const id = Number(searchParams.get("peerAcceptOrderId"));
+    if (Number.isFinite(id) && id > 0) {
+      setPeerAcceptOrderId(id);
+      const next = new URLSearchParams(searchParams);
+      next.delete("peerAcceptOrderId");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const load = async (from, to) => {
     setLoading(true);
@@ -301,7 +325,21 @@ export default function PurchasesHubPage() {
     }
   };
 
-  const refresh = () => void load(filters.dateFrom, filters.dateTo);
+  const refresh = useCallback(
+    () => void load(filters.dateFrom, filters.dateTo),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filters.dateFrom, filters.dateTo, toast],
+  );
+
+  usePeerOrderRealtime({
+    onSupplierOrder: useCallback(
+      ({ orderId }) => {
+        refresh();
+        if (orderId) setPeerAcceptOrderId(orderId);
+      },
+      [refresh],
+    ),
+  });
 
   const openNewPurchase = () => {
     setIsEditing(false);
@@ -403,6 +441,95 @@ export default function PurchasesHubPage() {
     onDestroyed: () => supplierFormTourRef.current?.resetDemo?.(),
   });
 
+  // Columnas Compras → app_settings.tableColumnVisibility (BD)
+  const columns = useMemo(
+    () => [
+      { id: "emissionDate", label: "Fecha", minWidth: 148 },
+      { id: "estabPtoEmi", label: "Estab", minWidth: 72 },
+      { id: "numero", label: "Nº factura", minWidth: 96 },
+      { id: "supplierLabel", label: "Proveedor", ...TEXT_COL(140) },
+      { id: "subtotalLabel", label: "Subtotal", ...MONEY_COL },
+      { id: "discountLabel", label: "Desc.", ...MONEY_COL },
+      { id: "ivaLabel", label: "IVA", ...MONEY_COL },
+      { id: "totalLabel", label: "Total", ...MONEY_COL },
+      { id: "cashLabel", label: "Efectivo", ...MONEY_COL },
+      { id: "checkBankLabel", label: "Chq/Bco", ...MONEY_COL },
+      { id: "cardLabel", label: "Tarjeta", ...MONEY_COL },
+      { id: "otherLabel", label: "Otros", ...MONEY_COL },
+      { id: "retentionLabel", label: "Ret.", ...MONEY_COL },
+      {
+        id: "actions",
+        label: "Acciones",
+        stopRowClick: true,
+        minWidth: 168,
+        cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+        headerSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+        getSearchValue: (row) => row.hubStatus?.label || "",
+        render: (row) => (
+          <Stack
+            direction="row"
+            spacing={0.25}
+            alignItems="center"
+            justifyContent="flex-end"
+            data-tour="compras-hub-row-actions"
+          >
+            <InvoiceHubStatusIcon status={row.hubStatus} />
+            {row.peerAcceptStatus === "pending_accept" ? (
+              <Tooltip title="Aceptar y enlazar productos">
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => setPeerAcceptOrderId(row.id)}
+                  aria-label="Aceptar pedido enlazado"
+                >
+                  <LinkIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+            {row.peerAcceptStatus !== "pending_accept" && canAbonarHubRow(row.hubStatus) ? (
+              <Tooltip title="Abonar">
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => setPayOrder(row)}
+                  aria-label="Abonar"
+                >
+                  <AttachMoneyIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+            <Tooltip title="Ver detalle">
+              <IconButton size="small" color="primary" onClick={() => void openDetail(row)}>
+                <VisibilityIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Imprimir">
+              <IconButton size="small" color="primary" onClick={() => printPurchaseReport(row)}>
+                <PrintIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            {row.peerAcceptStatus !== "pending_accept" ? (
+              <Tooltip title="Editar">
+                <IconButton size="small" color="primary" onClick={() => openEditPurchase(row)}>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+          </Stack>
+        ),
+      },
+      SPACER_COL,
+    ],
+    [],
+  );
+
+  const {
+    visibleColumns,
+    hiddenIds,
+    requiredIds,
+    toggleColumn,
+  } = useTableColumnVisibility("compras", columns);
+
   return (
     <Box sx={{ p: { xs: 1.5, md: 3 } }}>
       <Stack
@@ -461,8 +588,11 @@ export default function PurchasesHubPage() {
         sx={{ p: 2, mb: 2, borderRadius: 2 }}
         data-tour="compras-hub-filters"
       >
-        <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1.5 }}>
+        <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 0.5 }}>
           Filtros de búsqueda
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+          Sin fechas se listan todas las compras. Elige un rango solo si quieres acotar.
         </Typography>
         <Grid container spacing={1.5} alignItems="center">
           <Grid item xs={6} md={2}>
@@ -528,8 +658,8 @@ export default function PurchasesHubPage() {
               startIcon={<RestartAltIcon />}
               onClick={() =>
                 setFilters({
-                  dateFrom: monthStartIso(),
-                  dateTo: todayIso(),
+                  dateFrom: "",
+                  dateTo: "",
                   status: "all",
                 })
               }
@@ -545,57 +675,15 @@ export default function PurchasesHubPage() {
         rows={rows}
         dense
         tableMaxHeight="calc(100vh - 320px)"
-        columns={[
-          { id: "emissionDate", label: "Fecha", minWidth: 88 },
-          { id: "estabPtoEmi", label: "Estab", minWidth: 72 },
-          { id: "numero", label: "Nº factura", minWidth: 96 },
-          { id: "supplierLabel", label: "Proveedor", ...TEXT_COL(140) },
-          { id: "subtotalLabel", label: "Subtotal", ...MONEY_COL },
-          { id: "discountLabel", label: "Desc.", ...MONEY_COL },
-          { id: "ivaLabel", label: "IVA", ...MONEY_COL },
-          { id: "totalLabel", label: "Total", ...MONEY_COL },
-          { id: "cashLabel", label: "Efectivo", ...MONEY_COL },
-          { id: "checkBankLabel", label: "Chq/Bco", ...MONEY_COL },
-          { id: "cardLabel", label: "Tarjeta", ...MONEY_COL },
-          { id: "otherLabel", label: "Otros", ...MONEY_COL },
-          { id: "retentionLabel", label: "Ret.", ...MONEY_COL },
-          {
-            id: "actions",
-            label: "Acciones",
-            stopRowClick: true,
-            minWidth: 140,
-            cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
-            headerSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
-            getSearchValue: (row) => row.hubStatus?.label || "",
-            render: (row) => (
-              <Stack
-                direction="row"
-                spacing={0.25}
-                alignItems="center"
-                justifyContent="flex-end"
-                data-tour="compras-hub-row-actions"
-              >
-                <InvoiceHubStatusIcon status={row.hubStatus} />
-                <Tooltip title="Ver detalle">
-                  <IconButton size="small" color="primary" onClick={() => void openDetail(row)}>
-                    <VisibilityIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Imprimir">
-                  <IconButton size="small" color="primary" onClick={() => printPurchaseReport(row)}>
-                    <PrintIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Editar">
-                  <IconButton size="small" color="primary" onClick={() => openEditPurchase(row)}>
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Stack>
-            ),
-          },
-          SPACER_COL,
-        ]}
+        columns={visibleColumns}
+        toolbarExtra={
+          <TableColumnVisibilityControl
+            tableKey="compras"
+            hiddenIds={hiddenIds}
+            requiredIds={requiredIds}
+            onToggle={toggleColumn}
+          />
+        }
         showSearch
         showPagination
         showIndex={false}
@@ -633,6 +721,17 @@ export default function PurchasesHubPage() {
         }}
       />
 
+      <SupplierOrderPayDialog
+        open={Boolean(payOrder)}
+        order={payOrder}
+        onClose={() => setPayOrder(null)}
+        toast={toast}
+        onPaid={() => {
+          setHistoryRows(null);
+          refresh();
+        }}
+      />
+
       <SimpleDialog
         open={formOpen}
         onClose={closeForm}
@@ -659,6 +758,17 @@ export default function PurchasesHubPage() {
           active={formOpen}
         />
       </SimpleDialog>
+
+      <PeerSupplierOrderAcceptDialog
+        open={Boolean(peerAcceptOrderId)}
+        orderId={peerAcceptOrderId}
+        onClose={() => setPeerAcceptOrderId(null)}
+        onAccepted={() => {
+          setHistoryRows(null);
+          refresh();
+        }}
+        toast={toast}
+      />
     </Box>
   );
 }

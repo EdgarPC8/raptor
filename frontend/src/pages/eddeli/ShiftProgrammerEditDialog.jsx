@@ -48,7 +48,7 @@ import {
 } from "../../utils/turnoCashUtils.js";
 
 const MOVEMENT_CATEGORY_LABELS = {
-  gasto_operativo: "Gasto operativo",
+  gasto_operativo: "Egreso operativo",
   compra_mercancia: "Compra mercancía",
   retiro: "Retiro / depósito",
   entrada: "Entrada de efectivo",
@@ -222,7 +222,7 @@ export default function ShiftProgrammerEditDialog({ open, shiftId, onClose, onSa
         concept: edit.concept.trim(),
         createdAt: datetimeLocalForApi(edit.createdAt),
       });
-      void toast?.({ message: "Gasto actualizado.", variant: "success" });
+      void toast?.({ message: "Egreso actualizado.", variant: "success" });
       await loadShift();
       onSaved?.();
     } catch (e) {
@@ -413,7 +413,7 @@ export default function ShiftProgrammerEditDialog({ open, shiftId, onClose, onSa
 
             <Box>
               <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.75 }}>
-                Gastos y movimientos ({movements.length})
+                Egresos y movimientos ({movements.length})
               </Typography>
               {movements.length > 0 && (
                 <TableContainer sx={{ maxHeight: 220, mb: 1 }}>
@@ -515,7 +515,7 @@ export default function ShiftProgrammerEditDialog({ open, shiftId, onClose, onSa
               )}
 
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                Añadir gasto faltante (ej. almuerzo):
+                Añadir egreso faltante (ej. almuerzo):
               </Typography>
               <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
                 <TextField

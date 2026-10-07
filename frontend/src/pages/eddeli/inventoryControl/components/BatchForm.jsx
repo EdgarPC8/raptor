@@ -393,7 +393,7 @@ function BatchForm({
               fullWidth
               variant="standard"
               inputProps={{ min: 0, step: "0.01" }}
-              helperText="Solo si querés registrar el gasto de esta compra"
+              helperText="Solo si querés registrar el egreso de esta compra"
               {...register("unitCost")}
             />
           </Grid>
@@ -423,7 +423,7 @@ function BatchForm({
                       onChange={(e) => field.onChange(e.target.checked)}
                     />
                   }
-                  label="Registrar también gasto de compra (usa el costo unitario)"
+                  label="Registrar también egreso de compra (usa el costo unitario)"
                 />
               )}
             />

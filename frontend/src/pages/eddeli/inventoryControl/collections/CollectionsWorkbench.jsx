@@ -73,7 +73,7 @@ import DebtReportDialog from "./DebtReportDialog.jsx";
 export default function CollectionsWorkbench() {
   const isMobile = useMediaQuery("(max-width:900px)");
   const { user, toast: toastAuth } = useAuth();
-  const isProgrammer = user?.loginRol === "Programador";
+  const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
 
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -1062,7 +1062,7 @@ export default function CollectionsWorkbench() {
                 overflowX: "hidden",
                 overflowY: "auto",
                 pb: 0.5,
-                "-webkitOverflowScrolling": "touch",
+                WebkitOverflowScrolling: "touch",
                 "&::-webkit-scrollbar": { width: 8 },
                 "&::-webkit-scrollbar-thumb": { backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 4 },
                 boxSizing: "border-box",
@@ -1394,7 +1394,7 @@ export default function CollectionsWorkbench() {
                                 </Typography>
                                 <Typography variant="body2" sx={{ color: "text.secondary" }}>
                                   Estado: {g.status || "—"} · Creado:{" "}
-                                  {formatDateTime(g.createdAt || g.date)}
+                                  {formatDateTime(g.createdAt || g.date, { showSeconds: true })}
                                 </Typography>
                               </Box>
                               <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -1564,7 +1564,7 @@ export default function CollectionsWorkbench() {
                               }}
                             >
                               <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>
-                                {formatDateTime(p.date)} · {p.note || "Abono"} · {p.method || "—"}
+                                {formatDateTime(p.date, { showSeconds: true })} · {p.note || "Abono"} · {p.method || "—"}
                               </Typography>
                               <Typography variant="body2" sx={{ fontWeight: 800, whiteSpace: "nowrap" }}>
                                 {money(p.amount)}

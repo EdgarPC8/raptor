@@ -2,7 +2,7 @@ import { APP_ROUTES } from "../config/appRoutes.js";
 
 /**
  * Ruta de inicio tras login según rol activo.
- * Empleado → operación (caja); Admin/Programador → dashboard.
+ * Empleado → operación (caja); Admin/Propietario → dashboard.
  */
 export function getPostLoginPath(loginRol) {
   const role = String(loginRol || "").trim();

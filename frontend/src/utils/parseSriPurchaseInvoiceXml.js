@@ -3,8 +3,6 @@
  * Acepta factura suelta o envoltorio <autorizacion><comprobante><![CDATA[...]]>.
  */
 
-import { findProductByLooseCode } from "./productLookup.js";
-
 const IVA_PCT_BY_CODIGO = {
   0: 0,
   2: 12,
@@ -221,10 +219,8 @@ export function parseSriPurchaseInvoiceXml(rawText) {
 
 /**
  * Empareja un ítem XML con un producto del catálogo.
- * Prioridad:
- *  1) códigos guardados de ese proveedor (supplierCodeMap)
- *  2) productos que ese proveedor ya entregó (preferredProductIds)
- *  3) resto del catálogo
+ * Solo auto-enlaza por códigos ya aprendidos de ese proveedor.
+ * Nombre / similitudes: no — el usuario asigna a mano si no hay enlace.
  *
  * @param {object[]} products
  * @param {object} line
@@ -236,7 +232,7 @@ export function matchProductForXmlLine(
   products,
   line,
   supplierCodeMap = null,
-  options = {},
+  _options = {},
 ) {
   const list = Array.isArray(products) ? products : [];
   const map =
@@ -251,24 +247,7 @@ export function matchProductForXmlLine(
           )
         : null;
 
-  const preferredRaw = options?.preferredProductIds;
-  const preferredSet =
-    preferredRaw instanceof Set
-      ? preferredRaw
-      : new Set(
-          (Array.isArray(preferredRaw) ? preferredRaw : [])
-            .map((id) => Number(id))
-            .filter((id) => id > 0),
-        );
-
-  const preferredList = preferredSet.size
-    ? list.filter((p) => preferredSet.has(Number(p.id)))
-    : [];
-  const otherList = preferredSet.size
-    ? list.filter((p) => !preferredSet.has(Number(p.id)))
-    : list;
-
-  // 1) Código ya aprendido para este proveedor
+  // Solo código ya aprendido para este proveedor
   if (map && map.size) {
     for (const code of [line?.code, line?.auxCode]) {
       const key = String(code || "")
@@ -283,61 +262,30 @@ export function matchProductForXmlLine(
     }
   }
 
-  // 2) Historial de entregas de este proveedor (códigos + nombre)
-  if (preferredList.length) {
-    const hit = matchProductInList(preferredList, line);
-    if (hit) return { product: hit, source: "supplier_history" };
-  }
-
-  // 3) Resto del catálogo
-  const pool = otherList.length ? otherList : preferredList.length ? [] : list;
-  if (pool.length) {
-    const hit = matchProductInList(pool, line);
-    if (hit) return { product: hit, source: "catalog" };
-  }
-
   return { product: null, source: "none" };
 }
 
-/** Matching por código / nombre dentro de una lista acotada. */
-function matchProductInList(list, line) {
-  if (!list?.length) return null;
-
-  const codes = [line?.code, line?.auxCode]
-    .map((c) => String(c || "").trim())
-    .filter(Boolean);
-
-  for (const code of codes) {
-    const byDigits = findProductByLooseCode(list, code);
-    if (byDigits) return byDigits;
-  }
-
-  const desc = String(line?.description || "")
+function normalizeProductNameKey(value) {
+  return String(value || "")
     .trim()
     .toLowerCase()
+    .replace(/^\*+\s*/, "")
+    .replace(/[\u0000-\u001f]/g, "")
     .replace(/\s+/g, " ");
+}
+
+/**
+ * Al crear desde XML: reutilizar solo si el nombre coincide exacto
+ * (sin similitudes parciales).
+ */
+export function findProductByXmlDescription(products, description) {
+  const desc = normalizeProductNameKey(description);
   if (!desc) return null;
-
-  const exact = list.find(
-    (p) =>
-      String(p.name || "")
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, " ") === desc,
+  return (
+    (Array.isArray(products) ? products : []).find(
+      (p) => normalizeProductNameKey(p.name) === desc,
+    ) || null
   );
-  if (exact) return exact;
-
-  if (desc.length >= 8) {
-    const partial = list.find((p) => {
-      const n = String(p.name || "")
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, " ");
-      return n && (n.includes(desc) || desc.includes(n));
-    });
-    if (partial) return partial;
-  }
-  return null;
 }
 
 /** Convierte lista API { supplierCode, productId } → Map. */

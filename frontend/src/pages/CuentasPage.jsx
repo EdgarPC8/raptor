@@ -1,5 +1,5 @@
 /**
- * Administración de cuentas de acceso (login + roles). Solo Administrador y Programador.
+ * Administración de cuentas de acceso (login + roles). Solo Administrador y Propietario.
  */
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
@@ -18,7 +18,7 @@ import {
 } from "../api/accountRequest.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
-const ALLOWED = new Set(["Programador", "Administrador"]);
+const ALLOWED = new Set(["Propietario", "Administrador", "Programador"]);
 
 const personName = (row) => {
   const u = row.user || {};
@@ -27,7 +27,8 @@ const personName = (row) => {
 
 export default function CuentasPage() {
   const { user, toast } = useAuth();
-  const showInternalRoles = user?.loginRol === "Programador";
+  const showInternalRoles =
+    user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const [rows, setRows] = useState([]);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -39,7 +40,7 @@ export default function CuentasPage() {
   const formatRoles = (accountRoles) => {
     const names = (accountRoles || [])
       .map((x) => x.name)
-      .filter((name) => showInternalRoles || name !== "Programador");
+      .filter((name) => showInternalRoles || (name !== "Propietario" && name !== "Programador"));
     return names.join(", ") || "—";
   };
 
@@ -115,7 +116,7 @@ export default function CuentasPage() {
               <EditIcon />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Resetear contraseña a 12345678">
+          <Tooltip title="Resetear contraseña">
             <IconButton
               size="small"
               onClick={() => {
@@ -194,7 +195,7 @@ export default function CuentasPage() {
         open={resetOpen}
         onClose={() => setResetOpen(false)}
         title="Resetear contraseña"
-        message="La contraseña quedará en 12345678. ¿Continuar?"
+        message="Se reinicia la contraseña. Si la política de acceso está apagada, queda en 12345678. ¿Continuar?"
         onClickAccept={confirmReset}
       />
     </Box>

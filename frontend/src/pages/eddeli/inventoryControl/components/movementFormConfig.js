@@ -61,10 +61,27 @@ export const REASON_OPTIONS = {
   salida: [
     { value: "SALIDA_VENTA", label: "Venta" },
     { value: "SALIDA_CONSUMO", label: "Consumo / uso interno" },
-    { value: "SALIDA_MERMA", label: "Merma / daño" },
+    { value: "SALIDA_MERMA", label: "Merma" },
     { value: "SALIDA_OTRA", label: "Otra salida" },
   ],
 };
+
+const EXTRA_REASON_LABELS = {
+  SALIDA_CONSUMO_INTERNO: "Consumo de producción",
+  ENTRADA_PRODUCCION: "Producción",
+  AJUSTE_ENTRADA: "Ajuste de entrada",
+  AJUSTE_SALIDA: "Ajuste de salida",
+};
+
+export function movementReasonLabel(reason) {
+  const code = String(reason || "");
+  if (!code) return "—";
+  for (const list of Object.values(REASON_OPTIONS)) {
+    const hit = list.find((row) => row.value === code);
+    if (hit) return hit.label;
+  }
+  return EXTRA_REASON_LABELS[code] || code;
+}
 
 export function getUnitAbbr(product) {
   return (

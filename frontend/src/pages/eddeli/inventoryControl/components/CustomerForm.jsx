@@ -17,6 +17,13 @@ import {
   formToCustomerPayload,
   validateCustomerForm,
 } from "../../../../utils/customerUtils.js";
+import { APP_ID } from "../../../../config/appInfo.js";
+
+const PEER_OPTIONS = [
+  { value: "eddeli", label: "EdDeli" },
+  { value: "tienda", label: "Tienda" },
+  { value: "store", label: "Store" },
+].filter((o) => o.value !== APP_ID);
 
 function CustomerForm({ isEditing = false, datos = [], onClose, reload }) {
   const { handleSubmit, register, reset, setValue, watch } = useForm({
@@ -182,6 +189,27 @@ function CustomerForm({ isEditing = false, datos = [], onClose, reload }) {
             label={isActive !== false ? "Cliente activo" : "Cliente inactivo"}
           />
         </Grid>
+
+        <Grid item xs={12}>
+          <TextField
+            select
+            label="Sistema enlazado (app destino)"
+            fullWidth
+            variant="standard"
+            value={watch("remoteApp") || ""}
+            onChange={(e) => setValue("remoteApp", e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            helperText="Este cliente es esa app. Tus pedidos se pueden enviar allá como compra a proveedor"
+          >
+            <MenuItem value="">Ninguno</MenuItem>
+            {PEER_OPTIONS.map((o) => (
+              <MenuItem key={o.value} value={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+
         <Grid item xs={4}>
           <Button variant="contained" fullWidth type="submit">
             {!isEditing ? "Guardar" : "Editar"}

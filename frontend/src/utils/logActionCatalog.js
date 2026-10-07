@@ -21,7 +21,7 @@ const RESOURCE_LABELS = {
   orders: "pedido",
   shifts: "turno",
   incomes: "ingreso",
-  expenses: "gasto",
+  expenses: "egreso",
   notifications: "notificación",
   publicidad: "publicidad",
   campaigns: "campaña",

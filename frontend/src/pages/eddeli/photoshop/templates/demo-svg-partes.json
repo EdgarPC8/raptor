@@ -1,0 +1,765 @@
+{
+  "name": "Demo SVG partes separadas",
+  "app": "EdDeli",
+  "format": "3:2",
+  "canvas": {
+    "width": 384,
+    "height": 256
+  },
+  "meta": {
+    "name": "Demo SVG partes separadas",
+    "templateKind": "manual",
+    "requiresProduct": false,
+    "backgroundMode": "color"
+  },
+  "backgroundSrc": null,
+  "groups": [
+    {
+      "id": "group_main",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "layers": [
+    {
+      "id": "bg",
+      "name": "Fondo",
+      "groupId": "group_main",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 1,
+      "visible": true,
+      "locked": true,
+      "props": {
+        "fill": "#F5F0E8",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "01_anillo_exterior",
+      "name": "Anillo exterior",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 10,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/01_anillo_exterior.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "02_anillo_interior",
+      "name": "Anillo interior",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 11,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/02_anillo_interior.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "03_cara_punta",
+      "name": "Cara / punta",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 12,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/03_cara_punta.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "04_ojo",
+      "name": "Ojo",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 13,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/04_ojo.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "05_sonrisa",
+      "name": "Sonrisa",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 14,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/05_sonrisa.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "06_mejillas",
+      "name": "Mejillas",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 15,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/06_mejillas.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "07_boca",
+      "name": "Boca",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 16,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/07_boca.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "08_antena",
+      "name": "Antena",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 17,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/08_antena.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "09_cuerpo",
+      "name": "Cuerpo",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 18,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/09_cuerpo.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "10_brazo",
+      "name": "Brazo",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 19,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/10_brazo.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "11_helado_copa",
+      "name": "Helado (copa)",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 20,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/11_helado_copa.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "12_letra_verde",
+      "name": "Letra verde",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 21,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/12_letra_verde.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "13_letra_azul",
+      "name": "Letra azul",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 22,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/13_letra_azul.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "14_letra_negra",
+      "name": "Letra negra",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 23,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/14_letra_negra.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "15_letra_fila1_01",
+      "name": "Letra fila1 #01",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 24,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/15_letra_fila1_01.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "15_letra_fila1_02",
+      "name": "Letra fila1 #02",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 25,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/15_letra_fila1_02.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "15_letra_fila1_03",
+      "name": "Letra fila1 #03",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 26,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/15_letra_fila1_03.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "15_letra_fila1_04",
+      "name": "Letra fila1 #04",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 27,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/15_letra_fila1_04.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "15_letra_fila1_05",
+      "name": "Letra fila1 #05",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 28,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/15_letra_fila1_05.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "15_letra_fila1_06",
+      "name": "Letra fila1 #06",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 29,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/15_letra_fila1_06.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "15_letra_fila1_07",
+      "name": "Letra fila1 #07",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 30,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/15_letra_fila1_07.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "16_letra_fila2_01",
+      "name": "Letra fila2 #01",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 31,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/16_letra_fila2_01.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "16_letra_fila2_02",
+      "name": "Letra fila2 #02",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 32,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/16_letra_fila2_02.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "16_letra_fila2_03",
+      "name": "Letra fila2 #03",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 33,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/16_letra_fila2_03.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "16_letra_fila2_04",
+      "name": "Letra fila2 #04",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 34,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/16_letra_fila2_04.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "16_letra_fila2_05",
+      "name": "Letra fila2 #05",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 35,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/16_letra_fila2_05.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "16_letra_fila2_06",
+      "name": "Letra fila2 #06",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 36,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/16_letra_fila2_06.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "16_letra_fila2_07",
+      "name": "Letra fila2 #07",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 37,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/16_letra_fila2_07.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "16_letra_fila2_08",
+      "name": "Letra fila2 #08",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 38,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/16_letra_fila2_08.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "16_letra_fila2_09",
+      "name": "Letra fila2 #09",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 39,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/16_letra_fila2_09.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "17_figura_extra_01",
+      "name": "Figura extra #01",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 40,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/17_figura_extra_01.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "17_figura_extra_02",
+      "name": "Figura extra #02",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 41,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/17_figura_extra_02.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "17_figura_extra_03",
+      "name": "Figura extra #03",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 42,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/17_figura_extra_03.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "17_figura_extra_04",
+      "name": "Figura extra #04",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 43,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/17_figura_extra_04.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "17_figura_extra_05",
+      "name": "Figura extra #05",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 44,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/17_figura_extra_05.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "17_figura_extra_06",
+      "name": "Figura extra #06",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 45,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/17_figura_extra_06.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "18_adornos_sueltos",
+      "name": "Adornos sueltos",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 46,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/18_adornos_sueltos.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "19_marca_agua",
+      "name": "Marca de agua",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 47,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/vectosolve_parts/19_marca_agua.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    }
+  ]
+}

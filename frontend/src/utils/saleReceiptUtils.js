@@ -8,6 +8,7 @@ import { buildInvoiceRidePrintHtml } from "./invoiceRidePrintHtml.js";
 import {
   formatReceiptItemDescription,
   normalizeReceiptDetailSettings,
+  applyReceiptIvaSetting,
 } from "./receiptDetailFormat.js";
 import {
   formatReceiptQuantity,
@@ -111,7 +112,7 @@ export function formatUnitMoneyReceipt(n) {
 }
 
 export function formatReceiptDate(iso) {
-  return formatDateTime(iso);
+  return formatDateTime(iso, { showSeconds: true });
 }
 
 /** Etiquetas cortas en comprobante impreso. */
@@ -121,6 +122,8 @@ export const RECEIPT_FIELD_LABELS = {
   phone: "Tel:",
   address: "Dir:",
   payment: "Pag:",
+  received: "Recibido:",
+  change: "Vuelto:",
 };
 
 export function paymentMethodLabel(method) {
@@ -168,6 +171,13 @@ export function normalizeSaleReceipt(sale) {
       : customerNameRaw || displayFromOrder || customer.name || "—";
 
   const app = getActiveAppSettings();
+  const amountReceivedRaw = sale.amountReceived;
+  const amountReceived =
+    amountReceivedRaw != null && amountReceivedRaw !== ""
+      ? to2(amountReceivedRaw)
+      : null;
+  const changeDue =
+    amountReceived != null ? to2(Math.max(0, amountReceived - total)) : null;
   return {
     id: sale.id,
     businessName: app.alias || "App",
@@ -196,6 +206,8 @@ export function normalizeSaleReceipt(sale) {
     iva,
     total,
     discount,
+    amountReceived,
+    changeDue,
     ticketDiscountPercent: Number(sale.ticketDiscountPercent || 0),
     notes: String(sale.notes || "")
       .replace(/\[CAJA_POS\]/g, "")
@@ -248,6 +260,7 @@ export function buildReceiptFromCustomerOrder(order) {
     paymentMethod: order.paymentMethod || "credito",
     documentType: order.documentType || "nota_venta",
     notes: order.notes,
+    amountReceived: order.amountReceived,
     customer,
     items,
     subtotal,
@@ -264,6 +277,7 @@ export function buildReceiptFromCheckout({
   paymentMethod,
   saleType,
   notes,
+  amountReceived = null,
   ticketDiscountPercent = 0,
   discountTotal = 0,
 }) {
@@ -316,6 +330,7 @@ export function buildReceiptFromCheckout({
     paymentMethod: saleType === "credito" ? "credito" : paymentMethod,
     documentType: docType,
     notes,
+    amountReceived,
     customer,
     items,
     subtotal,
@@ -379,6 +394,7 @@ function buildPrintHtml(receipt, format, options = {}) {
   const detailCfg = normalizeReceiptDetailSettings(
     options.detailSettings ?? getActiveAppSettings()?.receiptDetailSettings,
   );
+  receipt = applyReceiptIvaSetting(receipt, detailCfg);
   const docType = receipt.documentType || "nota_venta";
   const tableCols = resolveReceiptTableColumns(detailCfg, docType, format);
   const cellFmt = {
@@ -472,6 +488,16 @@ function buildPrintHtml(receipt, format, options = {}) {
       ${totalRow("Subtotal", formatMoneyReceipt(receipt.subtotal))}
       ${receipt.iva > 0 ? totalRow("IVA", formatMoneyReceipt(receipt.iva)) : ""}
       ${totalRow("TOTAL", formatMoneyReceipt(receipt.total), true)}
+      ${
+        receipt.amountReceived != null
+          ? totalRow(RECEIPT_FIELD_LABELS.received, formatMoneyReceipt(receipt.amountReceived))
+          : ""
+      }
+      ${
+        receipt.amountReceived != null && receipt.changeDue != null
+          ? totalRow(RECEIPT_FIELD_LABELS.change, formatMoneyReceipt(receipt.changeDue))
+          : ""
+      }
     </div>
     ${showNotes && receipt.notes ? `<div style="margin-top:${isTicket ? 4 : 10}px;font-size:${isTicket ? p.notes : 12}px;font-weight:700;color:#000;word-wrap:break-word">${escapeHtml(receipt.notes)}</div>` : ""}
     <div style="text-align:center;margin-top:${isTicket ? 6 : 16}px;margin-bottom:0;font-size:${isTicket ? p.footer : 12}px;font-weight:800;color:#000">Gracias por su compra</div>

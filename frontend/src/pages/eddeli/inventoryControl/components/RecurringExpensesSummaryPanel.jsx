@@ -143,7 +143,7 @@ export default function RecurringExpensesSummaryPanel({ recurring }) {
           spacing={0.75}
           sx={{ mb: 1 }}
         >
-          <ChartBlockHeader title="Gastos fijos del local" sx={{ mb: 0, flex: 1, minWidth: 0 }} />
+          <ChartBlockHeader title="Egresos fijos del local" sx={{ mb: 0, flex: 1, minWidth: 0 }} />
           <Stack direction="row" spacing={0.5} flexShrink={0}>
             {hasDetails ? (
               <Button
@@ -187,7 +187,7 @@ export default function RecurringExpensesSummaryPanel({ recurring }) {
 
         {summary.isProfitable ? (
           <Alert severity="success" sx={{ py: 0.25 }}>
-            Ingresos del mes cubren los gastos fijos estimados.
+            Ingresos del mes cubren los egresos fijos estimados.
           </Alert>
         ) : summary.gapToCover > 0 ? (
           <Alert severity="info" icon={<TrendingUpIcon fontSize="inherit" />} sx={{ py: 0.25 }}>
@@ -211,7 +211,7 @@ export default function RecurringExpensesSummaryPanel({ recurring }) {
         fullWidth
       >
         <DialogTitle sx={{ pr: 6 }}>
-          Detalle de gastos fijos
+          Detalle de egresos fijos
           <IconButton
             aria-label="cerrar"
             onClick={() => setDetailsOpen(false)}

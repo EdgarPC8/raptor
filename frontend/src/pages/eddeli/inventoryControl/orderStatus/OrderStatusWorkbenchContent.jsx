@@ -134,7 +134,7 @@ export default function OrderStatusWorkbenchContent({
 }) {
   const theme = useTheme();
   const { user, toast } = useAuth();
-  const isProgrammer = user?.loginRol === "Programador";
+  const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const [tab, setTab] = useState(initialTab);
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(0);

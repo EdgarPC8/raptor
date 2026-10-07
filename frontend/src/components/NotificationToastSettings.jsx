@@ -1,6 +1,6 @@
 /**
  * Switches de avisos (bandeja) y toasts abajo a la derecha.
- * Admin / Programador.
+ * Admin / Propietario.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -161,8 +161,8 @@ export default function NotificationToastSettings() {
         Avisos y toasts
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        La bandeja y la campanita siguen igual. El toast sale abajo a la derecha
-        solo si lo prendés en esa columna. Todo arranca apagado en toast.
+        La bandeja y la campanita siguen igual. El toast sale en la posición de
+        Sistema → Toast, solo si lo prendés en esa columna. Todo arranca apagado en toast.
       </Typography>
       <Stack spacing={1.25}>
         <Box
@@ -242,7 +242,7 @@ export default function NotificationToastSettings() {
         </Button>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75 }}>
           Manda los 4 tipos a tu usuario, uno cada segundo. Prendé la columna Toast
-          para verlos abajo a la derecha.
+          para verlos en la posición configurada.
         </Typography>
       </Box>
     </Paper>

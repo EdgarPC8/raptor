@@ -15,6 +15,8 @@ export const deleteTaskPlan = (id) =>
   isGuestDataMode() ? guestDenied() : axios.delete(`/tasks/plans/${id}`, auth());
 export const publishTaskPlan = (id) =>
   isGuestDataMode() ? guestDenied() : axios.post(`/tasks/plans/${id}/publish`, {}, auth());
+export const closeTaskPlan = (id) =>
+  isGuestDataMode() ? guestDenied() : axios.post(`/tasks/plans/${id}/close`, {}, auth());
 export const getMyTaskItems = (params = {}) => {
   if (isGuestDataMode()) return guestFrom("myTaskItems");
   const qs = new URLSearchParams(params).toString();
@@ -26,3 +28,7 @@ export const deleteTaskItem = (id) =>
   isGuestDataMode() ? guestDenied() : axios.delete(`/tasks/items/${id}`, auth());
 export const executeTaskOpenBox = (id) =>
   isGuestDataMode() ? guestDenied() : axios.post(`/tasks/items/${id}/execute-open-box`, {}, auth());
+export const previewTaskProduction = (id) =>
+  isGuestDataMode() ? guestDenied() : axios.get(`/tasks/items/${id}/production-preview`, auth());
+export const executeTaskProduction = (id, payload) =>
+  isGuestDataMode() ? guestDenied() : axios.post(`/tasks/items/${id}/execute-production`, payload, auth());

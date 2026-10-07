@@ -1,4 +1,4 @@
-/** API gestión de imágenes en servidor (/img). Solo Programador. */
+/** API gestión de imágenes en servidor (/img). Solo Propietario. */
 import axios, { jwt } from "./axios.js";
 
 const auth = () => ({ headers: { Authorization: jwt() } });

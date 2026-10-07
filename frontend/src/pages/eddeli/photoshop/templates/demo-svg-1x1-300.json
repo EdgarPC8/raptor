@@ -1,0 +1,85 @@
+{
+  "name": "Demo SVG logo completo",
+  "app": "EdDeli",
+  "format": "3:2",
+  "canvas": {
+    "width": 384,
+    "height": 256
+  },
+  "meta": {
+    "name": "Demo SVG logo completo",
+    "templateKind": "manual",
+    "requiresProduct": false,
+    "backgroundMode": "color"
+  },
+  "backgroundSrc": null,
+  "groups": [
+    {
+      "id": "group_main",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "layers": [
+    {
+      "id": "bg_white",
+      "name": "Fondo",
+      "groupId": "group_main",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 256,
+      "zIndex": 1,
+      "visible": true,
+      "locked": true,
+      "props": {
+        "fill": "#F5F0E8",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "svg_path_demo",
+      "name": "Logo path SVG",
+      "groupId": "group_main",
+      "type": "svg",
+      "x": 12,
+      "y": 8,
+      "w": 360,
+      "h": 240,
+      "zIndex": 10,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "src": "sistema/diseno-promocional/capas/demo_path_logo.svg",
+        "fit": "contain",
+        "borderRadius": 0
+      },
+      "bind": null
+    },
+    {
+      "id": "label_hint",
+      "name": "Ayuda",
+      "groupId": "group_main",
+      "type": "text",
+      "x": 12,
+      "y": 228,
+      "w": 360,
+      "h": 24,
+      "zIndex": 20,
+      "visible": true,
+      "locked": false,
+      "props": {
+        "text": "SVG · 384×256 · logo completo · editá X/Y/W/H en inspector",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 11,
+        "fontWeight": 600,
+        "color": "#623c1a",
+        "align": "center",
+        "verticalAlign": "middle"
+      },
+      "bind": null
+    }
+  ]
+}

@@ -3,12 +3,14 @@
  */
 import { createContext, useContext, useState, useEffect } from "react";
 import { useSnackbar } from "notistack";
+import { useAppSettings } from "./AppSettingsContext.jsx";
 import { loginRequest, getSessionRequest } from "../api/userRequest.js";
 import { getAccount } from "../api/accountRequest.js";
 import { changeRole as changeRoleRequest } from "../api/authRequest.js";
 import { buildImageUrl, clearToken, getToken, setToken } from "../api/axios.js";
 import { getApiErrorMessage, getApiSuccessMessage } from "../utils/apiMessages.js";
 import { SHELL_ONLY } from "../config/deployEnv.js";
+import { toastAnchorOf } from "../utils/toastPosition.js";
 import {
   GUEST_USER,
   readGuestSession,
@@ -37,7 +39,14 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [profileImageUser, setProfileImageUser] = useState(null);
-  const { enqueueSnackbar } = useSnackbar();
+  const { enqueueSnackbar: enqueueRaw } = useSnackbar();
+  const { activeApp } = useAppSettings();
+  const toastAnchor = toastAnchorOf(activeApp?.toastPosition);
+  const enqueueSnackbar = (message, opts = {}) =>
+    enqueueRaw(message, {
+      ...opts,
+      anchorOrigin: opts.anchorOrigin || toastAnchor,
+    });
 
   const isGuest = Boolean(user?.isGuest);
 
@@ -136,7 +145,7 @@ export function AuthProvider({ children }) {
   const changeRole = async (newRoleId) => {
     if (isGuest) {
       const role = (user?.roles || []).find((r) => r.id === newRoleId || r.name === newRoleId);
-      if (!role || role.name === "Programador") {
+      if (!role || role.name === "Propietario" || role.name === "Programador") {
         enqueueSnackbar("En modo invitado solo Administrador y Empleado", {
           variant: "info",
         });
@@ -165,6 +174,9 @@ export function AuthProvider({ children }) {
       if (successText) {
         enqueueSnackbar(successText, { variant: "success" });
       }
+      // Recargar para que menú, rutas y datos del rol nuevo no queden del rol anterior.
+      window.location.assign("/");
+      return;
     } catch (error) {
       enqueueSnackbar(getApiErrorMessage(error), { variant: "error" });
     }
@@ -183,11 +195,13 @@ export function AuthProvider({ children }) {
     description,
     category,
     link,
+    anchorOrigin,
   } = {}) => {
     if ((message || title) && !promise) {
       enqueueSnackbar(message || title || "", {
         variant,
         autoHideDuration: autoHideDuration ?? 3000,
+        ...(anchorOrigin ? { anchorOrigin } : {}),
         ...(variant === "appNotification"
           ? { title, description, category, link }
           : {}),

@@ -36,14 +36,14 @@ import {
 } from "../../utils/saleReceiptUtils.js";
 
 const MOVEMENT_CATEGORY_LABELS = {
-  gasto_operativo: "Gasto operativo",
+  gasto_operativo: "Egreso operativo",
   compra_mercancia: "Compra mercancía",
   retiro: "Retiro / depósito",
   entrada: "Entrada de efectivo",
   otro: "Otro",
 };
 
-/** Colores fijos: inicial azul, ventas verde, gastos rojo, cierre amarillo. */
+/** Colores fijos: inicial azul, ventas verde, egresos rojo, cierre amarillo. */
 const CAJA_COLORS = {
   inicial: "#1565c0",
   ventas: "#2e7d32",
@@ -136,7 +136,7 @@ function DayDetailPanel({ report, loading, tab, onTabChange }) {
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
         <SummaryChip label="Inicial" value={formatMoney(summary?.openingCashTotal)} color={CAJA_COLORS.inicial} />
         <SummaryChip label="Ventas tienda" value={formatMoney(summary?.salesTotal)} color={CAJA_COLORS.ventas} />
-        <SummaryChip label="Gastos" value={formatMoney(summary?.cashOutTotal)} color={CAJA_COLORS.gastos} />
+        <SummaryChip label="Egresos" value={formatMoney(summary?.cashOutTotal)} color={CAJA_COLORS.gastos} />
         <SummaryChip label="Cierre" value={formatMoney(summary?.closingCashTotal)} color={CAJA_COLORS.cierre} />
         <SummaryChip label="Tickets" value={String(summary?.ordersCount ?? 0)} />
       </Stack>
@@ -151,7 +151,7 @@ function DayDetailPanel({ report, loading, tab, onTabChange }) {
           <Tab
             icon={<TrendingDownIcon sx={{ fontSize: 18 }} />}
             iconPosition="start"
-            label={`Gastos (${outflows.length})`}
+            label={`Egresos (${outflows.length})`}
             sx={{ minHeight: 40, fontSize: "0.8rem", color: CAJA_COLORS.gastos }}
           />
           <Tab
@@ -302,7 +302,7 @@ function DayDetailPanel({ report, loading, tab, onTabChange }) {
                     Ventas
                   </TableCell>
                   <TableCell align="right" sx={headerSx("gastos")}>
-                    Gastos
+                    Egresos
                   </TableCell>
                   <TableCell align="right" sx={headerSx("cierre")}>
                     Cierre
@@ -476,7 +476,7 @@ export default function TurnoSupervisionPage() {
               {" · "}
               <Box component="span" sx={{ color: CAJA_COLORS.ventas, fontWeight: 700 }}>Ventas</Box>
               {" · "}
-              <Box component="span" sx={{ color: CAJA_COLORS.gastos, fontWeight: 700 }}>Gastos</Box>
+              <Box component="span" sx={{ color: CAJA_COLORS.gastos, fontWeight: 700 }}>Egresos</Box>
               {" · "}
               <Box component="span" sx={{ color: CAJA_COLORS.cierre, fontWeight: 700 }}>Cierre</Box>
             </Typography>
@@ -505,7 +505,7 @@ export default function TurnoSupervisionPage() {
                   Ventas tienda
                 </TableCell>
                 <TableCell align="right" sx={headerSx("gastos")}>
-                  Gastos
+                  Egresos
                 </TableCell>
                 <TableCell align="right" sx={headerSx("cierre")}>
                   Cierre

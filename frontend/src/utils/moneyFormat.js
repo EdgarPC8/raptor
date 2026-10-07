@@ -1,10 +1,14 @@
 /** Formato de dinero según config de la app (decimales + redondeo). */
 
 export const MONEY_STORAGE_DECIMALS = 6;
-export const MONEY_INPUT_MAX_DECIMALS = 5;
+/** Máx. decimales en inputs; alineado a BD (DECIMAL 14,6). */
+export const MONEY_INPUT_MAX_DECIMALS = 6;
 
 const toNum = (v) => {
-  const n = Number(v);
+  if (v === "" || v == null) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim().replace(/\s/g, "").replace(",", ".");
+  const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 };
 
@@ -32,12 +36,24 @@ export function roundMoney(value, decimals = 2, mode = "up") {
   const m = normalizeMoneyRoundingMode(mode, "up");
   if (m === "down") return Math.floor(n * f + Number.EPSILON) / f;
   if (m === "nearest") return Math.round(n * f + Number.EPSILON) / f;
-  return Math.ceil(n * f - Number.EPSILON) / f;
+  return Math.ceil(n * f - Number.EPSILON) / f || 0;
 }
 
 /** Guarda / envía al API con hasta 6 decimales. */
 export function toStorageMoney(value) {
   return roundMoney(value, MONEY_STORAGE_DECIMALS, "nearest");
+}
+
+/**
+ * Valor limpio para <input type="number"> (sin basura de DECIMAL/"0.000860").
+ * Usa hasta 6 decimales y quita ceros finales.
+ */
+export function toMoneyInputValue(value) {
+  const n = toNum(value);
+  if (!Number.isFinite(n)) return "";
+  if (n === 0) return "0";
+  const fixed = n.toFixed(MONEY_STORAGE_DECIMALS);
+  return fixed.replace(/\.?0+$/, "");
 }
 
 /**
@@ -48,12 +64,13 @@ export function formatMoney(value, opts = {}) {
   const decimals = normalizeMoneyDisplayDecimals(opts.decimals, 2);
   const mode = normalizeMoneyRoundingMode(opts.roundingMode, "up");
   const rounded = roundMoney(value, decimals, mode);
+  const safe = Object.is(rounded, -0) ? 0 : rounded;
   return new Intl.NumberFormat("es-EC", {
     style: "currency",
     currency: opts.currency || "USD",
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(rounded);
+  }).format(safe);
 }
 
 export function formatMoneyFromApp(value, activeApp) {

@@ -29,6 +29,8 @@ import {
   Typography,
   alpha,
   useTheme,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import { ListSkeleton } from "../../../components/ContentSkeleton.jsx";
 import ScienceIcon from "@mui/icons-material/Science";
@@ -36,6 +38,7 @@ import LinkIcon from "@mui/icons-material/Link";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InventoryIcon from "@mui/icons-material/Inventory";
 import SearchIcon from "@mui/icons-material/Search";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
@@ -63,9 +66,12 @@ import {
 import { suggestUnitsPerPack } from "./components/movementFormConfig.js";
 import {
   suggestLinkAmount,
-  formatStockWithAlt,
   measureKind,
 } from "../../../utils/weightUnits.js";
+import {
+  normalizePackContents,
+  resolvePackOpenLines,
+} from "../../../utils/packContentsUtils.js";
 
 function formatStock(row) {
   return `${row.stock} ${row.unitAbbrev}`;
@@ -74,7 +80,8 @@ function formatStock(row) {
 /** Clasifica el producto para filtros y etiquetas de enlace. */
 function productKind(product) {
   if (!product) return "final";
-  if (product.isGenericIngredient || product.type === "raw") return "insumo";
+  if (product.isGenericIngredient || product.isRaw || product.type === "raw") return "insumo";
+  if (product.isRecipe && product.isRaw && !product.isSellable) return "intermediate";
   if (product.type === "intermediate") return "intermediate";
   return "final";
 }
@@ -151,6 +158,8 @@ export default function GenericIngredientsPage() {
   const [linkTargetId, setLinkTargetId] = useState("");
   const [linkUnitsPerPack, setLinkUnitsPerPack] = useState("1");
   const [linkTargetKindFilter, setLinkTargetKindFilter] = useState("all");
+  const [linkSurtidoMode, setLinkSurtidoMode] = useState(false);
+  const [linkLines, setLinkLines] = useState([{ productId: "", qty: "1" }]);
   const [allProducts, setAllProducts] = useState([]);
 
   const selected = useMemo(
@@ -212,6 +221,7 @@ export default function GenericIngredientsPage() {
     const preselect = preselectId
       ? allProducts.find((p) => Number(p.id) === Number(preselectId))
       : null;
+    const lines = resolvePackOpenLines(preselect || {});
     const existingTargetId = preselect?.genericProductId
       ? String(preselect.genericProductId)
       : selected
@@ -222,10 +232,26 @@ export default function GenericIngredientsPage() {
     setLinkUnitsPerPack(
       preselect?.unitsPerPack != null && Number(preselect.unitsPerPack) > 0
         ? String(preselect.unitsPerPack)
-        : "1",
+        : lines[0]?.qty
+          ? String(lines[0].qty)
+          : "1",
     );
     setLinkNote(preselect?.purchasePresentation || "");
     setLinkTargetKindFilter("all");
+    if (lines.length > 1) {
+      setLinkSurtidoMode(true);
+      setLinkLines(
+        lines.map((l) => ({ productId: String(l.productId), qty: String(l.qty) })),
+      );
+    } else {
+      setLinkSurtidoMode(false);
+      setLinkLines([
+        {
+          productId: lines[0] ? String(lines[0].productId) : existingTargetId,
+          qty: lines[0] ? String(lines[0].qty) : "1",
+        },
+      ]);
+    }
     void loadAllProducts();
     setOpenLink(true);
   };
@@ -283,12 +309,38 @@ export default function GenericIngredientsPage() {
   };
 
   const linkExisting = async () => {
-    if (!linkProductId || !linkTargetId) return;
+    if (!linkProductId) return;
+
+    let packContents;
+    if (linkSurtidoMode) {
+      packContents = normalizePackContents(
+        linkLines.map((l) => ({ productId: l.productId, qty: l.qty })),
+      );
+      if (!packContents.length) {
+        toast?.({
+          message: "Agregá al menos un producto con cantidad en el desglose.",
+          variant: "warning",
+        });
+        return;
+      }
+    } else {
+      if (!linkTargetId) return;
+      packContents = [
+        { productId: Number(linkTargetId), qty: Number(linkUnitsPerPack) },
+      ];
+      if (!(packContents[0].qty > 0)) {
+        toast?.({ message: "La cantidad debe ser mayor que 0.", variant: "warning" });
+        return;
+      }
+    }
+
     await runMutationReload(toast, {
       promise: linkPresentationRequest(linkProductId, {
-        targetProductId: Number(linkTargetId),
+        packContents,
         purchasePresentation: linkNote.trim() || null,
-        unitsPerPack: Number(linkUnitsPerPack),
+        // Compat API vieja
+        targetProductId: packContents[0].productId,
+        unitsPerPack: packContents[0].qty,
       }),
       reload: () => {
         load();
@@ -298,6 +350,8 @@ export default function GenericIngredientsPage() {
         setLinkUnitsPerPack("1");
         setLinkNote("");
         setLinkTargetKindFilter("all");
+        setLinkSurtidoMode(false);
+        setLinkLines([{ productId: "", qty: "1" }]);
       },
       successMessage: "Presentación enlazada",
     });
@@ -625,9 +679,12 @@ export default function GenericIngredientsPage() {
               )}
               {!loading && pagedProductRows.map((product) => {
                 const links = linksByTarget.get(Number(product.id)) || [];
+                const openLines = resolvePackOpenLines(product);
                 const target = product.genericProductId
                   ? productById.get(Number(product.genericProductId))
-                  : null;
+                  : openLines[0]
+                    ? productById.get(Number(openLines[0].productId))
+                    : null;
                 const expanded = expandedTargets.has(product.id);
                 const typeLabel = productKindLabel(product);
                 const typeColor = productKindChipColor(product);
@@ -658,27 +715,51 @@ export default function GenericIngredientsPage() {
                         />
                       </TableCell>
                       <TableCell align="right">
-                        {product.isGenericIngredient || product.type === "raw" ? (
-                          <Box>
-                            <Typography variant="body2" fontWeight={700}>
-                              {Number(product.stock || 0)}{" "}
-                              {product.InventoryUnit?.abbreviation || product.unitAbbrev || "g"}
+                        {(() => {
+                          const gramsEach = Number(product.standardWeightGrams) || 0;
+                          const stock = Number(product.stock || 0);
+                          const unitName =
+                            product.InventoryUnit?.name ||
+                            product.InventoryUnit?.abbreviation ||
+                            product.unitAbbrev ||
+                            "u";
+                          if (gramsEach > 0) {
+                            const total = stock * gramsEach;
+                            return (
+                              <Box>
+                                <Typography variant="body2" fontWeight={700}>
+                                  {stock.toLocaleString("es-EC")} {unitName} = {total.toLocaleString("es-EC")} g
+                                </Typography>
+                              </Box>
+                            );
+                          }
+                          return (
+                            <Typography variant="body2">
+                              {stock.toLocaleString("es-EC")} {unitName}
                             </Typography>
-                            {Number(product.stock) > 0 && (
-                              <Typography variant="caption" color="text.secondary" display="block">
-                                {formatStockWithAlt(product.stock, product)}
-                              </Typography>
-                            )}
-                          </Box>
-                        ) : (
-                          <>
-                            {Number(product.stock || 0)}{" "}
-                            {product.InventoryUnit?.abbreviation || product.unitAbbrev || ""}
-                          </>
-                        )}
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
-                        {target ? (
+                        {openLines.length > 1 ? (
+                          <Stack spacing={0.15}>
+                            <Stack direction="row" spacing={0.5} alignItems="center">
+                              <LinkIcon fontSize="inherit" color="action" />
+                              <Typography variant="caption" fontWeight={700}>
+                                Surtido ({openLines.length} productos)
+                              </Typography>
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                              {openLines
+                                .map((l) => {
+                                  const name =
+                                    productById.get(Number(l.productId))?.name || `#${l.productId}`;
+                                  return `${l.qty}× ${name}`;
+                                })
+                                .join(" · ")}
+                            </Typography>
+                          </Stack>
+                        ) : target ? (
                           <Stack spacing={0.15}>
                             <Stack direction="row" spacing={0.5} alignItems="center">
                               <LinkIcon fontSize="inherit" color="action" />
@@ -687,7 +768,7 @@ export default function GenericIngredientsPage() {
                               </Typography>
                             </Stack>
                             <Typography variant="caption" color="text.secondary">
-                              1 abierta → +{product.unitsPerPack || "—"}{" "}
+                              1 abierta → +{openLines[0]?.qty || product.unitsPerPack || "—"}{" "}
                               {target.InventoryUnit?.abbreviation ||
                                 target.unitAbbrev ||
                                 "u"}{" "}
@@ -1107,11 +1188,36 @@ export default function GenericIngredientsPage() {
         </DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            <strong>1. Empaque</strong> = producto final (Funda Aceite 900ml, Quintal…).{" "}
-            <strong>2. Destino</strong> = insumo (Aceite en ml, Harina en g) u otro final.{" "}
-            <strong>3. Cantidad</strong> = cuánto del destino suma al abrir <em>1</em> empaque
-            (ej. <strong>900 ml</strong>).
+            <strong>1. Empaque</strong> = producto final (Funda, Quintal, Paca surtida…).{" "}
+            <strong>2. Destino(s)</strong> = qué productos salen al abrir.{" "}
+            <strong>3. Cantidad</strong> = cuánto de cada uno por <em>1</em> empaque.
           </Typography>
+
+          <FormControlLabel
+            sx={{ mb: 1 }}
+            control={
+              <Checkbox
+                checked={linkSurtidoMode}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setLinkSurtidoMode(on);
+                  if (on) {
+                    setLinkLines([
+                      {
+                        productId: linkTargetId || "",
+                        qty: linkUnitsPerPack || "1",
+                      },
+                      { productId: "", qty: "1" },
+                    ]);
+                  } else if (linkLines[0]?.productId) {
+                    setLinkTargetId(linkLines[0].productId);
+                    setLinkUnitsPerPack(linkLines[0].qty || "1");
+                  }
+                }}
+              />
+            }
+            label="Paca surtida (varios productos al abrir)"
+          />
 
           <Box sx={{ mb: 1.5 }} data-tour="insumos-link-presentation">
             <SearchableSelect
@@ -1126,10 +1232,28 @@ export default function GenericIngredientsPage() {
                     : String(val ?? "");
                 setLinkProductId(nextId);
                 const row = allProducts.find((p) => String(p.id) === String(nextId));
-                if (row?.genericProductId) {
-                  setLinkTargetId(String(row.genericProductId));
-                  if (row.unitsPerPack != null && Number(row.unitsPerPack) > 0) {
-                    setLinkUnitsPerPack(String(row.unitsPerPack));
+                if (row) {
+                  const lines = resolvePackOpenLines(row);
+                  if (lines.length > 1) {
+                    setLinkSurtidoMode(true);
+                    setLinkLines(
+                      lines.map((l) => ({
+                        productId: String(l.productId),
+                        qty: String(l.qty),
+                      })),
+                    );
+                  } else if (lines.length === 1) {
+                    setLinkSurtidoMode(false);
+                    setLinkTargetId(String(lines[0].productId));
+                    setLinkUnitsPerPack(String(lines[0].qty));
+                    setLinkLines([
+                      { productId: String(lines[0].productId), qty: String(lines[0].qty) },
+                    ]);
+                  } else if (row.genericProductId) {
+                    setLinkTargetId(String(row.genericProductId));
+                    if (row.unitsPerPack != null && Number(row.unitsPerPack) > 0) {
+                      setLinkUnitsPerPack(String(row.unitsPerPack));
+                    }
                   }
                   if (row.purchasePresentation) setLinkNote(row.purchasePresentation);
                 }
@@ -1195,11 +1319,96 @@ export default function GenericIngredientsPage() {
                 {selectedLink.name}
               </Typography>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                Indica el destino (insumo o final) y cuántas unidades entrega cada unidad abierta.
+                {linkSurtidoMode
+                  ? "Indicá cada sabor/producto y cuántas unidades salen al abrir 1 paca."
+                  : "Indica el destino (insumo o final) y cuántas unidades entrega cada unidad abierta."}
               </Typography>
             </Box>
           )}
 
+          {linkSurtidoMode ? (
+            <Box sx={{ mb: 1.5 }} data-tour="insumos-link-surtido">
+              <Stack spacing={1}>
+                {linkLines.map((line, idx) => (
+                  <Stack
+                    key={`pack-line-${idx}`}
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={1}
+                    alignItems={{ sm: "center" }}
+                  >
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <SearchableSelect
+                        label={`Producto ${idx + 1}`}
+                        placeholder="Yogur fresa, mora…"
+                        items={targetCandidates.filter(
+                          (p) =>
+                            Number(p.id) !== Number(linkProductId) &&
+                            !linkLines.some(
+                              (l, j) =>
+                                j !== idx &&
+                                String(l.productId) === String(p.id) &&
+                                l.productId,
+                            ),
+                        )}
+                        value={line.productId}
+                        onChange={(val) => {
+                          const nextId =
+                            val && typeof val === "object"
+                              ? String(val.id ?? "")
+                              : String(val ?? "");
+                          setLinkLines((prev) =>
+                            prev.map((row, j) =>
+                              j === idx ? { ...row, productId: nextId } : row,
+                            ),
+                          );
+                        }}
+                        getOptionValue={(opt) => opt?.id ?? ""}
+                        getOptionLabel={(opt) => (opt ? opt.name : "")}
+                      />
+                    </Box>
+                    <TextField
+                      label="Cant."
+                      size="small"
+                      type="number"
+                      value={line.qty}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setLinkLines((prev) =>
+                          prev.map((row, j) => (j === idx ? { ...row, qty: v } : row)),
+                        );
+                      }}
+                      inputProps={{ min: 0.0001, step: "any" }}
+                      sx={{ width: { xs: "100%", sm: 110 } }}
+                    />
+                    <IconButton
+                      size="small"
+                      aria-label="Quitar línea"
+                      disabled={linkLines.length <= 1}
+                      onClick={() =>
+                        setLinkLines((prev) => prev.filter((_, j) => j !== idx))
+                      }
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                ))}
+                <Button
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={() =>
+                    setLinkLines((prev) => [...prev, { productId: "", qty: "1" }])
+                  }
+                >
+                  Agregar producto al desglose
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  Ej.: 4 fresa + 4 mora + 4 durazno = 12. Al abrir −1 paca y suben esos
+                  stocks.
+                </Typography>
+              </Stack>
+            </Box>
+          ) : (
+            <>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 1.5 }}>
             <TextField
               select
@@ -1326,13 +1535,15 @@ export default function GenericIngredientsPage() {
               {selectedTarget ? productUnitAbbrev(selectedTarget) : ""}
             </Button>
           )}
+            </>
+          )}
 
           <TextField
             label="Nota del empaque (opcional)"
             fullWidth
             value={linkNote}
             onChange={(e) => setLinkNote(e.target.value)}
-            placeholder="Ej: Quintal, Arroba"
+            placeholder="Ej: Quintal, Arroba, Paca surtida"
           />
         </DialogContent>
         <DialogActions>
@@ -1344,9 +1555,13 @@ export default function GenericIngredientsPage() {
             data-tour="insumos-link-save"
             disabled={
               !linkProductId ||
-              !linkTargetId ||
-              !Number.isFinite(Number(linkUnitsPerPack)) ||
-              Number(linkUnitsPerPack) <= 0
+              (linkSurtidoMode
+                ? !normalizePackContents(
+                    linkLines.map((l) => ({ productId: l.productId, qty: l.qty })),
+                  ).length
+                : !linkTargetId ||
+                  !Number.isFinite(Number(linkUnitsPerPack)) ||
+                  Number(linkUnitsPerPack) <= 0)
             }
           >
             Enlazar

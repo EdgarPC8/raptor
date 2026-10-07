@@ -40,6 +40,7 @@ import {
   getStoresRequest,
 } from "../../../api/inventoryControlRequest";
 import { storeHoldsInventory } from "../../../utils/storeLocationKind.js";
+import { formatDateTime } from "../../../helpers/functions.js";
 
 const WARN_DAYS = 30;
 
@@ -284,7 +285,7 @@ function BatchesPage() {
     {
       label: "Recibido",
       id: "receivedAt",
-      render: (row) => formatDate(row.receivedAt),
+      render: (row) => formatDateTime(row.receivedAt),
     },
     {
       label: "Acciones",

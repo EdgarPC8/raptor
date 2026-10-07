@@ -8,14 +8,23 @@ import {
   Switch,
   TextField,
   Typography,
+  Stack,
+  Chip,
 } from "@mui/material";
-import { useEffect } from "react";
+import PersonAddAlt1Icon from "@mui/icons-material/PersonAddAlt1";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../../../../context/AuthContext";
 import {
   createSupplierRequest,
   updateSupplierRequest,
+  linkSupplierAccountRequest,
+  unlinkSupplierAccountRequest,
 } from "../../../../api/inventoryControlRequest.js";
+import { getAccountsRequest, getRolRequest } from "../../../../api/accountRequest.js";
+import { addUser } from "../../../../api/userRequest.js";
+import SimpleDialog from "../../../../components/Dialogs/SimpleDialog.jsx";
+import UsersForm from "../../../../components/Forms/UserForm.jsx";
 import {
   BANK_ACCOUNT_TYPE_OPTIONS,
   formToSupplierPayload,
@@ -23,6 +32,20 @@ import {
   supplierToForm,
   SUPPLIER_IDENT_TYPE_OPTIONS,
 } from "../../../../utils/supplierUtils.js";
+import { APP_ID } from "../../../../config/appInfo.js";
+
+const PEER_APP_OPTIONS = [
+  { value: "eddeli", label: "EdDeli" },
+  { value: "tienda", label: "Tienda" },
+  { value: "store", label: "Store" },
+].filter((o) => o.value !== APP_ID);
+
+function isProveedorAccount(acc) {
+  return (acc?.roles || []).some((r) => {
+    const name = String(r?.name || "").trim();
+    return name === "Proveedor" || name === "Proovedor";
+  });
+}
 
 function SectionTitle({ children }) {
   return (
@@ -43,7 +66,103 @@ function SupplierForm({ isEditing = false, datos = {}, onClose, reload }) {
   const { toast: toastAuth } = useAuth();
   const identType = watch("identType");
   const isActive = watch("isActive");
+  const remoteApp = watch("remoteApp");
+  const [accounts, setAccounts] = useState([]);
+  const [linkedAccounts, setLinkedAccounts] = useState(
+    () => datos?.linkedAccounts || [],
+  );
+  const accountIdToLink = watch("accountIdToLink");
+  const [createUserOpen, setCreateUserOpen] = useState(false);
+  const [proveedorRoleId, setProveedorRoleId] = useState(null);
 
+  const loadProveedorAccounts = async () => {
+    try {
+      const res = await getAccountsRequest();
+      const rows = res?.data || res || [];
+      const filtered = Array.isArray(rows) ? rows.filter(isProveedorAccount) : [];
+      setAccounts(filtered);
+      return filtered;
+    } catch {
+      setAccounts([]);
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    void loadProveedorAccounts();
+  }, []);
+
+  useEffect(() => {
+    getRolRequest()
+      .then((res) => {
+        const roles = res?.data || res || [];
+        const role = (Array.isArray(roles) ? roles : []).find((r) => {
+          const name = String(r?.name || "").trim();
+          return name === "Proveedor" || name === "Proovedor";
+        });
+        if (role?.id) setProveedorRoleId(Number(role.id));
+      })
+      .catch(() => setProveedorRoleId(null));
+  }, []);
+
+  useEffect(() => {
+    setLinkedAccounts(datos?.linkedAccounts || []);
+  }, [datos?.id, datos?.linkedAccounts]);
+
+  const linkAccount = (accountId) => {
+    if (!datos?.id || !accountId) return;
+    toastAuth({
+      promise: linkSupplierAccountRequest(datos.id, Number(accountId)),
+      onSuccess: (result) => {
+        setLinkedAccounts(result?.data?.linkedAccounts || []);
+        setValue("accountIdToLink", "");
+        reload?.(result?.data);
+        return {
+          title: "Cuenta",
+          description: "Usuario vinculado al proveedor",
+        };
+      },
+    });
+  };
+
+  const handleCreateProveedorUser = async (form) => {
+    const roleIds = [
+      ...new Set(
+        [...(form.roles || []), proveedorRoleId]
+          .map((id) => Number(id))
+          .filter((id) => Number.isFinite(id) && id > 0),
+      ),
+    ];
+    if (!roleIds.length) {
+      void toastAuth?.({
+        message: "No se encontró el rol Proveedor. Crealo en Roles e intentá de nuevo.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    toastAuth({
+      promise: addUser({ ...form, roles: roleIds }).then(async (result) => {
+        const created = result?.data?.user || result?.user || result?.data;
+        const accountId =
+          Number(created?.account?.id) ||
+          Number(created?.Accounts?.[0]?.id) ||
+          null;
+        setCreateUserOpen(false);
+        await loadProveedorAccounts();
+        if (accountId && datos?.id) {
+          setValue("accountIdToLink", String(accountId));
+          const linked = await linkSupplierAccountRequest(datos.id, accountId);
+          setLinkedAccounts(linked?.data?.linkedAccounts || []);
+          reload?.(linked?.data);
+          return { ...result, _linked: true };
+        }
+        if (accountId) setValue("accountIdToLink", String(accountId));
+        return { ...result, _linked: false };
+      }),
+      successMessage: "Usuario Proveedor creado y listo para usar",
+    });
+  };
   const submitForm = async (formData) => {
     const payload = formToSupplierPayload(formData);
     if (!payload.name) {
@@ -343,12 +462,145 @@ function SupplierForm({ isEditing = false, datos = {}, onClose, reload }) {
           />
         </Grid>
 
+        <SectionTitle>Enlace con otra app</SectionTitle>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            select
+            label="Este proveedor es la app…"
+            fullWidth
+            size="small"
+            value={remoteApp || ""}
+            onChange={(e) => setValue("remoteApp", e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            helperText="Cuando esa app te envíe un pedido de cliente, caerá aquí como compra a este proveedor"
+          >
+            <MenuItem value="">Ninguna</MenuItem>
+            {PEER_APP_OPTIONS.map((o) => (
+              <MenuItem key={o.value} value={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+
+        <SectionTitle>Cuenta con rol Proveedor</SectionTitle>
+        {isEditing && datos?.id ? (
+          linkedAccounts?.length ? (
+            <Grid item xs={12}>
+              <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center">
+                <Typography variant="body2" color="text.secondary">
+                  Cuenta enlazada:
+                </Typography>
+                <Chip
+                  label={linkedAccounts[0].username}
+                  onDelete={() => {
+                    toastAuth({
+                      promise: unlinkSupplierAccountRequest(
+                        datos.id,
+                        linkedAccounts[0].id,
+                      ),
+                      onSuccess: (result) => {
+                        setLinkedAccounts(result?.data?.linkedAccounts || []);
+                        return {
+                          title: "Cuenta",
+                          description: "Usuario desvinculado",
+                        };
+                      },
+                    });
+                  }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Solo una cuenta por proveedor. Desvinculá para cambiarla.
+                </Typography>
+              </Stack>
+            </Grid>
+          ) : (
+            <>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  select
+                  label="Usuario a vincular"
+                  fullWidth
+                  size="small"
+                  value={accountIdToLink || ""}
+                  onChange={(e) => setValue("accountIdToLink", e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  helperText={
+                    accounts.length
+                      ? "Solo una cuenta Proveedor por proveedor"
+                      : "No hay cuentas Proveedor. Usá Crear cuenta."
+                  }
+                >
+                  <MenuItem value="">—</MenuItem>
+                  {accounts.map((acc) => (
+                    <MenuItem key={acc.id} value={String(acc.id)}>
+                      {acc.username}
+                      {acc.user
+                        ? ` · ${[acc.user.firstName, acc.user.firstLastName]
+                            .filter(Boolean)
+                            .join(" ")}`
+                        : ""}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  disabled={!accountIdToLink}
+                  onClick={() => linkAccount(accountIdToLink)}
+                >
+                  Vincular
+                </Button>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="secondary"
+                  startIcon={<PersonAddAlt1Icon />}
+                  onClick={() => setCreateUserOpen(true)}
+                >
+                  Crear cuenta
+                </Button>
+              </Grid>
+            </>
+          )
+        ) : (
+          <Grid item xs={12}>
+            <Typography variant="body2" color="text.secondary">
+              Guardá el proveedor y luego editalo para vincular o crear un usuario
+              con rol Proveedor.
+            </Typography>
+          </Grid>
+        )}
+
         <Grid item xs={12}>
           <Button variant="contained" fullWidth type="submit" sx={{ mt: 1 }}>
             {!isEditing ? "Guardar proveedor" : "Actualizar proveedor"}
           </Button>
         </Grid>
       </Grid>
+
+      <SimpleDialog
+        open={createUserOpen}
+        onClose={() => setCreateUserOpen(false)}
+        title="Crear usuario y cuenta Proveedor"
+        maxWidth="md"
+        fullWidth
+      >
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          Acá creás la persona (datos) y su cuenta de acceso al sistema (usuario y
+          contraseña) con rol Proveedor. Al guardar se vincula a este proveedor.
+        </Typography>
+        <UsersForm
+          key={createUserOpen ? `proveedor-${proveedorRoleId || "pending"}` : "closed"}
+          onSubmit={handleCreateProveedorUser}
+          isEditing={false}
+          presetRoles={proveedorRoleId ? [proveedorRoleId] : []}
+        />
+      </SimpleDialog>
     </Box>
   );
 }

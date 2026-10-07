@@ -123,8 +123,8 @@ export default function DoblePieChart({ data, displayMode = "value" }) {
   return (
     <Box sx={{ width: "100%" }}>
       <ChartBlockHeader
-        title="Ingresos y gastos por categoría"
-        subtitle="Anillo interior: total de ingresos vs gastos. Anillo exterior: desglose por categoría de cada uno. Los valores siguen el modo elegido en el controlador (monto, % o ambos)."
+        title="Ingresos y egresos por categoría"
+        subtitle="Anillo interior: total de ingresos vs egresos. Anillo exterior: desglose por categoría de cada uno. Los valores siguen el modo elegido en el controlador (monto, % o ambos)."
       />
       <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
         <PieChart

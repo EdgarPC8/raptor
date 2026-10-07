@@ -16,6 +16,7 @@ import {
 import PaymentsIcon from "@mui/icons-material/Payments";
 import { money, toNum } from "./helpers.js";
 import { formatCreditDueLabel, pickNextCredit } from "./creditHelpers.js";
+import { formatDateTime } from "../../../../helpers/functions.js";
 
 function installmentsSummary(order) {
   const installments = Array.isArray(order.paymentInstallments)
@@ -115,7 +116,7 @@ export default function CreditOrdersTab({
                     #{order.id}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {String(order.date || "").slice(0, 10)}
+                    {formatDateTime(order.date)}
                   </Typography>
                 </TableCell>
                 <TableCell>{getPartyName(order)}</TableCell>

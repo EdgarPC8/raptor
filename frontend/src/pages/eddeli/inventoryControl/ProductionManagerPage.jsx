@@ -134,7 +134,7 @@ function FinalStockAdjustCell({ product, onAdjusted, movementDate, isProgrammer 
 
 export default function ProductionManagerPage() {
   const { user } = useAuth();
-  const isProgrammer = user?.loginRol === "Programador";
+  const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const [movementDate, setMovementDate] = useState(todayDateInput());
   const [products, setProducts] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState("");

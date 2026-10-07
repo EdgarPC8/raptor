@@ -12,6 +12,7 @@ import { PieChart } from "@mui/x-charts/PieChart";
 import ChartBlockHeader from "../../../../components/Charts/ChartBlockHeader";
 import { ChartSkeleton } from "../../../../components/ContentSkeleton.jsx";
 import { money } from "../collections/helpers.js";
+import { showEgreso } from "../../../../utils/financeWords";
 import { getIncomeExpenseBreakdownDetail } from "../../../../api/financeRequest";
 import IncomeExpenseCategoryDetailDialog from "./IncomeExpenseCategoryDetailDialog";
 import {
@@ -44,20 +45,20 @@ export default function IncomeExpenseCategoryChart({ data }) {
     data?.meta?.totals?.income ?? platforms?.find((p) => p.label === "Ingresos")?.value ?? 0
   );
   const totalExpense = round2(
-    data?.meta?.totals?.expense ?? platforms?.find((p) => p.label === "Gastos")?.value ?? 0
+    data?.meta?.totals?.expense ?? platforms?.find((p) => p.label === "Egresos")?.value ?? 0
   );
 
   const outerData = useMemo(() => {
     if (!groups) return [];
     const incomeShades = (groups.Ingresos ?? []).map((r, i) => ({
       id: `i-${r.label}`,
-      label: r.label,
+      label: showEgreso(r.label),
       value: round2(r.value),
       color: alpha(incomeColor, Math.min(0.95, 0.5 + i * 0.08)),
     }));
     const expenseShades = (groups.Gastos ?? []).map((r, i) => ({
       id: `e-${r.label}`,
-      label: r.label,
+      label: showEgreso(r.label),
       value: round2(r.value),
       color: alpha(expenseColor, Math.min(0.95, 0.5 + i * 0.08)),
     }));
@@ -70,7 +71,7 @@ export default function IncomeExpenseCategoryChart({ data }) {
         id: "platforms",
         data: [
           { id: "ingresos", label: "Ingresos", value: totalIncome, color: incomeColor },
-          { id: "gastos", label: "Gastos", value: totalExpense, color: expenseColor },
+          { id: "egresos", label: "Egresos", value: totalExpense, color: expenseColor },
         ],
         innerRadius: 0,
         outerRadius: 48,
@@ -130,7 +131,7 @@ export default function IncomeExpenseCategoryChart({ data }) {
     return (
       <Paper variant="panel" sx={paperSx}>
         <ChartBlockHeader
-          title="Ingresos y gastos por categoría"
+          title="Ingresos y egresos por categoría"
           subtitle="Totales por fecha en Income y Expense (no por fecha de pedido)."
           sx={{ mb: 1, flexShrink: 0 }}
         />
@@ -152,7 +153,7 @@ export default function IncomeExpenseCategoryChart({ data }) {
           sx={{ mb: 1, flexShrink: 0 }}
         >
         <ChartBlockHeader
-          title="Ingresos y gastos por categoría"
+          title="Ingresos y egresos por categoría"
           subtitle="Totales por fecha en Income y Expense (no por fecha de pedido)."
           sx={{ mb: 0, flex: 1 }}
         />

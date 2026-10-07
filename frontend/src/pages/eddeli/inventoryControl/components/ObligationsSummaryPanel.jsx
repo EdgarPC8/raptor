@@ -85,7 +85,7 @@ export default function ObligationsSummaryPanel({ obligations }) {
         spacing={0.75}
         sx={{ mb: 1 }}
       >
-        <ChartBlockHeader title="Préstamos y deudas" sx={{ mb: 0, flex: 1, minWidth: 0 }} />
+        <ChartBlockHeader title="Préstamos" sx={{ mb: 0, flex: 1, minWidth: 0 }} />
         <Button
           component={RouterLink}
           to={APP_ROUTES.finance.loansDebts}

@@ -66,7 +66,7 @@ import { alpha } from "@mui/material/styles";
 export default function SupplierPayablesWorkbench() {
   const isMobile = useMediaQuery("(max-width:900px)");
   const { toast: toastAuth, user } = useAuth();
-  const canManagePacks = ["Programador", "Administrador"].includes(user?.loginRol);
+  const canManagePacks = ["Propietario", "Administrador"].includes(user?.loginRol);
 
   const [suppliers, setSuppliers] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -428,7 +428,7 @@ export default function SupplierPayablesWorkbench() {
   };
 
   const removePayment = async (paymentId) => {
-    if (!window.confirm("¿Eliminar este abono? Se revertirá el gasto contable.")) return;
+    if (!window.confirm("¿Eliminar este abono? Se revertirá el egreso contable.")) return;
     try {
       setLoading(true);
       await deleteSupplierOrderPaymentRequest(paymentId);

@@ -75,7 +75,7 @@ const LEGEND_ALL = [
   { key: 'orderMoney', label: 'Pedidos', colorKey: 'orderMoney' },
   { key: 'posSales', label: 'Caja', colorKey: 'posSales' },
   { key: 'collected', label: 'Ingresos', colorKey: 'collected' },
-  { key: 'expense', label: 'Gastos', colorKey: 'expense' },
+  { key: 'expense', label: 'Egresos', colorKey: 'expense' },
 ];
 
 const LEGEND_INCOME = [
@@ -302,7 +302,7 @@ export default function YearFinanceOverviewChart({
             ? `Meses con movimiento entre ${startDate || '…'} y ${endDate || '…'}. Clic en un mes para el calendario.`
             : isIncomeView
               ? 'Caja y cobros por mes según fecha en que entró el dinero (Income). Misma fecha; solo cambia el origen.'
-              : 'Pedidos/caja por fecha de pedido; ingresos y gastos por Income/Expense. Clic en un mes para el calendario.'
+              : 'Pedidos/caja por fecha de pedido; ingresos y egresos por Income/Expense. Clic en un mes para el calendario.'
         }
         sx={{ mb: 0.75 }}
       />
@@ -378,7 +378,7 @@ export default function YearFinanceOverviewChart({
               `Pedidos (fecha pedido): ${m.ordersCount} · ${moneyFmt(m.ordersAmount)}\n` +
               `Caja (fecha pedido): ${m.posSalesCount} · ${moneyFmt(m.posSalesAmount)}\n` +
               `Cobros pedidos (entrada $): ${moneyFmt(incomeCobrosAmount(m))}\n` +
-              `Gastos (Expense): ${moneyFmt(m.expensesAmount)}`;
+              `Egresos (Expense): ${moneyFmt(m.expensesAmount)}`;
 
           return (
             <Grid item xs={6} sm={4} md={3} lg={2} key={m.key}>
@@ -513,7 +513,7 @@ export default function YearFinanceOverviewChart({
           )}
           {!isIncomeView && (
             <Grid item xs={6} sm={4} md={3}>
-              <YearTotalItem label="Gastos" value={totals.expenses} color={chartColors.expense} moneyFmt={moneyFmt} />
+              <YearTotalItem label="Egresos" value={totals.expenses} color={chartColors.expense} moneyFmt={moneyFmt} />
             </Grid>
           )}
         </Grid>

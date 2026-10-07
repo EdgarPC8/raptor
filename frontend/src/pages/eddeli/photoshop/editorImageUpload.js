@@ -4,7 +4,12 @@ import { mediaStoragePath } from "../../../utils/mediaPaths.js";
 import { toRelativeImagePath } from "./editorActions.js";
 
 export const EDITOR_IMAGE_ACCEPT =
-  "image/png,image/jpeg,image/jpg,image/svg+xml,image/webp,image/gif,.png,.jpg,.jpeg,.svg,.webp,.gif";
+  "image/svg+xml,image/png,image/jpeg,image/jpg,image/webp,image/gif,.svg,.png,.jpg,.jpeg,.webp,.gif";
+
+export const EDITOR_SVG_ACCEPT = "image/svg+xml,.svg";
+
+export const EDITOR_RASTER_ACCEPT =
+  "image/png,image/jpeg,image/jpg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif";
 
 const ALLOWED_EXT = new Set([".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"]);
 

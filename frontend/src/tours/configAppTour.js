@@ -32,7 +32,7 @@ const tabsStep = {
   popover: {
     title: "Pestañas",
     description:
-      "Marca, Sistema, Local, Inventario, Comprobantes, Público, Facturación SRI y (si sos Programador) Backups. Cambiá de pestaña para ver otro tutorial.",
+      "Marca, Sistema, Local, Inventario, Comprobantes, Público, Facturación SRI y (si sos Propietario) Backups. Cambiá de pestaña para ver otro tutorial.",
     side: "bottom",
     align: "center",
   },
@@ -255,7 +255,7 @@ export function getConfigPublicoTourSteps() {
 
 export function getConfigBackupsTourSteps() {
   return [
-    headerStep("Solo Programador: respaldos JSON de la base."),
+    headerStep("Solo Propietario: respaldos JSON de la base."),
     tabsStep,
     {
       element: "[data-tour='config-backups']",

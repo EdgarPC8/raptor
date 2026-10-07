@@ -8,12 +8,9 @@ import {
   useSubscriptions,
 } from "../hooks/useSubscriptions.js";
 import { APP_ROUTES } from "../config/appRoutes.js";
+import UpdatingSystemIcon from "../components/UpdatingSystemIcon.jsx";
 
-/** Contenido visual de mantenimiento (también usado como overlay). */
-export function MaintenanceMessage() {
-  const { activeApp } = useAppSettings();
-  const brand = activeApp?.alias || activeApp?.name || "la aplicación";
-
+function OverlayShell({ icon, title, lead, foot, glow }) {
   return (
     <Box
       sx={{
@@ -26,21 +23,18 @@ export function MaintenanceMessage() {
         py: 4,
         bgcolor: "background.default",
         backgroundImage: (t) =>
-          `radial-gradient(ellipse 80% 60% at 50% 0%, ${t.palette.warning.main}22, transparent 60%)`,
+          `radial-gradient(ellipse 80% 60% at 50% 0%, ${
+            glow === "info" ? t.palette.info.main : t.palette.warning.main
+          }22, transparent 60%)`,
       }}
     >
       <Stack
         spacing={{ xs: 2, sm: 3 }}
         alignItems="center"
         textAlign="center"
-        sx={{ maxWidth: 720, width: "100%" }}
+        sx={{ maxWidth: 720, width: "100%", overflow: "visible" }}
       >
-        <BuildCircleIcon
-          sx={{
-            fontSize: { xs: 96, sm: 128 },
-            color: "warning.main",
-          }}
-        />
+        {icon}
         <Typography
           component="h1"
           sx={{
@@ -50,7 +44,7 @@ export function MaintenanceMessage() {
             letterSpacing: "-0.02em",
           }}
         >
-          Sistema en mantenimiento
+          {title}
         </Typography>
         <Typography
           sx={{
@@ -60,8 +54,7 @@ export function MaintenanceMessage() {
             maxWidth: 560,
           }}
         >
-          {brand} no está disponible por ahora. Estamos trabajando para mejorar
-          el sistema.
+          {lead}
         </Typography>
         <Typography
           sx={{
@@ -70,21 +63,59 @@ export function MaintenanceMessage() {
             maxWidth: 520,
           }}
         >
-          Vuelve a intentarlo más tarde. Tu suscripción sigue activa; solo el
-          acceso está pausado hasta que se reactive.
+          {foot}
         </Typography>
       </Stack>
     </Box>
   );
 }
 
+/** Contenido visual de mantenimiento (overlay app completa). */
+export function MaintenanceMessage() {
+  const { activeApp } = useAppSettings();
+  const brand = activeApp?.alias || activeApp?.name || "la aplicación";
+
+  return (
+    <OverlayShell
+      glow="warning"
+      icon={
+        <BuildCircleIcon
+          sx={{
+            fontSize: { xs: 96, sm: 128 },
+            color: "warning.main",
+          }}
+        />
+      }
+      title="Sistema en mantenimiento"
+      lead={`${brand} no está disponible por ahora. Estamos trabajando para mejorar el sistema.`}
+      foot="Volvé a intentarlo más tarde. Tu suscripción sigue activa; solo el acceso está pausado hasta que se reactive."
+    />
+  );
+}
+
+/** Contenido cuando el gestor marca la app como «actualizando». */
+export function UpdatingMessage() {
+  const { activeApp } = useAppSettings();
+  const brand = activeApp?.alias || activeApp?.name || "la aplicación";
+
+  return (
+    <OverlayShell
+      glow="info"
+      icon={<UpdatingSystemIcon size={220} />}
+      title="Sistema actualizándose"
+      lead={`${brand} no está disponible por ahora. Se está aplicando una actualización.`}
+      foot="Volvé a intentarlo en unos minutos. Tu suscripción sigue activa; solo el acceso está pausado hasta que termine la actualización."
+    />
+  );
+}
+
 /**
- * Ruta legacy /mantenimiento: si ya no hay mantenimiento, vuelve al inicio.
- * El modo normal es el overlay (AppMaintenanceOverlay), sin cambiar de URL.
+ * Ruta legacy /mantenimiento: si ya no hay bloqueo, vuelve al inicio.
  */
 export default function MaintenancePage() {
   const navigate = useNavigate();
   const { subscription, isLoading } = useSubscriptions();
+  const blocked = Boolean(subscription?.maintenance || subscription?.updating);
 
   useEffect(() => {
     if (!SUBSCRIPTIONS_ENABLED) {
@@ -92,14 +123,15 @@ export default function MaintenancePage() {
       return;
     }
     if (isLoading) return;
-    if (!subscription?.maintenance) {
+    if (!blocked) {
       navigate(APP_ROUTES.dashboard, { replace: true });
     }
-  }, [isLoading, navigate, subscription?.maintenance]);
+  }, [isLoading, navigate, blocked]);
 
-  if (!SUBSCRIPTIONS_ENABLED || isLoading || !subscription?.maintenance) {
+  if (!SUBSCRIPTIONS_ENABLED || isLoading || !blocked) {
     return null;
   }
 
+  if (subscription?.updating) return <UpdatingMessage />;
   return <MaintenanceMessage />;
 }

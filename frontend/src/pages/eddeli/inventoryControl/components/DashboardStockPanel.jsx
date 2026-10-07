@@ -365,7 +365,7 @@ export default function DashboardStockPanel({ productsStock, onStockUpdated }) {
   const { user, toast } = useAuth();
   const { activeApp } = useAppSettings();
   const multiStockEnabled = activeApp?.multiStockEnabled !== false;
-  const isProgrammer = user?.loginRol === "Programador";
+  const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const [view, setView] = useState("critical");
   const [productType, setProductType] = useState("all");
   const [page, setPage] = useState(0);

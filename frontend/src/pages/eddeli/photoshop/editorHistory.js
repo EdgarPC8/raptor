@@ -11,6 +11,7 @@ const UI_ONLY = new Set([
   "_PUSH_HISTORY",
   "UNDO",
   "REDO",
+  "SET_FOLDER_COLLAPSED",
 ]);
 
 const MUTATING = new Set([
@@ -22,16 +23,30 @@ const MUTATING = new Set([
   "DELETE_SELECTED_LAYER",
   "DELETE_LAYER",
   "DUPLICATE_SELECTED_LAYER",
+  "DUPLICATE_FOLDER",
   "REORDER_BY_DROP",
   "TOGGLE_VISIBLE",
+  "SET_LAYERS_VISIBLE",
   "TOGGLE_LOCKED",
   "SET_DOC_META",
+  "GROUP_SELECTED_LAYERS",
+  "UNGROUP_SELECTED_LAYERS",
+  "RENAME_FOLDER",
+  "MOVE_TO_FOLDER",
+  "MERGE_SVG_LAYERS",
 ]);
 
 export function makeSnapshot(state) {
   return {
     doc: structuredClone(state.doc),
-    selected: state.selected ? { ...state.selected } : null,
+    selected: state.selected
+      ? {
+          ...state.selected,
+          ids: Array.isArray(state.selected.ids)
+            ? [...state.selected.ids]
+            : undefined,
+        }
+      : null,
   };
 }
 

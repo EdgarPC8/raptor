@@ -33,9 +33,9 @@ export const deleteIncomeRequest = async (id) => {
   });
 };
 
-// ✅ Gastos
+// ✅ Egresos
 
-// Crear un nuevo gasto
+// Crear un nuevo egreso
 export const createExpenseRequest = async (data) => {
   if (isGuestDataMode()) return guestDenied();
   return await axios.post("/finance/expenses", data, {
@@ -43,7 +43,7 @@ export const createExpenseRequest = async (data) => {
   });
 };
 
-// Obtener todos los gastos
+// Obtener todos los egresos
 export const getAllExpensesRequest = async () => {
   if (isGuestDataMode()) return guestFrom("expensesList");
   return await axios.get("/finance/expenses", {
@@ -51,14 +51,14 @@ export const getAllExpensesRequest = async () => {
   });
 };
 
-// Actualizar un gasto
+// Actualizar un egreso
 export const updateExpenseRequest = async (id, data) => {
   return await axios.put(`/finance/expenses/${id}`, data, {
     headers: { Authorization: jwt() },
   });
 };
 
-// Eliminar un gasto
+// Eliminar un egreso
 export const deleteExpenseRequest = async (id) => {
   return await axios.delete(`/finance/expenses/${id}`, {
     headers: { Authorization: jwt() },
@@ -67,7 +67,7 @@ export const deleteExpenseRequest = async (id) => {
 
 // 📊 Resumen financiero
 
-// Obtener resumen de ingresos, gastos y balance
+// Obtener resumen de ingresos, egresos y balance
 export const getFinanceSummaryRequest = async () => {
   if (isGuestDataMode()) return guestFrom("financeSummary");
   return await axios.get("/finance/summary", {
@@ -128,7 +128,7 @@ export const getCalendarMonthSummaryRequest = async (year, month) => {
   });
 };
 
-/** Resumen anual: totales por mes (pedidos, caja, cobranzas, gastos). */
+/** Resumen anual: totales por mes (pedidos, caja, cobranzas, egresos). */
 export const getCalendarYearSummaryRequest = async (year) => {
   if (isGuestDataMode()) return guestFrom("calendarYear", { year });
   return axios.get("/finance/calendar-year", {
@@ -259,7 +259,7 @@ export const getCashFlowMirrorRequest = async ({ granularity = "day", startDate,
   });
 };
 
-/** Velas japonesas del saldo acumulado (ingresos − gastos). */
+/** Velas japonesas del saldo acumulado (ingresos − egresos). */
 export const getCashFlowCandlesRequest = async ({
   granularity = "day",
   limit = 25,
@@ -277,7 +277,7 @@ export const getCashFlowCandlesRequest = async ({
   });
 };
 
-// Préstamos y deudas (sin pedido)
+// Préstamos (sin pedido): los que das y los que recibes, con plazos
 export const getObligationsWorkbenchRequest = async (params = {}) => {
   if (isGuestDataMode()) return guestFrom("obligationsWorkbench");
   return axios.get("/finance/obligations/workbench", {
@@ -296,6 +296,11 @@ export const createObligationRequest = async (data) =>
     headers: { Authorization: jwt(), "Content-Type": "application/json" },
   });
 
+export const updateObligationRequest = async (id, data) =>
+  axios.put(`/finance/obligations/${id}`, data, {
+    headers: { Authorization: jwt(), "Content-Type": "application/json" },
+  });
+
 export const payObligationRequest = async (id, data) =>
   axios.post(`/finance/obligations/${id}/pay`, data, {
     headers: { Authorization: jwt(), "Content-Type": "application/json" },
@@ -306,7 +311,7 @@ export const cancelObligationRequest = async (id) =>
     headers: { Authorization: jwt() },
   });
 
-// Gastos recurrentes (arriendo, servicios, permisos)
+// Egresos recurrentes (arriendo, servicios, permisos)
 export const getRecurringWorkbenchRequest = async (params = {}) =>
   axios.get("/finance/recurring/workbench", {
     params,
@@ -321,6 +326,11 @@ export const createRecurringTemplateRequest = async (data) =>
 export const updateRecurringTemplateRequest = async (id, data) =>
   axios.put(`/finance/recurring/templates/${id}`, data, {
     headers: { Authorization: jwt(), "Content-Type": "application/json" },
+  });
+
+export const deleteRecurringTemplateRequest = async (id) =>
+  axios.delete(`/finance/recurring/templates/${id}`, {
+    headers: { Authorization: jwt() },
   });
 
 export const updateRecurringOccurrenceRequest = async (id, data) =>
@@ -338,7 +348,21 @@ export const skipRecurringOccurrenceRequest = async (id, data) =>
     headers: { Authorization: jwt(), "Content-Type": "application/json" },
   });
 
+export const restoreRecurringOccurrenceRequest = async (id) =>
+  axios.patch(`/finance/recurring/occurrences/${id}/restore`, {}, {
+    headers: { Authorization: jwt(), "Content-Type": "application/json" },
+  });
+
 export const generateRecurringOccurrencesRequest = async () =>
   axios.post("/finance/recurring/generate", null, {
     headers: { Authorization: jwt() },
   });
+
+/** Indicadores del reporte financiero (tabla). */
+export const getBusinessIndicatorsReportRequest = async (params = {}) => {
+  if (isGuestDataMode()) return guestFrom("businessIndicators", params);
+  return axios.get("/finance/business-indicators", {
+    headers: { Authorization: jwt() },
+    params,
+  });
+};

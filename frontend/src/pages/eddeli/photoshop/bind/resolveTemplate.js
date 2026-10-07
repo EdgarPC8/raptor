@@ -11,7 +11,54 @@ import {
   resolveValue,
   resolveImageUrl,
   isNonEmptyString,
+  serializeBoundValue,
 } from "./resolveMedia";
+
+const resolveMultiProductText = (docData, keyForText) => {
+  if (!keyForText) return undefined;
+
+  const direct = resolveValue(docData, keyForText);
+  if (direct !== undefined) {
+    return serializeBoundValue(direct);
+  }
+
+  const rawProductIds = docData?.productIds ?? docData?.products?.map((p) => p?.id) ?? [];
+  if (Array.isArray(rawProductIds) && rawProductIds.length > 0) {
+    const values = rawProductIds
+      .map((id) => {
+        const product = Array.isArray(docData?.products)
+          ? docData.products.find((p) => String(p?.id) === String(id))
+          : undefined;
+
+        if (!product) return "";
+
+        const candidate = keyForText.startsWith("product.")
+          ? keyForText.replace(/^product\./, "")
+          : keyForText;
+
+        const fromProduct = candidate === "id"
+          ? product.id
+          : candidate === "name"
+            ? product.name
+            : candidate === "displayName"
+              ? product.displayName ?? product.name
+              : candidate === "price"
+                ? product.price
+                : candidate === "sku"
+                  ? product.sku
+                  : candidate === "barcode"
+                    ? product.barcode
+                    : undefined;
+
+        return fromProduct !== undefined && fromProduct !== null ? String(fromProduct) : "";
+      })
+      .filter((value) => value !== "");
+
+    if (values.length) return values.join(", ");
+  }
+
+  return undefined;
+};
 
 /**
  * Resuelve TODO el template antes de dibujar (solo layers; sin background fijo).
@@ -33,8 +80,8 @@ export const resolveLayer = (doc, docData, layer) => {
   const keyForImage = layer?.fieldKey || layer?.bind?.srcFrom || "";
   const keyForText = layer?.fieldKey || layer?.bind?.textFrom || "";
 
-  /* ================= IMAGE ================= */
-  if (layer.type === "image") {
+  /* ================= IMAGE / SVG ================= */
+  if (layer.type === "image" || layer.type === "svg") {
     const value = resolveValue(docData, keyForImage);
 
     const srcPrefix = layer?.bind?.srcPrefix || "";
@@ -59,22 +106,14 @@ export const resolveLayer = (doc, docData, layer) => {
 
 /* ================= TEXT ================= */
 if (layer.type === "text") {
-  const value = resolveValue(docData, keyForText);
+  const value = resolveMultiProductText(docData, keyForText);
 
   // ❌ solo undefined y null significan "no hay dato"
   if (value === undefined || value === null) return layer;
 
-  let text = String(value); // 🔥 números → string
-
-  // const maxLen = Number(layer?.bind?.maxLen || 0);
-  // if (maxLen > 0 && text.length > maxLen) {
-  //   text = text.slice(0, maxLen);
-  // }
-  // si descomento esto se cortara cuando el bind.maxlengt se mayor a su valor despues ya pongo esto en la manipulacion del texto
-
   return {
     ...layer,
-    props: { ...(layer.props || {}), text },
+    props: { ...(layer.props || {}), text: String(value) },
   };
 }
 

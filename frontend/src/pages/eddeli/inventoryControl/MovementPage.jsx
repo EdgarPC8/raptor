@@ -21,11 +21,13 @@ import {
   unwrapListResponse,
   deleteMovement,
   updateMovementsDateBatch,
+  anularProduccion,
 } from "../../../api/inventoryControlRequest";
 
 function MovementPage() {
   const { user, toast: toastAuth } = useAuth();
-  const isProgrammer = user?.loginRol === "Programador";
+  const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
+  const canAnular = user?.loginRol === "Administrador" || user?.loginRol === "Propietario" || user?.loginRol === "Programador";
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingMovement, setEditingMovement] = useState(null);
@@ -77,6 +79,23 @@ function MovementPage() {
       onError: (res) => ({
         title: "Movimiento",
         description: res?.response?.data?.message || "No se pudo eliminar",
+      }),
+    });
+  };
+
+  const handleAnular = async (opId) => {
+    if (!canAnular || !opId) return;
+    if (!window.confirm(`¿Anular la producción ${opId}? Se revierten sus movimientos.`)) return;
+    await toastAuth({
+      promise: anularProduccion(opId),
+      onSuccess: async () => {
+        await fetchMovements();
+        await fetchProducts();
+        return { title: "Producción", description: "Anulada" };
+      },
+      onError: (res) => ({
+        title: "Producción",
+        description: res?.response?.data?.message || "No se pudo anular",
       }),
     });
   };
@@ -164,6 +183,9 @@ function MovementPage() {
         onDelete={handleDelete}
         onBatchDate={onBatchDateWithToast}
         onBatchDateSaved={fetchMovements}
+        canAnular={canAnular}
+        onAnular={handleAnular}
+        total={total}
       />
 
       <TablePagination

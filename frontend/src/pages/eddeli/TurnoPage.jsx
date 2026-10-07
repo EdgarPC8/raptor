@@ -86,7 +86,7 @@ import {
 const to2 = (n) => Number(Number(n || 0).toFixed(2));
 
 const MOVEMENT_CATEGORY_LABELS = {
-  gasto_operativo: "Gasto operativo",
+  gasto_operativo: "Egreso operativo",
   compra_mercancia: "Compra mercancía",
   retiro: "Retiro / depósito",
   entrada: "Entrada de efectivo",
@@ -238,9 +238,9 @@ export default function TurnoPage() {
   const { activeApp } = useAppSettings();
   /** Multistock: solo sucursales propias. Un solo local: cualquier local activo. */
   const multiStockEnabled = Boolean(activeApp?.multiStockEnabled);
-  const isProgrammer = user?.loginRol === "Programador";
+  const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const isAdmin = user?.loginRol === "Administrador" || isProgrammer;
-  /** Admin y Programador abren/cierran con arqueo por monedas/billetes. */
+  /** Admin y Propietario abren/cierran con arqueo por monedas/billetes. */
   const canCashArqueo = isAdmin;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -582,7 +582,7 @@ export default function TurnoPage() {
         skipExpense: true,
       });
       void toast?.({
-        message: "Compra registrada: salida de efectivo en el turno y gasto en Finanzas.",
+        message: "Compra registrada: salida de efectivo en el turno y egreso en Finanzas.",
         variant: "success",
       });
     } catch (e) {
@@ -1113,7 +1113,7 @@ export default function TurnoPage() {
                 isProgrammer
                 value={movementForm.movementDate}
                 onChange={(v) => setMovementForm((p) => ({ ...p, movementDate: v }))}
-                label="Fecha del gasto (opc.)"
+                label="Fecha del egreso (opc.)"
               />
             </Box>
           )}
@@ -1373,7 +1373,7 @@ export default function TurnoPage() {
         </TableContainer>
         {isProgrammer && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-            Clic en un turno para corregir arqueo, fechas y gastos.
+            Clic en un turno para corregir arqueo, fechas y egresos.
           </Typography>
         )}
       </Paper>

@@ -18,6 +18,7 @@ import { Add, EditOutlined, DeleteOutline } from "@mui/icons-material";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TablePro from "../../../components/Tables/TablePro";
+import { showEgreso } from "../../../utils/financeWords";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 import FinanceForm from "./components/FinanceForm";
 import FinanceSummaryCards from "./components/FinanceSummaryCards";
@@ -139,7 +140,7 @@ function FinancePage() {
   const openCreate = (type) => {
     setFormType(type);
     setDataToEdit(null);
-    setTitleUserDialog(type === "income" ? "Registrar Ingreso" : "Registrar Gasto");
+    setTitleUserDialog(type === "income" ? "Registrar Ingreso" : "Registrar Egreso");
     setOpenDialog(true);
   };
 
@@ -158,7 +159,7 @@ function FinancePage() {
       label: "Fecha",
       id: "date",
       getSortValue: (r) => new Date(r.date || 0).getTime(),
-      render: (r) => formatDateTime(r?.date),
+      render: (r) => formatDateTime(r?.date, { showSeconds: true }),
     },
     {
       label: "Tipo",
@@ -167,11 +168,15 @@ function FinancePage() {
         r.type === "income" ? (
           <Chip size="small" color="success" label="Ingreso" icon={<TrendingUpIcon />} />
         ) : (
-          <Chip size="small" color="error" label="Gasto" icon={<TrendingDownIcon />} />
+          <Chip size="small" color="error" label="Egreso" icon={<TrendingDownIcon />} />
         ),
     },
     { label: "Concepto", id: "concept" },
-    { label: "Categoría", id: "category" },
+    {
+      label: "Categoría",
+      id: "category",
+      render: (r) => showEgreso(r?.category),
+    },
     {
       label: "Monto",
       id: "amount",
@@ -205,7 +210,7 @@ function FinancePage() {
                   setFormType(r.type || "income");
                   setDataToEdit(r);
                   setTitleUserDialog(
-                    "Editar " + (r.type === "expense" ? "Gasto" : "Ingreso")
+                    "Editar " + (r.type === "expense" ? "Egreso" : "Ingreso")
                   );
                   setOpenDialog(true);
                 }}
@@ -262,7 +267,7 @@ function FinancePage() {
           Finanzas
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Resumen de ingresos y gastos registrados. El detalle de cobros está en Finanzas → Cobranzas.
+          Resumen de ingresos y egresos registrados. La tabla muestra los 500 movimientos más recientes. El detalle de cobros está en Finanzas → Cobranzas.
         </Typography>
       </Box>
 
@@ -283,7 +288,7 @@ function FinancePage() {
           </Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
             <Chip size="small" color="success" variant="outlined" label={`Ingresos ${money(filteredTotals.income)}`} />
-            <Chip size="small" color="error" variant="outlined" label={`Gastos ${money(filteredTotals.expense)}`} />
+            <Chip size="small" color="error" variant="outlined" label={`Egresos ${money(filteredTotals.expense)}`} />
             <Chip
               size="small"
               color={filteredTotals.balance >= 0 ? "primary" : "warning"}
@@ -309,7 +314,7 @@ function FinancePage() {
             startIcon={<Add />}
             onClick={() => openCreate("expense")}
           >
-            Gasto
+            Egreso
           </Button>
         </Stack>
       </Stack>
@@ -330,7 +335,7 @@ function FinancePage() {
         >
           <ToggleButton value="all">Todos</ToggleButton>
           <ToggleButton value="income">Solo ingresos</ToggleButton>
-          <ToggleButton value="expense">Solo gastos</ToggleButton>
+          <ToggleButton value="expense">Solo egresos</ToggleButton>
         </ToggleButtonGroup>
 
         <TextField
@@ -344,14 +349,14 @@ function FinancePage() {
           <MenuItem value="all">Todas</MenuItem>
           {categoryOptions.map((c) => (
             <MenuItem key={c} value={c}>
-              {c}
+              {showEgreso(c)}
             </MenuItem>
           ))}
         </TextField>
       </Stack>
 
       <TablePro
-        title="Ingresos y gastos"
+        title="Ingresos y egresos"
         rows={filteredRows}
         columns={columns}
         loading={loading}

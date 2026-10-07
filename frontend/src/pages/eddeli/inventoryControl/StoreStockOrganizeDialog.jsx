@@ -74,7 +74,7 @@ export function StoreStockManager({
   defaultTab = 0,
 }) {
   const { toast: toastAuth, user } = useAuth();
-  const isProgrammer = user?.loginRol === "Programador";
+  const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const [tab, setTab] = useState(defaultTab);
   const [loading, setLoading] = useState(false);
   const [stocks, setStocks] = useState([]);
@@ -91,7 +91,7 @@ export function StoreStockManager({
   const [transferring, setTransferring] = useState(false);
   const [lastMsg, setLastMsg] = useState("");
 
-  /** Programador: fijar stock absoluto en este local (sin movimiento). */
+  /** Propietario: fijar stock absoluto en este local (sin movimiento). */
   const [editProductId, setEditProductId] = useState(null);
   const [editQty, setEditQty] = useState("");
   const [savingAdjust, setSavingAdjust] = useState(false);
@@ -452,7 +452,7 @@ export function StoreStockManager({
           Productos con stock <strong>en este local</strong> (Bodega o sucursal). Para mover varios,
           usa “A la lista” y confirma en la pestaña de traspaso.
           {isProgrammer
-            ? " Como Programador puedes fijar la cantidad exacta aquí (sin crear movimiento)."
+            ? " Como Propietario puedes fijar la cantidad exacta aquí (sin crear movimiento)."
             : ""}
         </Alert>
 
@@ -460,7 +460,7 @@ export function StoreStockManager({
           <Paper variant="outlined" sx={{ p: 1.25, mb: 1.5 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
               <TuneIcon fontSize="small" color="warning" />
-              <Typography variant="subtitle2">Ajuste Programador (sin movimiento)</Typography>
+              <Typography variant="subtitle2">Ajuste Propietario (sin movimiento)</Typography>
             </Stack>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "flex-start" }}>
               <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -532,7 +532,7 @@ export function StoreStockManager({
           <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
             Sin stock registrado aquí.
             {isProgrammer
-              ? " Usa el ajuste Programador arriba o traspasa desde otro local."
+              ? " Usa el ajuste Propietario arriba o traspasa desde otro local."
               : " Traspasa desde otro local con la lista."}
           </Typography>
         ) : (
@@ -588,7 +588,7 @@ export function StoreStockManager({
                         <TableCell align="right">
                           <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                             {isProgrammer && !editing ? (
-                              <Tooltip title="Ajustar cantidad (Programador)">
+                              <Tooltip title="Ajustar cantidad (Propietario)">
                                 <IconButton
                                   size="small"
                                   onClick={() => {

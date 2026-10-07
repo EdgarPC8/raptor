@@ -56,9 +56,9 @@ export function getProductoFormTourSteps() {
     {
       element: "[data-tour='producto-form-type']",
       popover: {
-        title: "Tipo",
+        title: "Tipo de producto",
         description:
-          "Materia prima = insumos. Intermedio = se produce y se usa en otra receta. Final = se vende al cliente.",
+          "Select múltiple: Final (se vende), Insumo (recetas) e Intermedio (se fabrica). Podés marcar más de uno — ej. Huevo = Final + Insumo.",
         side: "bottom",
         align: "start",
       },

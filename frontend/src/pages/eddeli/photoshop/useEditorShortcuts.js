@@ -1,8 +1,8 @@
 import { useEffect, useCallback } from "react";
 import { useEditor } from "./EditorProvider.jsx";
-import { useImageCropCtx } from "./useImageCrop.jsx";
 import { useAuth } from "../../../context/AuthContext.jsx";
-import { isSelectionTool } from "./editorCursors.js";
+import { getSelectedLayerIds } from "./editorReducer.js";
+import { useImageCropCtx } from "./useImageCrop.jsx";
 
 function isTypingTarget(el) {
   if (!el) return false;
@@ -11,7 +11,7 @@ function isTypingTarget(el) {
 }
 
 /**
- * Atajos estilo Photopea / Photoshop en el editor.
+ * Atajos del editor.
  */
 export function useEditorShortcuts() {
   const {
@@ -25,20 +25,14 @@ export function useEditorShortcuts() {
     canRedo,
     state,
   } = useEditor();
-  const {
-    cropDraft,
-    docSelection,
-    cropBusy,
-    cancelCrop,
-    cancelSelection,
-    clearDocSelection,
-    copySelectionToLayer,
-    cutSelectionToLayer,
-    startCropSelected,
-  } = useImageCropCtx();
   const { toast } = useAuth();
-
-  const busy = cropBusy;
+  const {
+    docSelection,
+    copySelectionWithToast,
+    cutSelectionWithToast,
+    clearDocSelection,
+    cancelSelection,
+  } = useImageCropCtx();
 
   const duplicateLayer = useCallback(() => {
     dispatch({ type: "DUPLICATE_SELECTED_LAYER" });
@@ -49,18 +43,6 @@ export function useEditorShortcuts() {
     deleteLayer(state.selected.id);
   }, [deleteLayer, state.selected]);
 
-  const handleCtrlJ = useCallback(async () => {
-    if (busy) return;
-    const ok = await copySelectionToLayer();
-    if (ok) return;
-    if (state.selected?.kind === "layer") duplicateLayer();
-  }, [busy, copySelectionToLayer, duplicateLayer, state.selected]);
-
-  const handleCtrlShiftJ = useCallback(async () => {
-    if (busy) return;
-    await cutSelectionToLayer();
-  }, [busy, cutSelectionToLayer]);
-
   const handleSave = useCallback(async () => {
     await toast({
       promise: saveTemplateDoc(),
@@ -68,6 +50,8 @@ export function useEditorShortcuts() {
       errorMessage: "No se pudo guardar",
     });
   }, [saveTemplateDoc, toast]);
+
+  const hasDocSel = Boolean(docSelection && docSelection.w >= 2 && docSelection.h >= 2);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -94,15 +78,39 @@ export function useEditorShortcuts() {
         return;
       }
 
-      if (mod && e.shiftKey && key === "j") {
+      if (mod && !e.shiftKey && key === "j") {
         e.preventDefault();
-        handleCtrlShiftJ();
+        if (hasDocSel) {
+          cutSelectionWithToast();
+        } else if (state.selected?.kind === "layer") {
+          duplicateLayer();
+        }
         return;
       }
 
-      if (mod && !e.shiftKey && key === "j") {
+      if (mod && e.shiftKey && key === "j") {
         e.preventDefault();
-        handleCtrlJ();
+        if (hasDocSel) copySelectionWithToast();
+        return;
+      }
+
+      // Ctrl+G → carpeta con selección
+      if (mod && !e.shiftKey && key === "g") {
+        e.preventDefault();
+        const ids = getSelectedLayerIds(state.selected);
+        if (ids.length >= 1) {
+          dispatch({ type: "GROUP_SELECTED_LAYERS" });
+        }
+        return;
+      }
+
+      // Ctrl+Shift+G → desagrupar
+      if (mod && e.shiftKey && key === "g") {
+        e.preventDefault();
+        const ids = getSelectedLayerIds(state.selected);
+        if (ids.length >= 1) {
+          dispatch({ type: "UNGROUP_SELECTED_LAYERS" });
+        }
         return;
       }
 
@@ -115,51 +123,50 @@ export function useEditorShortcuts() {
       }
 
       if (key === "escape") {
-        if (cropDraft || docSelection) {
+        if (hasDocSel) {
           e.preventDefault();
-          cancelSelection();
+          clearDocSelection();
           return;
         }
+        cancelSelection?.();
         dispatch({ type: "SET_SELECTED", selected: null });
+        setActiveTool("select");
         return;
       }
 
       if (mod) return;
 
       if (key === "v") {
-        cancelSelection();
+        setActiveTool("select");
         return;
       }
       if (key === "m") {
-        cancelCrop();
-        clearDocSelection();
-        setActiveTool("select-rect");
-        return;
-      }
-      if (key === "l") {
-        cancelCrop();
-        clearDocSelection();
-        setActiveTool("select-lasso");
-        return;
-      }
-      if (key === "c") {
-        setActiveTool("crop");
-        startCropSelected("crop");
+        setActiveTool(e.shiftKey ? "select-ellipse" : "select-rect");
         return;
       }
       if (key === "g") {
-        cancelCrop();
         setActiveTool("eyedropper");
         return;
       }
+      if (key === "k") {
+        setActiveTool("paint-bucket");
+        return;
+      }
       if (key === "t") {
-        cancelCrop();
         setActiveTool("text");
         return;
       }
       if (key === "u") {
-        cancelCrop();
         setActiveTool("shape");
+        return;
+      }
+      if (key === "s") {
+        setActiveTool("svg");
+        return;
+      }
+      if (key === "i") {
+        setActiveTool("image");
+        return;
       }
     };
 
@@ -169,19 +176,16 @@ export function useEditorShortcuts() {
     canRedo,
     canUndo,
     cancelSelection,
-    cancelCrop,
     clearDocSelection,
-    cropDraft,
-    docSelection,
+    copySelectionWithToast,
+    cutSelectionWithToast,
     deleteSelected,
-    deleteLayer,
     dispatch,
-    handleCtrlJ,
-    handleCtrlShiftJ,
+    duplicateLayer,
     handleSave,
+    hasDocSel,
     redo,
     setActiveTool,
-    startCropSelected,
     state.selected,
     undo,
   ]);

@@ -1,5 +1,5 @@
 /**
- * Sistema → Planes: comparación comercial (Gratis / Medio / Pro).
+ * Sistema → Planes: comparación comercial (catálogo fijo systemPlansCatalog.js).
  */
 import { Navigate } from "react-router-dom";
 import {
@@ -22,7 +22,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { SYSTEM_PLANS } from "../config/systemPlansCatalog.js";
 import { usePlans } from "../hooks/usePlans.js";
 
-const ALLOWED = new Set(["Programador", "Administrador"]);
+const ALLOWED = new Set(["Propietario", "Programador", "Administrador"]);
 
 const PERIOD_LABELS = { MONTHLY: "/mes", ANNUALLY: "/año" };
 

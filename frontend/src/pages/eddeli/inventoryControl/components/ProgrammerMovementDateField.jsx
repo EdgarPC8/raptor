@@ -1,10 +1,11 @@
 import { Box, IconButton, TextField, Tooltip } from "@mui/material";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import { nowLocalDateTime, toLocalDateTimeInput } from "../../../../utils/appDateTime.js";
 
 const PROGRAMMER_HINT =
-  "Puedes registrar con fecha pasada o corregir el historial.";
+  "Puedes registrar con fecha y hora pasadas o corregir el historial.";
 
-/** Campo de fecha personalizada — visible solo en mantenimiento interno. */
+/** Campo de fecha/hora personalizada — visible solo en mantenimiento interno. */
 export default function ProgrammerMovementDateField({
   isProgrammer,
   value,
@@ -17,7 +18,7 @@ export default function ProgrammerMovementDateField({
     <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
       <TextField
         label={label}
-        type="date"
+        type="datetime-local"
         fullWidth
         size="small"
         variant="outlined"
@@ -35,17 +36,25 @@ export default function ProgrammerMovementDateField({
   );
 }
 
+/** Envía datetime completo al API (conserva hora). */
 export const movementDateForApi = (dateStr) => {
   if (!dateStr) return undefined;
-  return `${dateStr}T12:00:00.000Z`;
+  const s = String(dateStr).trim();
+  if (!s) return undefined;
+  // Solo día → mediodía local vía datetime-local no debería llegar; si llega, añade hora actual
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const now = nowLocalDateTime(); // YYYY-MM-DDTHH:mm
+    return `${s}T${now.slice(11)}`;
+  }
+  return s.length >= 16 ? s.slice(0, 16) : s;
 };
 
-export const todayDateInput = () => new Date().toISOString().slice(0, 10);
+export const todayDateInput = () => nowLocalDateTime();
 
 export const isoToDateInput = (iso) => {
   if (!iso) return "";
   try {
-    return new Date(iso).toISOString().slice(0, 10);
+    return toLocalDateTimeInput(iso);
   } catch {
     return "";
   }

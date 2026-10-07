@@ -1,5 +1,5 @@
 /**
- * Control de imágenes del servidor (/img). Solo Programador.
+ * Control de imágenes del servidor (/img). Solo Propietario.
  * Navegación por carpetas hijas + subida masiva de carpeta/subcarpetas/archivos.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

@@ -77,7 +77,7 @@ function RoleChips({ roles, showInternalRoles = false }) {
   if (!roles?.length) return null;
   const visible = showInternalRoles
     ? roles
-    : roles.filter((role) => role !== "Programador");
+    : roles.filter((role) => role !== "Propietario" && role !== "Programador");
   if (!visible.length) return null;
   return (
     <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
@@ -637,8 +637,9 @@ export default function InfoPage() {
   const { subscription } = useSubscriptions();
   const [searchParams, setSearchParams] = useSearchParams();
   const plan = useMemo(() => resolveActiveSystemPlan(subscription), [subscription]);
-  const canSeePlans = ["Programador", "Administrador"].includes(user?.loginRol);
-  const showInternalRoles = user?.loginRol === "Programador";
+  const canSeePlans = ["Propietario", "Programador", "Administrador"].includes(user?.loginRol);
+  const showInternalRoles =
+    user?.loginRol === "Propietario" || user?.loginRol === "Programador";
 
   const tabParam = searchParams.get("tab");
   const moduloParam = searchParams.get("modulo");

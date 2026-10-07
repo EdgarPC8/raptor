@@ -1,3 +1,5 @@
+import { showEgreso } from "../../../../utils/financeWords";
+
 export const EMPLOYEE_EXPENSE_CATEGORY = "Pago Empleados";
 export const INVENTORY_PURCHASE_CATEGORY = "Compras";
 export const SERVICE_EXPENSE_CATEGORY = "Pago de servicios";
@@ -30,7 +32,7 @@ function groupByCategory(lines = []) {
     map.set(key, round2((map.get(key) || 0) + Number(line.amount || 0)));
   }
   return [...map.entries()]
-    .map(([label, value]) => ({ label, value }))
+    .map(([label, value]) => ({ label: showEgreso(label), value }))
     .sort((a, b) => b.value - a.value);
 }
 

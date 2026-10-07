@@ -2,18 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Container,
-  IconButton,
   Stack,
   Typography,
   CircularProgress,
   Alert,
-  Tooltip,
+  ButtonBase,
+  Collapse,
+  Button,
 } from "@mui/material";
-import NewspaperIcon from "@mui/icons-material/Newspaper";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import PauseIcon from "@mui/icons-material/Pause";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import CampaignIcon from "@mui/icons-material/Campaign";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
@@ -28,28 +25,16 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import QrCode2Icon from "@mui/icons-material/QrCode2";
 import BadgeIcon from "@mui/icons-material/Badge";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import NewspaperIcon from "@mui/icons-material/Newspaper";
 import { getNewsRequest } from "../../../api/newsRequest.js";
-import {
-  getNewsAutoplayPaused,
-  setNewsAutoplayPaused,
-  markNewsAsSeen,
-} from "../../../utils/newsLocalState.js";
-
-const PAPER = "#ebe9e4";
-const PAPER_EDGE = "#d5d1c8";
-const BOX = "#f4f2ed";
-const BOX_BORDER = "#cfc9bc";
-const INK = "#1c1b19";
-const INK_MUTED = "#5c5852";
-const ACCENT = "#3d4a3a";
-const AUTO_MS = 10_000;
+import { markNewsAsSeen } from "../../../utils/newsLocalState.js";
 
 const FIGURE_PALETTES = [
-  { bg: "#dfe6dc", ink: "#3d4a3a" },
-  { bg: "#e4ddd4", ink: "#5a4a3a" },
-  { bg: "#d9e0e6", ink: "#3a4654" },
-  { bg: "#e6e0d4", ink: "#4a4538" },
-  { bg: "#e0dce6", ink: "#463a54" },
+  { bg: "primary.light", ink: "primary.dark" },
+  { bg: "warning.light", ink: "warning.dark" },
+  { bg: "success.light", ink: "success.dark" },
+  { bg: "info.light", ink: "info.dark" },
+  { bg: "secondary.light", ink: "secondary.dark" },
 ];
 
 function pickFigure(item) {
@@ -99,915 +84,605 @@ function pickFigure(item) {
   return { Icon: ArticleIcon, palette: FIGURE_PALETTES[0] };
 }
 
-/** Bloque visual que simula una imagen con icono. */
-function FigureBlock({ item, size = "md", fullWidth = false }) {
-  const { Icon, palette } = pickFigure(item);
-  const dims =
-    size === "lg"
-      ? { h: { xs: 72, md: 96 }, icon: { xs: 36, md: 48 } }
-      : size === "sm"
-        ? { h: 36, icon: 18 }
-        : { h: 64, icon: 32 };
-
-  return (
-    <Box
-      aria-hidden
-      sx={{
-        height: dims.h,
-        width: fullWidth ? "100%" : undefined,
-        minWidth: fullWidth
-          ? 0
-          : size === "sm"
-            ? 52
-            : size === "lg"
-              ? { xs: 72, md: 110 }
-              : 72,
-        borderRadius: fullWidth ? 0 : 1,
-        bgcolor: palette.bg,
-        border: fullWidth ? `none` : `1px solid ${BOX_BORDER}`,
-        borderBottom: fullWidth ? `1px solid ${BOX_BORDER}` : undefined,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        backgroundImage: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.45), transparent 55%), linear-gradient(145deg, ${palette.bg} 0%, rgba(255,255,255,0.2) 50%, ${palette.bg} 100%)`,
-      }}
-    >
-      <Icon sx={{ fontSize: dims.icon, color: palette.ink, opacity: 0.88 }} />
-    </Box>
-  );
-}
-
 function formatDate(value) {
   if (!value) return "";
   try {
-    return new Date(value).toLocaleDateString("es-EC", {
+    return new Date(value).toLocaleString("es-EC", {
       day: "2-digit",
       month: "short",
       year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   } catch {
     return "";
   }
 }
 
-function PageChrome({ heading, pageNumber, children, noScroll = false }) {
+function sortKey(item) {
+  return Number(item.sortOrder ?? item.sort_order ?? 0);
+}
+
+function sectionDomId(id) {
+  return `news-sec-${id}`;
+}
+
+function buildNewsBoard(items) {
+  const portadas = [];
+  const novedades = [];
+  const sistema = [];
+  const proximamente = [];
+
+  for (const item of items) {
+    const kind = String(item.kind || "");
+    if (kind === "portada") {
+      portadas.push(item);
+      continue;
+    }
+    if (kind === "proximamente") {
+      proximamente.push(item);
+      continue;
+    }
+    if (kind === "breve") {
+      if (sortKey(item) >= 20) novedades.push(item);
+      else sistema.push(item);
+      continue;
+    }
+    sistema.push(item);
+  }
+
+  const byOrder = (a, b) => sortKey(a) - sortKey(b);
+  portadas.sort(byOrder);
+  novedades.sort(byOrder);
+  sistema.sort(byOrder);
+  proximamente.sort(byOrder);
+
+  return {
+    cover: portadas[0] || null,
+    sections: [
+      {
+        id: "novedades",
+        eyebrow: "Novedades",
+        title: "Lo nuevo",
+        description: "Cambios recientes y mejoras que acabamos de sumar.",
+        accent: "primary",
+        items: novedades,
+      },
+      {
+        id: "sistema",
+        eyebrow: "En el sistema",
+        title: "Ya funciona",
+        description: "Lo que tenés disponible y corre bien día a día.",
+        accent: "success",
+        items: sistema,
+      },
+      {
+        id: "proximamente",
+        eyebrow: "Roadmap",
+        title: "Lo que se viene",
+        description: "Próximas funciones en preparación.",
+        accent: "warning",
+        items: proximamente,
+      },
+    ],
+  };
+}
+
+function accentColor(accent) {
+  if (accent === "success") return "success.main";
+  if (accent === "warning") return "warning.main";
+  return "primary.main";
+}
+
+function CoverHero({ item }) {
+  const { Icon } = pickFigure(item);
   return (
     <Box
+      id={sectionDomId("portada")}
       sx={{
-        flex: 1,
-        minWidth: 0,
-        height: "100%",
-        bgcolor: PAPER,
-        px: { xs: 1.25, md: 1.75 },
-        py: { xs: 1, md: 1.25 },
-        display: "flex",
-        flexDirection: "column",
+        scrollMarginTop: 88,
+        position: "relative",
         overflow: "hidden",
+        borderRadius: 3,
+        border: 1,
+        borderColor: "divider",
+        bgcolor: "background.paper",
+        backgroundImage: (theme) =>
+          `linear-gradient(145deg, ${theme.palette.primary.main}22 0%, ${theme.palette.background.paper} 48%, ${theme.palette.warning.main}14 100%)`,
+        px: { xs: 2.5, md: 4 },
+        py: { xs: 3.5, md: 5 },
       }}
     >
+      <Box
+        sx={{
+          position: "absolute",
+          right: { xs: 12, md: 28 },
+          top: { xs: 12, md: 24 },
+          width: { xs: 56, md: 72 },
+          height: { xs: 56, md: 72 },
+          borderRadius: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          bgcolor: "primary.main",
+          color: "primary.contrastText",
+          opacity: 0.92,
+        }}
+        aria-hidden
+      >
+        <Icon sx={{ fontSize: { xs: 28, md: 34 } }} />
+      </Box>
+
+      <Typography
+        sx={{
+          mb: 1.25,
+          fontSize: "0.7rem",
+          fontWeight: 800,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: "text.secondary",
+          pr: 8,
+        }}
+      >
+        Primera plana
+        {item.publishedAt ? ` · ${formatDate(item.publishedAt)}` : ""}
+      </Typography>
+      <Typography
+        component="h1"
+        sx={{
+          maxWidth: 720,
+          fontWeight: 900,
+          letterSpacing: "-0.02em",
+          lineHeight: 1.12,
+          fontSize: { xs: "1.75rem", md: "2.35rem" },
+          color: "text.primary",
+          pr: { xs: 7, md: 10 },
+        }}
+      >
+        {item.title}
+      </Typography>
+      {item.subtitle ? (
+        <Typography
+          sx={{
+            mt: 1.5,
+            maxWidth: 640,
+            fontWeight: 600,
+            fontSize: { xs: "1rem", md: "1.1rem" },
+            color: "text.secondary",
+          }}
+        >
+          {item.subtitle}
+        </Typography>
+      ) : null}
+      {item.body ? (
+        <Typography
+          sx={{
+            mt: 2,
+            maxWidth: 680,
+            whiteSpace: "pre-wrap",
+            fontSize: "0.95rem",
+            lineHeight: 1.6,
+            color: "text.primary",
+            opacity: 0.9,
+          }}
+        >
+          {item.body}
+        </Typography>
+      ) : null}
+    </Box>
+  );
+}
+
+function NewsCard({ item, accent }) {
+  const [open, setOpen] = useState(false);
+  const hasBody = Boolean(item.body?.trim());
+  const { Icon, palette } = pickFigure(item);
+  const bar = accentColor(accent);
+
+  return (
+    <Box
+      id={`news-item-${item.id}`}
+      sx={{
+        scrollMarginTop: 88,
+        position: "relative",
+        overflow: "hidden",
+        borderRadius: 2,
+        border: 1,
+        borderColor: "divider",
+        bgcolor: "background.paper",
+        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        "&:hover": {
+          transform: "translateY(-2px)",
+          boxShadow: 2,
+        },
+      }}
+    >
+      <Box
+        sx={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          bgcolor: bar,
+        }}
+        aria-hidden
+      />
+      <Stack direction="row" spacing={1.5} sx={{ p: 2, pl: 2.5 }}>
+        <Box
+          sx={{
+            width: 44,
+            height: 44,
+            borderRadius: 1.5,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            bgcolor: palette.bg,
+            color: palette.ink,
+          }}
+          aria-hidden
+        >
+          <Icon fontSize="small" />
+        </Box>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+            <Typography
+              sx={{
+                fontSize: "0.65rem",
+                fontWeight: 800,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: bar,
+              }}
+            >
+              {accent === "warning"
+                ? "Próximo"
+                : accent === "success"
+                  ? "Listo"
+                  : "Nuevo"}
+            </Typography>
+            {item.publishedAt ? (
+              <Typography sx={{ fontSize: "0.7rem", color: "text.secondary" }}>
+                {formatDate(item.publishedAt)}
+              </Typography>
+            ) : null}
+          </Stack>
+          <Typography sx={{ fontWeight: 800, fontSize: "0.98rem", lineHeight: 1.25 }}>
+            {item.title}
+          </Typography>
+          {item.subtitle ? (
+            <Typography
+              sx={{ mt: 0.5, fontWeight: 600, fontSize: "0.85rem", color: "text.secondary" }}
+            >
+              {item.subtitle}
+            </Typography>
+          ) : null}
+          {hasBody ? (
+            <>
+              <Collapse in={open} collapsedSize={48}>
+                <Typography
+                  sx={{
+                    mt: 1,
+                    whiteSpace: "pre-wrap",
+                    fontSize: "0.85rem",
+                    lineHeight: 1.55,
+                    color: "text.primary",
+                    opacity: 0.85,
+                  }}
+                >
+                  {item.body}
+                </Typography>
+              </Collapse>
+              <Button
+                size="small"
+                onClick={() => setOpen((v) => !v)}
+                sx={{ mt: 0.5, px: 0, minWidth: 0, fontWeight: 700 }}
+              >
+                {open ? "Ver menos" : "Leer más"}
+              </Button>
+            </>
+          ) : null}
+        </Box>
+      </Stack>
+    </Box>
+  );
+}
+
+function BoardSection({ section }) {
+  if (!section.items.length) return null;
+  const bar = accentColor(section.accent);
+
+  return (
+    <Box id={sectionDomId(section.id)} sx={{ scrollMarginTop: 88 }}>
       <Stack
         direction="row"
         justifyContent="space-between"
-        alignItems="baseline"
-        sx={{
-          mb: 0.75,
-          pb: 0.5,
-          borderBottom: `2.5px solid ${INK}`,
-          flexShrink: 0,
-        }}
+        alignItems="flex-end"
+        sx={{ mb: 1.5, pb: 1, borderBottom: 1, borderColor: "divider" }}
       >
-        <Typography
+        <Box>
+          <Typography
+            sx={{
+              fontSize: "0.68rem",
+              fontWeight: 800,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: bar,
+            }}
+          >
+            {section.eyebrow}
+          </Typography>
+          <Typography
+            component="h2"
+            sx={{
+              fontWeight: 900,
+              letterSpacing: "-0.02em",
+              fontSize: { xs: "1.35rem", md: "1.6rem" },
+            }}
+          >
+            {section.title}
+          </Typography>
+          <Typography sx={{ mt: 0.25, fontSize: "0.85rem", color: "text.secondary" }}>
+            {section.description}
+          </Typography>
+        </Box>
+        <Box
           sx={{
-            fontFamily: '"Source Serif 4", Georgia, serif',
-            fontWeight: 800,
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            fontSize: "0.7rem",
-            color: INK,
+            px: 1.25,
+            py: 0.5,
+            borderRadius: 999,
+            bgcolor: "action.hover",
+            fontSize: "0.75rem",
+            fontWeight: 700,
+            color: "text.secondary",
           }}
         >
-          {heading}
-        </Typography>
-        <Typography sx={{ fontSize: "0.65rem", color: INK_MUTED }}>
-          Pág. {pageNumber}
-        </Typography>
+          {section.items.length}
+        </Box>
       </Stack>
       <Box
         sx={{
-          flex: 1,
-          minHeight: 0,
-          overflow: noScroll ? "hidden" : "auto",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {children}
-      </Box>
-    </Box>
-  );
-}
-
-function CoverCard({ item }) {
-  return (
-    <Box
-      sx={{
-        minHeight: 0,
-        height: "100%",
-        bgcolor: BOX,
-        border: `1px solid ${BOX_BORDER}`,
-        borderRadius: 1,
-        overflow: "hidden",
-        display: "flex",
-        gap: 0.75,
-        alignItems: "center",
-        px: 0.85,
-        py: 0.6,
-      }}
-    >
-      <FigureBlock item={item} size="sm" />
-      <Box sx={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
-        <Typography
-          sx={{
-            fontFamily: '"Source Serif 4", Georgia, serif',
-            fontWeight: 800,
-            fontSize: "0.68rem",
-            lineHeight: 1.15,
-            color: INK,
-            mb: 0.1,
-            display: "-webkit-box",
-            WebkitLineClamp: 1,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {item.title}
-        </Typography>
-        {item.subtitle ? (
-          <Typography
-            sx={{
-              fontSize: "0.58rem",
-              fontWeight: 600,
-              color: ACCENT,
-              mb: 0.1,
-              display: "-webkit-box",
-              WebkitLineClamp: 1,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {item.subtitle}
-          </Typography>
-        ) : null}
-        {item.body ? (
-          <Typography
-            sx={{
-              fontSize: "0.58rem",
-              lineHeight: 1.25,
-              color: INK_MUTED,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {item.body}
-          </Typography>
-        ) : null}
-      </Box>
-    </Box>
-  );
-}
-
-/**
- * Portada sin scroll.
- * - front: titular (2 cols) + grilla 2×2 (4 cards)
- * - grid: grilla 2×3 (6 cards)
- */
-function CoverLayout({
-  hero,
-  summaries,
-  lead = "En esta edición · resumen",
-  coverVariant = "front",
-}) {
-  const rows = coverVariant === "grid" ? 3 : 2;
-
-  return (
-    <Box
-      sx={{
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        gap: 0.75,
-        overflow: "hidden",
-        minHeight: 0,
-      }}
-    >
-      {hero ? (
-        <Box
-          sx={{
-            flexShrink: 0,
-            bgcolor: BOX,
-            border: `1px solid ${BOX_BORDER}`,
-            borderLeft: `4px solid ${ACCENT}`,
-            borderRadius: 1,
-            px: 1.25,
-            py: 1,
-            display: "flex",
-            gap: 1.1,
-            alignItems: "center",
-            maxHeight: "38%",
-          }}
-        >
-          <FigureBlock item={hero} size="md" />
-          <Box sx={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
-            <Typography
-              sx={{
-                fontSize: "0.58rem",
-                fontWeight: 700,
-                letterSpacing: 1.2,
-                textTransform: "uppercase",
-                color: ACCENT,
-                mb: 0.25,
-              }}
-            >
-              Titular
-              {hero.publishedAt ? ` · ${formatDate(hero.publishedAt)}` : ""}
-            </Typography>
-            <Typography
-              sx={{
-                fontFamily: '"Source Serif 4", Georgia, serif',
-                fontWeight: 800,
-                fontSize: { xs: "0.98rem", md: "1.15rem" },
-                lineHeight: 1.15,
-                color: INK,
-                mb: 0.25,
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-              }}
-            >
-              {hero.title}
-            </Typography>
-            {hero.subtitle ? (
-              <Typography
-                sx={{
-                  fontSize: "0.72rem",
-                  fontWeight: 600,
-                  color: INK_MUTED,
-                  mb: 0.25,
-                  display: "-webkit-box",
-                  WebkitLineClamp: 1,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                }}
-              >
-                {hero.subtitle}
-              </Typography>
-            ) : null}
-            {hero.body ? (
-              <Typography
-                sx={{
-                  fontSize: "0.7rem",
-                  lineHeight: 1.3,
-                  color: INK,
-                  fontFamily: '"Source Serif 4", Georgia, serif',
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                }}
-              >
-                {hero.body}
-              </Typography>
-            ) : null}
-          </Box>
-        </Box>
-      ) : null}
-
-      {lead ? (
-        <Typography
-          sx={{
-            fontSize: "0.62rem",
-            fontWeight: 800,
-            letterSpacing: 1.1,
-            textTransform: "uppercase",
-            color: INK_MUTED,
-            flexShrink: 0,
-          }}
-        >
-          {lead}
-        </Typography>
-      ) : null}
-
-      <Box
-        sx={{
-          flex: 1,
-          minHeight: 0,
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
-          gap: 0.75,
+          gap: 1.5,
+          gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
         }}
       >
-        {summaries.slice(0, rows * 2).map((item) => (
-          <CoverCard key={item.id} item={item} />
+        {section.items.map((item) => (
+          <NewsCard key={item.id} item={item} accent={section.accent} />
         ))}
       </Box>
     </Box>
   );
 }
 
-function DetailCards({ items }) {
-  return (
-    <Stack spacing={1}>
-      {items.map((item) => (
-        <Box
-          key={item.id}
-          sx={{
-            bgcolor: BOX,
-            border: `1px solid ${BOX_BORDER}`,
-            borderRadius: 1,
-            px: 1.25,
-            py: 1.1,
-            display: "flex",
-            gap: 1.1,
-            alignItems: "flex-start",
-          }}
-        >
-          <FigureBlock item={item} size="md" />
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography
-              sx={{
-                fontSize: "0.6rem",
-                fontWeight: 700,
-                letterSpacing: 1.1,
-                textTransform: "uppercase",
-                color: ACCENT,
-                mb: 0.3,
-              }}
-            >
-              En detalle
-              {item.publishedAt ? ` · ${formatDate(item.publishedAt)}` : ""}
-            </Typography>
-            <Typography
-              sx={{
-                fontFamily: '"Source Serif 4", Georgia, serif',
-                fontWeight: 800,
-                fontSize: "0.95rem",
-                lineHeight: 1.2,
-                color: INK,
-                mb: 0.3,
-              }}
-            >
-              {item.title}
-            </Typography>
-            {item.subtitle ? (
-              <Typography
-                sx={{
-                  fontSize: "0.74rem",
-                  fontWeight: 600,
-                  color: INK_MUTED,
-                  mb: 0.4,
-                }}
-              >
-                {item.subtitle}
-              </Typography>
-            ) : null}
-            {item.body ? (
-              <Typography
-                sx={{
-                  fontSize: "0.74rem",
-                  lineHeight: 1.4,
-                  color: INK,
-                  fontFamily: '"Source Serif 4", Georgia, serif',
-                  whiteSpace: "pre-wrap",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 5,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                }}
-              >
-                {item.body}
-              </Typography>
-            ) : null}
-          </Box>
-        </Box>
-      ))}
-    </Stack>
-  );
-}
-
-function TeaserLayout({ items }) {
-  if (!items.length) {
-    return (
-      <Box
-        sx={{
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Typography sx={{ color: INK_MUTED, fontStyle: "italic" }}>
-          Pronto habrá novedades…
-        </Typography>
-      </Box>
-    );
-  }
+function FloatingNotes({ notes, activeId, onJump }) {
+  const [open, setOpen] = useState(true);
 
   return (
     <Box
       sx={{
-        height: "100%",
-        display: "grid",
-        gridTemplateColumns: items.length > 1 ? "1fr 1fr" : "1fr",
-        gap: 1,
-        minHeight: 0,
-        overflow: "hidden",
-      }}
-    >
-      {items.map((item) => (
-        <Box
-          key={item.id}
-          sx={{
-            bgcolor: BOX,
-            border: `1px dashed ${BOX_BORDER}`,
-            borderRadius: 1.5,
-            px: 1.5,
-            py: 1.5,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            textAlign: "center",
-            minHeight: 0,
-            overflow: "hidden",
-          }}
-        >
-          <FigureBlock item={item} size="md" />
-          <Typography
-            sx={{
-              fontSize: "0.6rem",
-              fontWeight: 800,
-              letterSpacing: 1.4,
-              textTransform: "uppercase",
-              color: ACCENT,
-              mt: 1,
-              mb: 0.5,
-            }}
-          >
-            Próximamente
-          </Typography>
-          <Typography
-            sx={{
-              fontFamily: '"Source Serif 4", Georgia, serif',
-              fontWeight: 800,
-              fontSize: "1rem",
-              lineHeight: 1.2,
-              color: INK,
-              mb: 0.5,
-            }}
-          >
-            {item.title}
-          </Typography>
-          {item.subtitle ? (
-            <Typography
-              sx={{
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: INK_MUTED,
-                mb: 0.5,
-              }}
-            >
-              {item.subtitle}
-            </Typography>
-          ) : null}
-          {item.body ? (
-            <Typography
-              sx={{
-                fontSize: "0.75rem",
-                lineHeight: 1.4,
-                color: INK,
-                fontFamily: '"Source Serif 4", Georgia, serif',
-                display: "-webkit-box",
-                WebkitLineClamp: 6,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-              }}
-            >
-              {item.body}
-            </Typography>
-          ) : null}
-        </Box>
-      ))}
-    </Box>
-  );
-}
-
-function FeaturePage({ item, accentLabel = "En detalle" }) {
-  const isLead = item?.kind === "portada";
-  const isSoon = item?.kind === "proximamente";
-
-  return (
-    <Box
-      sx={{
-        height: "100%",
-        minHeight: 0,
+        pointerEvents: "none",
+        position: "fixed",
+        right: { xs: 12, md: 20 },
+        bottom: { xs: 16, md: 28 },
+        zIndex: (theme) => theme.zIndex.snackbar,
         display: "flex",
         flexDirection: "column",
-        overflow: "hidden",
-        bgcolor: BOX,
-        border: `1px solid ${BOX_BORDER}`,
-        borderLeft: `4px solid ${isSoon ? "#5a4a6a" : ACCENT}`,
-        borderRadius: 1,
-        p: { xs: 1.25, md: 1.75 },
+        alignItems: "flex-end",
+        gap: 1,
       }}
     >
-      <Box
-        sx={{
-          display: "flex",
-          gap: 1.25,
-          alignItems: "flex-start",
-          mb: 1.25,
-          flexShrink: 0,
-        }}
-      >
-        <FigureBlock item={item} size={isLead ? "lg" : "md"} />
-        <Box sx={{ minWidth: 0, flex: 1 }}>
+      {open ? (
+        <Box
+          component="nav"
+          aria-label="Secciones de noticias"
+          sx={{
+            pointerEvents: "auto",
+            width: { xs: 168, sm: 188 },
+            p: 1,
+            borderRadius: 3,
+            border: 1,
+            borderColor: "divider",
+            bgcolor: (theme) =>
+              theme.palette.mode === "dark"
+                ? "rgba(20,20,20,0.88)"
+                : "rgba(255,255,255,0.9)",
+            backdropFilter: "blur(10px)",
+            boxShadow: 6,
+            display: "flex",
+            flexDirection: "column",
+            gap: 0.75,
+          }}
+        >
           <Typography
             sx={{
-              fontSize: "0.6rem",
+              px: 0.75,
+              fontSize: "0.62rem",
               fontWeight: 800,
-              letterSpacing: 1.3,
+              letterSpacing: "0.14em",
               textTransform: "uppercase",
-              color: isSoon ? "#5a4a6a" : ACCENT,
-              mb: 0.4,
+              color: "text.secondary",
             }}
           >
-            {accentLabel}
-            {item.publishedAt ? ` · ${formatDate(item.publishedAt)}` : ""}
+            Ir a
           </Typography>
-          <Typography
-            sx={{
-              fontFamily: '"Source Serif 4", Georgia, serif',
-              fontWeight: 800,
-              fontSize: isLead
-                ? { xs: "1.25rem", md: "1.55rem" }
-                : { xs: "1.1rem", md: "1.3rem" },
-              lineHeight: 1.15,
-              color: INK,
-              mb: 0.4,
-            }}
-          >
-            {item.title}
-          </Typography>
-          {item.subtitle ? (
-            <Typography
-              sx={{
-                fontSize: isLead ? "0.88rem" : "0.8rem",
-                fontWeight: 600,
-                color: INK_MUTED,
-              }}
-            >
-              {item.subtitle}
-            </Typography>
-          ) : null}
+          {notes.map((note) => {
+            const active = activeId === note.id;
+            const bar = accentColor(note.accent);
+            return (
+              <ButtonBase
+                key={note.id}
+                onClick={() => onJump(note.id)}
+                sx={{
+                  display: "block",
+                  textAlign: "left",
+                  borderRadius: 2,
+                  border: 1,
+                  borderColor: active ? bar : "divider",
+                  bgcolor: active ? "action.selected" : "background.paper",
+                  px: 1.25,
+                  py: 1,
+                  borderLeft: 3,
+                  borderLeftColor: active ? bar : "transparent",
+                  transition: "transform 0.15s ease",
+                  "&:hover": { transform: "translateY(-1px)" },
+                }}
+              >
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography
+                    sx={{
+                      fontSize: "0.7rem",
+                      fontWeight: 800,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      color: bar,
+                    }}
+                  >
+                    {note.title}
+                  </Typography>
+                  <Typography sx={{ fontSize: "0.65rem", fontWeight: 700, color: "text.secondary" }}>
+                    {note.count}
+                  </Typography>
+                </Stack>
+                <Typography
+                  sx={{
+                    mt: 0.25,
+                    fontSize: "0.7rem",
+                    color: "text.secondary",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {note.hint}
+                </Typography>
+              </ButtonBase>
+            );
+          })}
         </Box>
-      </Box>
+      ) : null}
 
-      <Box
+      <Button
+        variant="contained"
+        size="small"
+        onClick={() => setOpen((v) => !v)}
         sx={{
-          flex: 1,
-          minHeight: 0,
-          overflow: "hidden",
-          borderTop: `1px solid ${BOX_BORDER}`,
-          pt: 1.25,
+          pointerEvents: "auto",
+          borderRadius: 999,
+          px: 2,
+          fontWeight: 800,
+          boxShadow: 4,
         }}
       >
-        {item.body ? (
-          <Typography
-            sx={{
-              fontSize: isLead ? "0.9rem" : "0.84rem",
-              lineHeight: 1.55,
-              color: INK,
-              fontFamily: '"Source Serif 4", Georgia, serif',
-              whiteSpace: "pre-wrap",
-              display: "-webkit-box",
-              WebkitLineClamp: isLead ? 14 : 16,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {item.body}
-          </Typography>
-        ) : null}
-      </Box>
+        {open ? "Ocultar" : "Secciones"}
+      </Button>
     </Box>
   );
 }
 
-function PaperPage({ page, pageNumber }) {
-  if (!page) {
-    return (
-      <PageChrome heading="—" pageNumber={pageNumber} noScroll>
-        <Box
-          sx={{
-            height: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Typography sx={{ color: INK_MUTED, fontStyle: "italic", fontSize: "0.85rem" }}>
-            Página en blanco
-          </Typography>
-        </Box>
-      </PageChrome>
-    );
-  }
+function NewsBoard({ items }) {
+  const board = useMemo(() => buildNewsBoard(items), [items]);
+  const [activeId, setActiveId] = useState("portada");
 
-  const noScroll = page.layout === "cover" || page.layout === "feature";
-
-  return (
-    <PageChrome heading={page.heading} pageNumber={pageNumber} noScroll={noScroll}>
-      {page.layout === "cover" ? (
-        <CoverLayout
-          hero={page.hero}
-          summaries={page.summaries || []}
-          lead={page.lead}
-          coverVariant={page.coverVariant || "front"}
-        />
-      ) : null}
-      {page.layout === "feature" && page.item ? (
-        <FeaturePage item={page.item} accentLabel={page.accentLabel} />
-      ) : null}
-      {page.layout === "cards" ? <DetailCards items={page.items || []} /> : null}
-      {page.layout === "teaser" ? <TeaserLayout items={page.items || []} /> : null}
-    </PageChrome>
-  );
-}
-
-function sortKey(item) {
-  return Number(item.sortOrder ?? item.sort_order ?? 0);
-}
-
-function buildPages(items) {
-  const map = {
-    portada: [],
-    interior: [],
-    breve: [],
-    editorial: [],
-    proximamente: [],
-  };
-  for (const item of items) {
-    const key = map[item.kind] ? item.kind : "interior";
-    map[key].push(item);
-  }
-
-  const breves = [...map.breve].sort((a, b) => sortKey(a) - sortKey(b));
-  const systemCards = breves.filter((b) => sortKey(b) < 20).slice(0, 4);
-  const doneCards = breves.filter((b) => sortKey(b) >= 20).slice(0, 4);
-  const page1Cards =
-    systemCards.length >= 4 ? systemCards : breves.slice(0, 4);
-  const page2Done =
-    doneCards.length >= 4 ? doneCards : breves.slice(4, 8);
-  const page2Soon = [...map.proximamente]
-    .sort((a, b) => sortKey(a) - sortKey(b))
-    .slice(0, 2);
-  const page2Cards = [...page2Done.slice(0, 4), ...page2Soon].slice(0, 6);
-
-  const pages = [];
-
-  pages.push({
-    id: "portada-a",
-    heading: "Portada",
-    layout: "cover",
-    coverVariant: "front",
-    hero: map.portada[0] || null,
-    summaries: page1Cards,
-    lead: "En el sistema · lo más útil",
-  });
-
-  pages.push({
-    id: "portada-b",
-    heading: "Portada",
-    layout: "cover",
-    coverVariant: "grid",
-    hero: null,
-    summaries: page2Cards,
-    lead: "Lo reciente · y lo que se viene",
-  });
-
-  // Una página por noticia de portada, en el mismo orden.
-  // Tras las 4 del sistema → primera plana (grande) → hechos (sin duplicar Noticias) → próximamente.
-  const doneForDetail = page2Done.filter((b) => {
-    const s = sortKey(b);
-    if (s === 20) return false;
-    const t = String(b.title || "").toLowerCase();
-    if (/secci[oó]n de noticias|noticias del sistema/.test(t) && map.portada[0]) {
-      return false;
+  const notes = useMemo(() => {
+    const list = [
+      {
+        id: "portada",
+        title: "Portada",
+        hint: board.cover?.title || "Primera plana",
+        count: board.cover ? 1 : 0,
+        accent: "primary",
+      },
+    ];
+    for (const section of board.sections) {
+      if (!section.items.length) continue;
+      list.push({
+        id: section.id,
+        title: section.title,
+        hint: section.eyebrow,
+        count: section.items.length,
+        accent: section.accent,
+      });
     }
-    return true;
-  });
+    return list;
+  }, [board]);
 
-  const featureSequence = [
-    ...page1Cards.map((item) => ({
-      item,
-      heading: "En detalle",
-      accentLabel: "En el sistema",
-    })),
-    ...(map.portada[0]
-      ? [
-          {
-            item: map.portada[0],
-            heading: "Primera plana",
-            accentLabel: "Lo que se hizo",
-          },
-        ]
-      : []),
-    ...doneForDetail.map((item) => ({
-      item,
-      heading: "En detalle",
-      accentLabel: "Lo que se hizo",
-    })),
-    ...page2Soon.map((item) => ({
-      item,
-      heading: "Próximamente",
-      accentLabel: "Próximamente",
-    })),
-  ];
-
-  for (const entry of featureSequence) {
-    pages.push({
-      id: `feature-${entry.item.id}`,
-      heading: entry.heading,
-      layout: "feature",
-      item: entry.item,
-      accentLabel: entry.accentLabel,
-    });
-  }
-
-  if (pages.length % 2 === 1) {
-    pages.push(null);
-  }
-  return pages;
-}
-
-function NewspaperPager({ pages }) {
-  const spreads = useMemo(() => {
-    const pairs = [];
-    for (let i = 0; i < pages.length; i += 2) {
-      pairs.push([pages[i] || null, pages[i + 1] || null]);
-    }
-    return pairs;
-  }, [pages]);
-
-  const [spreadIndex, setSpreadIndex] = useState(0);
-  const [paused, setPaused] = useState(() => getNewsAutoplayPaused());
-
-  const togglePaused = useCallback(() => {
-    setPaused((prev) => {
-      const next = !prev;
-      setNewsAutoplayPaused(next);
-      return next;
-    });
+  const onJump = useCallback((id) => {
+    setActiveId(id);
+    const el = document.getElementById(sectionDomId(id));
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  const totalSpreads = spreads.length || 1;
-  const safeIndex = Math.min(spreadIndex, totalSpreads - 1);
-  const [left, right] = spreads[safeIndex] || [null, null];
-  const leftNum = safeIndex * 2 + 1;
-  const rightNum = safeIndex * 2 + 2;
-
-  const goPrev = useCallback(() => {
-    setSpreadIndex((i) => (i - 1 + totalSpreads) % totalSpreads);
-  }, [totalSpreads]);
-
-  const goNext = useCallback(() => {
-    setSpreadIndex((i) => (i + 1) % totalSpreads);
-  }, [totalSpreads]);
-
   useEffect(() => {
-    setSpreadIndex(0);
-  }, [pages]);
+    const nodes = notes
+      .map((n) => document.getElementById(sectionDomId(n.id)))
+      .filter(Boolean);
+    if (!nodes.length) return undefined;
 
-  useEffect(() => {
-    if (paused || totalSpreads <= 1) return undefined;
-    const id = window.setInterval(() => {
-      setSpreadIndex((i) => (i + 1) % totalSpreads);
-    }, AUTO_MS);
-    return () => window.clearInterval(id);
-  }, [paused, totalSpreads, safeIndex]);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        const top = visible[0]?.target?.id?.replace(/^news-sec-/, "");
+        if (top) setActiveId(top);
+      },
+      { rootMargin: "-20% 0px -55% 0px", threshold: [0.15, 0.35, 0.6] },
+    );
+
+    for (const node of nodes) observer.observe(node);
+    return () => observer.disconnect();
+  }, [notes]);
+
+  const hasAnySection = board.sections.some((s) => s.items.length > 0);
 
   return (
-    <Box sx={{ width: "100%", display: "flex", flexDirection: "column" }}>
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "row",
-          width: "100%",
-          height: {
-            xs: "calc(100dvh - 210px)",
-            md: "calc(100dvh - 190px)",
-          },
-          maxHeight: { xs: 440, md: 540 },
-          minHeight: { xs: 280, md: 360 },
-          border: `1px solid ${PAPER_EDGE}`,
-          borderRadius: 1,
-          overflow: "hidden",
-          bgcolor: PAPER,
-          boxShadow: "0 8px 22px rgba(0,0,0,0.12)",
-        }}
-      >
-        <PaperPage page={left} pageNumber={leftNum} />
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 4, pb: 10 }}>
+      {board.cover ? (
+        <CoverHero item={board.cover} />
+      ) : (
         <Box
+          id={sectionDomId("portada")}
           sx={{
-            width: 2,
-            bgcolor: PAPER_EDGE,
-            flexShrink: 0,
-            boxShadow: "0 0 12px rgba(0,0,0,0.25)",
+            scrollMarginTop: 88,
+            borderRadius: 3,
+            border: "1px dashed",
+            borderColor: "divider",
+            bgcolor: "action.hover",
+            px: 2.5,
+            py: 4,
+            textAlign: "center",
           }}
-        />
-        <PaperPage page={right} pageNumber={rightNum} />
-      </Box>
-
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="center"
-        spacing={0.75}
-        sx={{ mt: 1.25, flexShrink: 0 }}
-      >
-        <Tooltip title="Página anterior">
-          <span>
-            <IconButton
-              size="small"
-              onClick={goPrev}
-              disabled={totalSpreads <= 1}
-              aria-label="Anterior"
-              sx={{
-                bgcolor: PAPER,
-                border: `1px solid ${PAPER_EDGE}`,
-                color: INK,
-                "&:hover": { bgcolor: PAPER_EDGE },
-              }}
-            >
-              <ChevronLeftIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-
-        <Tooltip title={paused ? "Reanudar autoavance" : "Pausar autoavance"}>
-          <IconButton
-            size="small"
-            onClick={togglePaused}
-            aria-label={paused ? "Reanudar" : "Pausar"}
+        >
+          <Typography
             sx={{
-              bgcolor: paused ? INK : PAPER,
-              color: paused ? PAPER : INK,
-              border: `1px solid ${PAPER_EDGE}`,
-              "&:hover": {
-                bgcolor: paused ? "#2e2c28" : PAPER_EDGE,
-              },
+              fontSize: "0.7rem",
+              fontWeight: 800,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "text.secondary",
             }}
           >
-            {paused ? (
-              <PlayArrowIcon fontSize="small" />
-            ) : (
-              <PauseIcon fontSize="small" />
-            )}
-          </IconButton>
-        </Tooltip>
+            Primera plana
+          </Typography>
+          <Typography sx={{ mt: 1, color: "text.secondary", fontSize: "0.9rem" }}>
+            Pronto habrá un titular principal acá.
+          </Typography>
+        </Box>
+      )}
 
-        <Tooltip title="Página siguiente">
-          <span>
-            <IconButton
-              size="small"
-              onClick={goNext}
-              disabled={totalSpreads <= 1}
-              aria-label="Siguiente"
-              sx={{
-                bgcolor: PAPER,
-                border: `1px solid ${PAPER_EDGE}`,
-                color: INK,
-                "&:hover": { bgcolor: PAPER_EDGE },
-              }}
-            >
-              <ChevronRightIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-      </Stack>
+      {hasAnySection ? (
+        board.sections.map((section) => (
+          <BoardSection key={section.id} section={section} />
+        ))
+      ) : (
+        <Typography align="center" color="text.secondary" sx={{ fontSize: "0.9rem" }}>
+          Solo hay portada por ahora.
+        </Typography>
+      )}
 
-      <Typography
-        align="center"
-        sx={{ mt: 0.5, fontSize: "0.72rem", color: INK_MUTED, flexShrink: 0 }}
-      >
-        Páginas {leftNum}–{rightNum} de {pages.length}
-        {!paused && totalSpreads > 1 ? " · Avanza sola cada 10 s" : ""}
-        {paused ? " · Pausado" : ""}
-      </Typography>
+      <FloatingNotes notes={notes} activeId={activeId} onJump={onJump} />
     </Box>
   );
 }
@@ -1048,42 +723,38 @@ export default function NoticiasPage() {
     };
   }, []);
 
-  const pages = useMemo(() => buildPages(items), [items]);
-
   return (
     <Box
       sx={{
-        overflow: "hidden",
-        background:
-          "linear-gradient(180deg, #d9d6cf 0%, #cfcbc2 50%, #d9d6cf 100%)",
-        py: { xs: 1, md: 1.25 },
+        py: { xs: 1.5, md: 2 },
+        background: (theme) =>
+          `linear-gradient(180deg, ${theme.palette.background.default} 0%, ${theme.palette.action.hover} 42%, ${theme.palette.background.default} 100%)`,
+        minHeight: "100%",
       }}
     >
-      <Container maxWidth={false} sx={{ px: { xs: 1.25, md: 2.5 } }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-          <NewspaperIcon sx={{ color: INK, fontSize: 22 }} />
+      <Container maxWidth="lg" sx={{ px: { xs: 1.5, md: 3 } }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+          <CampaignIcon color="primary" />
           <Box>
             <Typography
-              fontWeight={800}
+              fontWeight={900}
               sx={{
-                fontFamily: '"Source Serif 4", Georgia, serif',
                 letterSpacing: "-0.02em",
-                color: INK,
-                fontSize: { xs: "1.05rem", md: "1.2rem" },
+                fontSize: { xs: "1.15rem", md: "1.35rem" },
                 lineHeight: 1.2,
               }}
             >
-              El Diario del Sistema
-            </Typography>
-            <Typography sx={{ color: INK_MUTED, fontSize: "0.7rem" }}>
               Novedades del sistema
+            </Typography>
+            <Typography sx={{ color: "text.secondary", fontSize: "0.75rem" }}>
+              Portada · lo nuevo · lo que ya funciona · próximos
             </Typography>
           </Box>
         </Stack>
 
         {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-            <CircularProgress size={32} sx={{ color: INK }} />
+          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+            <CircularProgress size={32} />
           </Box>
         ) : error ? (
           <Alert severity="error">{error}</Alert>
@@ -1093,7 +764,7 @@ export default function NoticiasPage() {
             novedades, aparecerán acá automáticamente.
           </Alert>
         ) : (
-          <NewspaperPager pages={pages} />
+          <NewsBoard items={items} />
         )}
       </Container>
     </Box>

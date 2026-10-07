@@ -29,6 +29,7 @@ import {
   expenseBudgetRowKey,
   isFinanceRowIncluded,
 } from "../../collections/summaryBuilders.js";
+import { formatDateTime } from "../../../../../helpers/functions.js";
 
 const moneyChart = (v) =>
   new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
@@ -36,7 +37,7 @@ const moneyChart = (v) =>
   );
 
 /**
- * Vista global (todos los clientes): ventas por producto vs gastos en un periodo,
+ * Vista global (todos los clientes): ventas por producto vs egresos en un periodo,
  * con casillas para armar un “presupuesto” como en Cobranzas.
  */
 export default function GlobalFinanceBudgetPanel({ orders = [], expenses = [] }) {
@@ -97,7 +98,7 @@ export default function GlobalFinanceBudgetPanel({ orders = [], expenses = [] })
   const summaryDataset = useMemo(
     () => [
       { label: "Ventas (presup.)", value: budgetMetrics.salesBudget },
-      { label: "Gastos (presup.)", value: budgetMetrics.expensesBudget },
+      { label: "Egresos (presup.)", value: budgetMetrics.expensesBudget },
       { label: "Utilidad (presup.)", value: budgetMetrics.profitBudget },
     ],
     [budgetMetrics]
@@ -122,8 +123,8 @@ export default function GlobalFinanceBudgetPanel({ orders = [], expenses = [] })
   return (
     <Box>
       <ChartBlockHeader
-        title="Ventas globales vs gastos (presupuesto)"
-        subtitle="Todos los pedidos y gastos del negocio en el periodo. Marca qué productos y qué gastos entran en la suma del presupuesto; los gráficos usan esos totales."
+        title="Ventas globales vs egresos (presupuesto)"
+        subtitle="Todos los pedidos y egresos del negocio en el periodo. Marca qué productos y qué egresos entran en la suma del presupuesto; los gráficos usan esos totales."
       />
 
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" sx={{ mt: 1, mb: 1 }}>
@@ -162,7 +163,7 @@ export default function GlobalFinanceBudgetPanel({ orders = [], expenses = [] })
       </Stack>
 
       <Alert severity="info" sx={{ py: 0.5, mb: 1.5 }}>
-        {period.label} — Las ventas suman líneas de pedidos en el rango (cantidad cobrable × precio). Los gastos
+        {period.label} — Las ventas suman líneas de pedidos en el rango (cantidad cobrable × precio). Los egresos
         vienen del módulo Finanzas.
       </Alert>
 
@@ -172,7 +173,7 @@ export default function GlobalFinanceBudgetPanel({ orders = [], expenses = [] })
           sx={{ bgcolor: alpha(cSales, 0.85), color: chipText(cSales) }}
         />
         <Chip
-          label={`Gastos (presup.): ${money(budgetMetrics.expensesBudget)}`}
+          label={`Egresos (presup.): ${money(budgetMetrics.expensesBudget)}`}
           variant="outlined"
           color="error"
         />
@@ -182,7 +183,7 @@ export default function GlobalFinanceBudgetPanel({ orders = [], expenses = [] })
         />
       </Stack>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-        Referencia periodo (todo incluido): ventas {money(periodFinance.salesTotal)} · gastos{" "}
+        Referencia periodo (todo incluido): ventas {money(periodFinance.salesTotal)} · egresos{" "}
         {money(periodFinance.expensesTotal)} · utilidad bruta {money(periodFinance.profitEstimate)}
       </Typography>
 
@@ -201,7 +202,7 @@ export default function GlobalFinanceBudgetPanel({ orders = [], expenses = [] })
         Ventas por producto (global)
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-        Incluye en <b>Ventas (presup.)</b> solo lo que quieras comparar con gastos.
+        Incluye en <b>Ventas (presup.)</b> solo lo que quieras comparar con egresos.
       </Typography>
       {periodFinance.salesRows.length === 0 ? (
         <Typography variant="body2" color="text.secondary">
@@ -271,14 +272,14 @@ export default function GlobalFinanceBudgetPanel({ orders = [], expenses = [] })
       )}
 
       <Typography variant="subtitle2" sx={{ mt: 2 }} gutterBottom>
-        Gastos registrados (global)
+        Egresos registrados (global)
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-        Excluye del presupuesto gastos que no correspondan a la operación del periodo.
+        Excluye del presupuesto egresos que no correspondan a la operación del periodo.
       </Typography>
       {periodFinance.expensesInPeriod.length === 0 ? (
         <Typography variant="body2" color="text.secondary">
-          Sin gastos en el periodo.
+          Sin egresos en el periodo.
         </Typography>
       ) : (
         <>
@@ -294,7 +295,7 @@ export default function GlobalFinanceBudgetPanel({ orders = [], expenses = [] })
                 setExpenseBudgetInclude(m);
               }}
             >
-              Incluir todos (gastos)
+              Incluir todos (egresos)
             </Button>
             <Button
               size="small"
@@ -307,7 +308,7 @@ export default function GlobalFinanceBudgetPanel({ orders = [], expenses = [] })
                 setExpenseBudgetInclude(m);
               }}
             >
-              Excluir todos (gastos)
+              Excluir todos (egresos)
             </Button>
           </Stack>
           <Box sx={{ width: "100%", overflowX: "auto" }}>
@@ -336,10 +337,10 @@ export default function GlobalFinanceBudgetPanel({ orders = [], expenses = [] })
                             const cur = isFinanceRowIncluded(expenseBudgetInclude, ek);
                             setExpenseBudgetInclude((prev) => ({ ...prev, [ek]: !cur }));
                           }}
-                          inputProps={{ "aria-label": `Incluir gasto ${e.concept || ek}` }}
+                          inputProps={{ "aria-label": `Incluir egreso ${e.concept || ek}` }}
                         />
                       </TableCell>
-                      <TableCell>{typeof e.date === "string" ? e.date.slice(0, 10) : "—"}</TableCell>
+                      <TableCell>{formatDateTime(e.date)}</TableCell>
                       <TableCell>{e.concept || "—"}</TableCell>
                       <TableCell>{e.category || "—"}</TableCell>
                       <TableCell align="right">{money(e.amount)}</TableCell>

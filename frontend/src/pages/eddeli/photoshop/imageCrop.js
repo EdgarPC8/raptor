@@ -213,6 +213,32 @@ export function cropSelectionToLayerRect(layer, cropNorm, naturalW, naturalH) {
 }
 
 /**
+ * True si el blob tiene algún píxel con alpha visible.
+ */
+export async function blobHasVisiblePixels(blob, alphaMin = 12) {
+  if (!blob) return false;
+  try {
+    const bmp = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, bmp.width);
+    canvas.height = Math.max(1, bmp.height);
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(bmp, 0, 0);
+    bmp.close?.();
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 3; i < data.length; i += 16) {
+      if (data[i] > alphaMin) return true;
+    }
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] > alphaMin) return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Photoshop / Photopea "Layer via Copy" (Ctrl+J):
  * Renderiza la capa como se ve y extrae el rect de selección del documento.
  */
@@ -238,6 +264,14 @@ export async function bakeLayerRegionFromDocSel(layer, group, docSel, mime = "im
   const drawX = bounds.x - docSel.x;
   const drawY = bounds.y - docSel.y;
   drawImageWithCrop(ctx, im, drawX, drawY, bounds.w, bounds.h, fit, 0, layer.props?.cropNorm);
+
+  if (docSel.shape === "ellipse") {
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.beginPath();
+    ctx.ellipse(cw / 2, ch / 2, cw / 2, ch / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+  }
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -274,7 +308,17 @@ export async function bakeLayerWithDocSelHole(layer, group, docSel, mime = "imag
   const hx2 = Math.min(docSel.x + docSel.w, bounds.x + bounds.w) - bounds.x;
   const hy2 = Math.min(docSel.y + docSel.h, bounds.y + bounds.h) - bounds.y;
   if (hx2 > hx1 && hy2 > hy1) {
-    ctx.clearRect(hx1, hy1, hx2 - hx1, hy2 - hy1);
+    const hw = hx2 - hx1;
+    const hh = hy2 - hy1;
+    if (docSel.shape === "ellipse") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.beginPath();
+      ctx.ellipse(hx1 + hw / 2, hy1 + hh / 2, hw / 2, hh / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+    } else {
+      ctx.clearRect(hx1, hy1, hw, hh);
+    }
   }
 
   return new Promise((resolve, reject) => {

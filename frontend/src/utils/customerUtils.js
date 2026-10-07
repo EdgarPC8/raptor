@@ -24,6 +24,7 @@ export const EMPTY_CUSTOMER_FORM = {
   phone: "",
   address: "",
   isActive: true,
+  remoteApp: "",
 };
 
 export function buildCustomerDisplayName(customer) {
@@ -64,6 +65,7 @@ export function customerToForm(customer) {
     phone: customer.phone || "",
     address: customer.address || "",
     isActive: customer.isActive !== false,
+    remoteApp: customer.remoteApp || "",
   };
 }
 
@@ -85,6 +87,7 @@ export function formToCustomerPayload(form) {
     phone: String(form.phone || "").trim() || null,
     address: String(form.address || "").trim() || null,
     isActive: form.isActive !== false,
+    remoteApp: String(form.remoteApp || "").trim() || null,
   };
 }
 

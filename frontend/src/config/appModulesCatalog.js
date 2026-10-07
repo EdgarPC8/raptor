@@ -16,7 +16,7 @@ import { APP_ROUTES } from "./appRoutes.js";
 
 export const APP_ROLES_LEGEND = [
   {
-    name: "Programador",
+    name: "Propietario",
     internal: true,
     description:
       "Rol técnico de mantenimiento (logs, backups, archivos). No forma parte del uso diario del negocio.",
@@ -40,18 +40,18 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Panel",
         path: APP_ROUTES.dashboard,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Resumen del negocio: calendario financiero, clientes, ingresos por producto y gráficos. El rol Empleado no usa esta vista; se redirige a Caja.",
         functions: [
-          { name: "Tarjetas financieras", description: "KPIs de balance, ingresos, gastos, cobranzas, préstamos y margen del mes." },
+          { name: "Tarjetas financieras", description: "KPIs de balance, ingresos, egresos, cobranzas, préstamos y margen del mes." },
           { name: "Alertas de inventario", description: "Toggles por agotarse/agotados y filtro por tipo de producto; medidores de stock." },
           { name: "Ver detalle de stock", description: "Diálogo con productos en alerta de stock y mínimos." },
-          { name: "Gráfico ingresos vs gastos", description: "Desglose por categoría de movimientos financieros." },
+          { name: "Gráfico ingresos vs egresos", description: "Desglose por categoría de movimientos financieros." },
           { name: "Gráfico anual", description: "Navegación por año, toggle todo/solo ingresos; clic en mes lleva al calendario." },
           { name: "Estados de pedido", description: "Tarjetas clicables por estado y diálogo de detalle de pedidos." },
           { name: "Gráfico espejo de caja", description: "Granularidad día/semana/mes; clic en barra abre detalle del día." },
           { name: "Gráfico de velas", description: "Periodo configurable con paginación; selección filtra el gráfico espejo." },
-          { name: "Calendario financiero", description: "Navegación mensual; vista Todo (pedidos/caja operativa/cobros/gastos) o Ingresos (caja + cobros por fecha de entrada del dinero)." },
+          { name: "Calendario financiero", description: "Navegación mensual; vista Todo (pedidos/caja operativa/cobros/egresos) o Ingresos (caja + cobros por fecha de entrada del dinero)." },
           { name: "Detalle del día", description: "Modal con chips de caja (entrada $) y cobros; pestañas por origen del ingreso." },
           { name: "Ingresos por producto", description: "Selector de rango top N y periodo semana/mes/año." },
           { name: "Tabla de clientes", description: "Acordeón por cliente con estadísticas; diálogo de detalle completo." },
@@ -60,7 +60,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Notificaciones",
         path: APP_ROUTES.system.notifications,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
         description: "Avisos del sistema y mensajes para el equipo.",
         functions: [
           { name: "Pestañas admin", description: "Mis notificaciones y programar saludos/avisos (Administrador)." },
@@ -84,7 +84,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Caja",
         path: APP_ROUTES.operation.cash,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
         description: "Ventas en mostrador, carrito, cobro en efectivo/transferencia y comprobantes. Pantalla de inicio del rol Empleado.",
         functions: [
           { name: "Escáner de código de barras", description: "Agrega productos al carrito al escanear; se pausa con diálogos abiertos." },
@@ -104,14 +104,14 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Turno",
         path: APP_ROUTES.operation.shifts,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
         description: "Apertura y cierre de turno, capital en caja y movimientos de efectivo.",
         functions: [
           { name: "Apertura de turno", description: "Arqueo por monedas/billetes (Administrador) o total en efectivo (Empleado); notas opcionales." },
           { name: "Movimientos de caja", description: "Toggle salida/entrada, categoría, monto, concepto y registrar." },
           { name: "Compra de mercancía", description: "Vincula producto, cantidad y notas cuando la categoría es compra_mercancia." },
           { name: "Tabla de movimientos", description: "Lista en tiempo real del turno activo." },
-          { name: "Cierre con arqueo", description: "Resumen de ventas, gastos, esperado y diferencia en vivo." },
+          { name: "Cierre con arqueo", description: "Resumen de ventas, egresos, esperado y diferencia en vivo." },
           { name: "Cerrar turno", description: "Cierra turno y muestra cuadre perfecto o diferencia." },
           { name: "Historial de turnos", description: "Turnos recientes del local." },
           { name: "Supervisión por fecha", description: "Enlace a supervisión (Administrador)." },
@@ -120,7 +120,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Tareas",
         path: APP_ROUTES.operation.tasks,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
         description: "Planes de trabajo para el personal: crear, editar borradores, publicar y checklist del empleado.",
         functions: [
           { name: "Vista admin: planes", description: "Tabla con búsqueda y paginación de planes de tareas." },
@@ -138,7 +138,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Comprobantes POS",
         path: APP_ROUTES.operation.posReceipts,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description:
           "Hub de comprobantes: reimpresión de ventas de caja, facturas SRI, notas, emitidos y config. Sin módulo aparte de «Comprobantes electrónicos».",
         functions: [
@@ -153,7 +153,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Facturas",
         path: APP_ROUTES.electronicDocs.invoices,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Factura electrónica (código SRI 01). Acceso desde Comprobantes POS.",
         functions: [{ name: "Bandeja", description: "Emitir, autorizar y consultar facturas." }],
@@ -161,7 +161,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Notas de venta",
         path: APP_ROUTES.electronicDocs.salesNotes,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Notas de venta. Acceso desde Comprobantes POS.",
         functions: [{ name: "Bandeja", description: "Listado y emisión." }],
@@ -169,7 +169,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Notas de crédito / débito",
         path: APP_ROUTES.electronicDocs.creditNotes,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "NC (04) y ND (05). Acceso desde Comprobantes POS.",
         functions: [
@@ -180,7 +180,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Retenciones",
         path: APP_ROUTES.electronicDocs.withholdings,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Comprobante de retención (07). Acceso desde Comprobantes POS.",
         functions: [{ name: "Bandeja", description: "Emitir y autorizar retenciones." }],
@@ -188,7 +188,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Guías de remisión",
         path: APP_ROUTES.electronicDocs.deliveryGuides,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Guía de remisión (06). Acceso desde Comprobantes POS.",
         functions: [{ name: "Bandeja", description: "Emitir guías." }],
@@ -196,7 +196,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Documentos emitidos",
         path: APP_ROUTES.electronicDocs.issued,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Bandeja SRI: autorizados, rechazados, XML y RIDE. Acceso desde Comprobantes POS.",
         functions: [{ name: "Bandeja", description: "Consulta por estado y tipo." }],
@@ -204,13 +204,13 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Supervisión caja",
         path: APP_ROUTES.operation.shiftSupervision,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Revisión de turnos cerrados, diferencias y movimientos por fecha.",
         functions: [
           { name: "Navegación semanal", description: "Flechas anterior/siguiente para cambiar semana." },
-          { name: "Resumen semanal", description: "Por día: inicial, ventas, gastos, cierre y total semana." },
+          { name: "Resumen semanal", description: "Por día: inicial, ventas, egresos, cierre y total semana." },
           { name: "Selección de día", description: "Clic en fila carga panel de detalle inferior." },
-          { name: "Pestañas Gastos / Ventas", description: "Alterna salidas de efectivo y ventas del día." },
+          { name: "Pestañas Egresos / Ventas", description: "Alterna salidas de efectivo y ventas del día." },
           { name: "Acordeones de ventas", description: "Cada venta expandible con líneas de producto." },
           { name: "Turnos del día", description: "Operador, estado, montos y cierre por turno." },
         ],
@@ -218,7 +218,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Apertura multi-caja por local",
         path: APP_ROUTES.operation.multiCash,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
         status: "planned",
         description:
           "Próximamente: abrir y operar varias cajas al mismo tiempo en un mismo local/sucursal, con turnos e indicadores independientes por caja.",
@@ -240,7 +240,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Pedidos",
         path: APP_ROUTES.sales.orders,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Creación y seguimiento de pedidos: entrega, pago por ítem y estados.",
         functions: [
           { name: "Crear pedido cliente", description: "Diálogo con productos, precios distribuidor y fecha." },
@@ -257,7 +257,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Clientes",
         path: APP_ROUTES.sales.customers,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Directorio de clientes con datos de contacto y facturación.",
         functions: [
           { name: "Agregar cliente", description: "Diálogo con formulario vacío." },
@@ -269,7 +269,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Proveedores",
         path: APP_ROUTES.sales.suppliers,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Directorio de proveedores con datos de contacto y notas.",
         functions: [
           { name: "Agregar proveedor", description: "Alta con nombre, teléfono, correo, dirección y notas." },
@@ -281,7 +281,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Ventas",
         path: APP_ROUTES.sales.salesHub,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description:
           "Reporte de ventas / facturación diaria: fechas, vendedor, totales y formas de pago.",
         functions: [
@@ -294,7 +294,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Compras",
         path: APP_ROUTES.sales.purchasesHub,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description:
           "Registrar factura del proveedor (XML/PDF), cargar productos y ver reporte diario.",
         functions: [
@@ -309,7 +309,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Clientes con cuenta",
         path: APP_ROUTES.sales.customerAccounts,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: acceso de clientes al sistema (cuenta de login vinculada al cliente mayorista) para consultar pedidos, saldos o catálogo según permisos.",
@@ -324,25 +324,26 @@ export const APP_MODULE_GROUPS = [
   {
     id: "finanzas",
     label: "Finanzas",
-    summary: "Ingresos, gastos, cobranzas, préstamos y gastos recurrentes.",
+    summary:
+      "Ingresos, egresos, cobranzas, préstamos, egresos recurrentes y reporte financiero.",
     sections: [
       {
         name: "Finanzas",
         path: APP_ROUTES.finance.transactions,
-        roles: ["Programador", "Administrador"],
-        description: "Registro de ingresos y gastos, resumen y movimientos contables.",
+        roles: ["Propietario", "Programador", "Administrador"],
+        description: "Registro de ingresos y egresos, resumen y movimientos contables.",
         functions: [
-          { name: "Tarjetas resumen", description: "Balance, ingresos, gastos, margen y totales." },
-          { name: "Tabla unificada", description: "Ingresos y gastos en una sola tabla con filtros." },
-          { name: "Filtro por tipo", description: "Ver todos, solo ingresos o solo gastos." },
+          { name: "Tarjetas resumen", description: "Balance, ingresos, egresos, margen y totales." },
+          { name: "Tabla unificada", description: "Ingresos y egresos en una sola tabla con filtros." },
+          { name: "Filtro por tipo", description: "Ver todos, solo ingresos o solo egresos." },
           { name: "Filtro por categoría", description: "Acotar movimientos por categoría." },
-          { name: "Registrar ingreso/gasto", description: "Formulario con categoría, monto y comprobante (gastos)." },
+          { name: "Registrar ingreso/egreso", description: "Formulario con categoría, monto y comprobante (egresos)." },
         ],
       },
       {
         name: "Cobranzas",
         path: APP_ROUTES.finance.collections,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Cobranzas a clientes y pagos a proveedores (tabs).",
         functions: [
           { name: "Modo Clientes / Proveedores", description: "Alternar por cobrar y por pagar." },
@@ -350,22 +351,23 @@ export const APP_MODULE_GROUPS = [
         ],
       },
       {
-        name: "Préstamos y deudas",
+        name: "Préstamos",
         path: APP_ROUTES.finance.loansDebts,
-        roles: ["Programador", "Administrador"],
-        description: "Préstamos, deudas y pagos sin pedido asociado.",
+        roles: ["Propietario", "Programador", "Administrador"],
+        description: "Préstamos que das y que recibes, con plazos en calendario y tabla.",
         functions: [
-          { name: "Nuevo préstamo/deuda", description: "Obligación por cobrar o por pagar con movimiento en finanzas." },
-          { name: "Filtros", description: "Tipo, estado (abiertas/saldadas/anuladas) y búsqueda por persona." },
-          { name: "Ver detalle", description: "Historial de abonos vinculados a finanzas." },
-          { name: "Registrar cobro/pago", description: "Abono con monto, fecha y método." },
-          { name: "Anular obligación", description: "Solo sin abonos; revierte movimiento original." },
+          { name: "Calendario", description: "Vista principal: cada plazo en el día que vence." },
+          { name: "Tabla", description: "Vista secundaria con persona, saldo y próximo plazo." },
+          { name: "Préstamo que doy / que recibo", description: "Los dos sentidos, con movimiento en finanzas." },
+          { name: "Plazos", description: "Divide el monto en cuotas como el crédito de Caja y Pedidos." },
+          { name: "Registrar cobro/pago", description: "Abono con monto, fecha y método. Se aplica al plazo más antiguo." },
+          { name: "Anular préstamo", description: "Solo sin abonos; revierte el movimiento original." },
         ],
       },
       {
-        name: "Gastos recurrentes",
+        name: "Egresos recurrentes",
         path: APP_ROUTES.finance.recurringExpenses,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Plantillas de arriendo, servicios y cuotas periódicas.",
         functions: [
@@ -373,8 +375,21 @@ export const APP_MODULE_GROUPS = [
           { name: "Nueva plantilla", description: "Local, categoría, monto fijo/variable, frecuencia y vencimiento." },
           { name: "Cuotas del mes", description: "Tabla con selector de mes." },
           { name: "Ajustar monto variable", description: "Monto real de factura antes de pagar." },
-          { name: "Registrar pago", description: "Crea gasto en Finanzas." },
+          { name: "Registrar pago", description: "Crea egreso en Finanzas." },
           { name: "Omitir período", description: "Marca cuota omitida sin pago." },
+        ],
+      },
+      {
+        name: "Reporte financiero",
+        path: APP_ROUTES.finance.financialReport,
+        roles: ["Propietario", "Programador", "Administrador"],
+        status: "active",
+        description:
+          "Indicadores del negocio: ventas, compras, caja, deudas, egresos y semanas cubiertas.",
+        functions: [
+          { name: "Resumen del periodo", description: "Tabla de indicadores con resultado y explicación." },
+          { name: "Filtros", description: "Selector de mes." },
+          { name: "Exportar", description: "Descarga del reporte para análisis." },
         ],
       },
     ],
@@ -387,7 +402,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Productos",
         path: APP_ROUTES.inventory.products,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Productos finales, precios, stock, códigos de barras e imágenes.",
         functions: [
           { name: "Vista tarjetas / tabla", description: "Alternar grid de cards o tabla paginada." },
@@ -400,7 +415,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Sucursales / locales",
         path: APP_ROUTES.channel.stores,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description:
           "Sucursales propias (caja + SRI) y vitrinas (entrega para que vendan). Filtro por tipo y mapa.",
         functions: [
@@ -415,7 +430,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Movimientos",
         path: APP_ROUTES.inventory.movement,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Entradas, salidas, ajustes y auditoría de inventario.",
         functions: [
           { name: "Registrar movimiento", description: "Entrada, salida, ajuste, producción o apertura de presentación." },
@@ -429,7 +444,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Categorías",
         path: APP_ROUTES.inventory.categories,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Jerarquía de categorías y reglas de surtido o tramos en caja.",
         functions: [
           { name: "Panel maestro-detalle", description: "Categorías principales y subcategorías." },
@@ -441,7 +456,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Tramos",
         path: APP_ROUTES.inventory.tierGroups,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Grupos de precio por cantidad (ej. paquetes de panes).",
         functions: [
           { name: "Grupos de tramos", description: "Precios por cantidad para canasta surtido en caja." },
@@ -453,7 +468,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Unidades",
         path: APP_ROUTES.inventory.units,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Unidades de medida: unidad, kg, quintal, etc.",
         functions: [
           { name: "CRUD de unidades", description: "Nombre, abreviatura y descripción." },
@@ -463,7 +478,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Bodegas",
         path: APP_ROUTES.inventory.warehouses,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: locales usados como bodegas. Se crea una bodega con ubicación y mantiene su propio inventario (stock por bodega, distinto de la vitrina o sucursal de venta).",
@@ -477,7 +492,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Lotes y vencimientos",
         path: APP_ROUTES.inventory.batches,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Control de lotes por producto con fechas de vencimiento, alertas y baja por caducidad.",
@@ -491,7 +506,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Valor de inventario",
         path: APP_ROUTES.inventory.value,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description:
           "Cuánto vale el stock del negocio a costo y a precio de venta. Con multistock, filtro por local/bodega.",
         functions: [
@@ -512,7 +527,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Insumos y marcas",
         path: APP_ROUTES.production.ingredients,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Materias primas, presentaciones y marcas de compra.",
         functions: [
           { name: "Panel de insumos genéricos", description: "Lista con stock total y presentaciones." },
@@ -525,7 +540,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Recetas",
         path: APP_ROUTES.production.recipes,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Composición de productos finales a partir de insumos.",
         functions: [
           { name: "Selector de producto", description: "Finales e intermedios con chips de tipo y precios." },
@@ -539,7 +554,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Producción",
         path: APP_ROUTES.production.manufacturing,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Órdenes de producción y consumo de insumos.",
         functions: [
           { name: "Ajuste de stock inline", description: "Campo de stock absoluto genera movimiento de ajuste." },
@@ -551,7 +566,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Proveedores con cuenta",
         path: APP_ROUTES.production.supplierAccounts,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: acceso de proveedores al sistema (cuenta vinculada al proveedor). El directorio está en Ventas y Compras → Proveedores; las cuentas por pagar en Compras.",
@@ -573,7 +588,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Plantillas",
         path: "/documentos/plantillas",
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: plantillas reutilizables de documentos (cartas, acuerdos, formatos internos) con campos dinámicos.",
@@ -586,7 +601,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Contratos",
         path: "/documentos/contratos",
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: generar y gestionar contratos a partir de plantillas (vigencia, partes y estado).",
@@ -599,7 +614,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Firmas",
         path: "/documentos/firmas",
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: captura o solicitud de firmas (manual/digital) vinculadas a un documento.",
@@ -612,7 +627,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Archivo",
         path: "/documentos/archivo",
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: repositorio de documentos generados o subidos (búsqueda, carpetas y permisos).",
@@ -634,7 +649,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Rutas",
         path: "/logistica/rutas",
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: definir y gestionar rutas de despacho (zonas, orden de paradas, días de recorrido).",
@@ -647,7 +662,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Transportistas",
         path: "/logistica/transportistas",
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: directorio de transportistas (datos, vehículo, y en el futuro cuenta/rol de acceso).",
@@ -660,7 +675,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Entregas",
         path: "/logistica/entregas",
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
         status: "planned",
         description:
           "Próximamente: bandeja de entregas del día (pendiente, en ruta, entregado, fallido) vinculadas a pedidos o despachos.",
@@ -673,7 +688,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Tracking",
         path: "/logistica/tracking",
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: seguimiento en vivo o por historial de entregas y ubicación del transportista.",
@@ -695,7 +710,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Encuestas",
         path: "/comunidad/encuestas",
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
         status: "planned",
         description:
           "Próximamente: crear y responder encuestas (preguntas abiertas u opciones). Puede incluir una encuesta de mejoras del sistema/negocio.",
@@ -708,7 +723,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Quejas",
         path: "/comunidad/quejas",
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
         status: "planned",
         description:
           "Próximamente: buzón de quejas o reclamos con seguimiento (recibida, en revisión, resuelta).",
@@ -721,7 +736,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Resultados",
         path: "/comunidad/resultados",
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: ver respuestas de encuestas y resumen de quejas (Administrador).",
@@ -743,7 +758,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Promociones",
         path: APP_ROUTES.marketing.promotions,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description:
           "Grupos de clientes con un beneficio pegado (ej. 8 panes × $1). Un cliente solo puede estar en un grupo.",
         functions: [
@@ -757,7 +772,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Noticias",
         path: APP_ROUTES.marketing.news,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description:
           "Novedades del sistema en formato periódico: portada, detalle y próximamente.",
@@ -771,7 +786,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Catálogo config",
         path: APP_ROUTES.channel.catalog,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description: "Configuración del catálogo público y orden de productos.",
         functions: [
           { name: "Entradas por sección", description: "Portada, ofertas, recomendados, novedades, etc." },
@@ -783,7 +798,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Grupos comparativos",
         path: APP_ROUTES.channel.compareGroups,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Comparación de productos para la vitrina.",
         functions: [
@@ -796,7 +811,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Campañas",
         path: APP_ROUTES.advertising.campaigns,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Listado y edición de campañas publicitarias.",
         functions: [
@@ -809,7 +824,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Dispositivos TV",
         path: APP_ROUTES.advertising.devices,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Registro de pantallas o boxes conectados.",
         functions: [
@@ -822,7 +837,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Reproductor",
         path: APP_ROUTES.advertising.player,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Vista previa y control del reproductor de campañas.",
         functions: [
@@ -835,7 +850,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Editor de diseño",
         path: APP_ROUTES.promoDesign.editor,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Editor tipo Photoshop: capas, propiedades, exportar. Abrir plantilla desde Plantillas → Diseñar.",
         functions: [
@@ -847,7 +862,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Plantillas",
         path: APP_ROUTES.promoDesign.templates,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Gestión de plantillas: crear, importar, diseñar (editor tipo Photoshop) o abrir en la vista con productos.",
         functions: [
@@ -861,7 +876,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Vista con productos",
         path: APP_ROUTES.promoDesign.preview,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
         description: "Solo cambiar qué producto se muestra en una plantilla ya diseñada. Canvas de solo lectura; exporta PNG/JPG/PDF.",
         functions: [
@@ -880,7 +895,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Usuarios",
         path: APP_ROUTES.admin.users,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Administrador", "Programador"],
         description: "Datos personales de las personas del negocio.",
         functions: [
           { name: "Listado de usuarios", description: "ID, CI, nombre, username y roles." },
@@ -891,7 +906,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Cuentas",
         path: APP_ROUTES.admin.accounts,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Administrador", "Programador"],
         description: "Usuarios de acceso (login) y asignación de roles.",
         functions: [
           { name: "Listado de cuentas", description: "Persona vinculada, login y roles." },
@@ -903,7 +918,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Roles",
         path: APP_ROUTES.admin.roles,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Administrador", "Programador"],
         description: "Catálogo de roles del sistema.",
         functions: [
           { name: "Crear rol", description: "Campo inline con envío rápido." },
@@ -914,7 +929,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Panel de control",
         path: APP_ROUTES.admin.controlPanel,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Administrador", "Programador"],
         description: "Estadísticas generales y copias de seguridad JSON.",
         functions: [
           { name: "Estadísticas del sistema", description: "Contadores de clientes, productos, usuarios, etc." },
@@ -925,7 +940,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Programas de notificación",
         path: APP_ROUTES.admin.notificationPrograms,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Administrador", "Programador"],
         description: "Envíos programados de avisos por rol o audiencia.",
         functions: [
           { name: "CRUD plantillas", description: "Código, título, mensaje y enlace opcional." },
@@ -937,7 +952,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Asistencia / horarios del personal",
         path: "/administracion/asistencia",
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         status: "planned",
         description:
           "Próximamente: control de asistencia y horarios del personal (entrada/salida, turnos laborales y reportes).",
@@ -959,14 +974,14 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Configuración",
         path: APP_ROUTES.system.settings,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description:
           "Negocio/app (logo, icono, zona horaria, operación) y preparación de facturación electrónica SRI (RUC, firma .p12). También accesible desde el menú del avatar.",
         functions: [
           { name: "Pestaña Marca", description: "Logo, icono y datos del negocio." },
           { name: "Pestaña Sistema / Inventario / Comprobantes / Público", description: "Operación, stock, tickets y vista pública." },
           { name: "Pestaña Facturación SRI", description: "Datos fiscales, ambiente y certificado .p12." },
-          { name: "Pestaña Backups (Programador)", description: "Subir, descargar, guardar y recargar backup.json." },
+          { name: "Pestaña Backups (Propietario)", description: "Subir, descargar, guardar y recargar backup.json." },
           { name: "Subir / cambiar logo", description: "Imagen de marca (con nombre) en {prefijo}/logos/." },
           { name: "Subir / cambiar icono", description: "Emblema/favicon en {prefijo}/icons/; independiente del logo." },
           { name: "Zona horaria", description: "IANA (ej. America/Guayaquil) para fechas del sistema." },
@@ -976,7 +991,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Planes",
         path: APP_ROUTES.system.plans,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description:
           "Planes comerciales: Prueba, Básico, Medio, Pro, Socios y Empresarial.",
         status: "active",
@@ -993,7 +1008,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Módulos",
         path: APP_ROUTES.system.modules,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description:
           "Catálogo de módulos del menú (no secciones): en uso, en desarrollo, mantenimiento o solo desarrollador.",
         status: "active",
@@ -1006,7 +1021,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Perfil",
         path: APP_ROUTES.system.profile,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
         description: "Datos y foto del usuario conectado. También en el menú del avatar.",
         functions: [
           { name: "Editar datos personales", description: "Nombre, contacto y foto de perfil." },
@@ -1016,7 +1031,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Donaciones",
         path: APP_ROUTES.system.donations,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
         description: "Información de apoyo al proyecto Raptor. También en el menú del avatar.",
         functions: [
           { name: "Información de apoyo", description: "Datos para contribuir al desarrollo del proyecto." },
@@ -1025,7 +1040,7 @@ export const APP_MODULE_GROUPS = [
       {
         name: "Facturación electrónica",
         path: APP_ROUTES.electronicDocs.sriSettings,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
         description:
           "Atajo a la pestaña SRI dentro de Configuración. No emite facturas aún; el POS sigue con consumidor final / comprobantes.",
         functions: [
@@ -1114,7 +1129,7 @@ export const APP_ACCOUNT_SECTIONS = [
   {
     name: "Perfil",
     path: APP_ROUTES.system.profile,
-    roles: ["Programador", "Administrador", "Empleado"],
+    roles: ["Propietario", "Programador", "Administrador", "Empleado"],
     description: "Datos y foto del usuario conectado.",
     functions: [
       { name: "Editar datos personales", description: "Nombre, contacto y foto de perfil." },
@@ -1124,7 +1139,7 @@ export const APP_ACCOUNT_SECTIONS = [
   {
     name: "Información",
     path: APP_ROUTES.info,
-    roles: ["Programador", "Administrador", "Empleado"],
+    roles: ["Propietario", "Programador", "Administrador", "Empleado"],
     description: "Versión de la app, plan en uso y mapa de módulos por sección (esta página). El PDF exporta el mismo catálogo.",
     functions: [
       { name: "Pestaña La app", description: "Logo, nombre, versión, descripción y plan comercial activo." },
@@ -1136,7 +1151,7 @@ export const APP_ACCOUNT_SECTIONS = [
   {
     name: "Donaciones",
     path: APP_ROUTES.system.donations,
-    roles: ["Programador", "Administrador", "Empleado"],
+    roles: ["Propietario", "Programador", "Administrador", "Empleado"],
     description: "Información de apoyo al proyecto Raptor.",
     functions: [
       { name: "Información de apoyo", description: "Datos para contribuir al desarrollo del proyecto." },

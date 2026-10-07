@@ -228,8 +228,8 @@ export default function CashFlowMirrorChart({
         sx={{ mb: 0.75 }}
       >
         <ChartBlockHeader
-          title="Flujo de ingresos y gastos"
-          subtitle="Ingresos (Income.date) y gastos (Expense.date). Clic en una barra para ver el detalle del período."
+          title="Flujo de ingresos y egresos"
+          subtitle="Ingresos (Income.date) y egresos (Expense.date). Clic en una barra para ver el detalle del período."
           sx={{ mb: 0, flex: 1, minWidth: 0 }}
         />
         <ToggleButtonGroup
@@ -350,7 +350,7 @@ export default function CashFlowMirrorChart({
                   if (!row) return moneyFmt(v);
                   return [
                     `Ingresos: ${moneyFmt(row.income)}`,
-                    `Gastos: ${moneyFmt(row.expenseTotal)}`,
+                    `Egresos: ${moneyFmt(row.expenseTotal)}`,
                     `Balance: ${moneyFmt(row.netBalance)}`,
                     `Margen: ${pctFmt(row.marginPct)}`,
                   ].join(' · ');
@@ -360,13 +360,13 @@ export default function CashFlowMirrorChart({
                 id: 'expense',
                 type: 'bar',
                 dataKey: 'expenseMirror',
-                label: 'Gastos',
+                label: 'Egresos',
                 color: cExpense,
                 valueFormatter: (v, ctx) => {
                   const row = dataset[ctx?.dataIndex ?? 0];
                   if (!row) return moneyFmt(Math.abs(v));
                   return [
-                    `Gastos: ${moneyFmt(row.expense)}`,
+                    `Egresos: ${moneyFmt(row.expense)}`,
                     `Balance: ${moneyFmt(row.netBalance)}`,
                     `Margen: ${pctFmt(row.marginPct)}`,
                   ].join(' · ');

@@ -101,7 +101,7 @@ function ProfitabilitySection({ profitability, fmtMoney, fmtPct }) {
     },
     { divider: true },
     {
-      label: "Gastos operativos (sin compras inventario)",
+      label: "Egresos operativos (sin compras inventario)",
       value: fmtMoney(profitability.operationalExpense),
       color: "error.main",
     },
@@ -147,7 +147,7 @@ function ProfitabilitySection({ profitability, fmtMoney, fmtPct }) {
         Rentabilidad del período
       </Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
-        La utilidad operativa no trata las compras a proveedores como gasto del día; el inventario
+        La utilidad operativa no trata las compras a proveedores como egreso del día; el inventario
         del local se muestra aparte como activo.
       </Typography>
       {rows.map((row, idx) =>
@@ -841,7 +841,7 @@ export default function FinancialReportDialog({ open, onClose, dateFilters = {} 
             {filtersHideAll && (
               <Alert severity="warning" sx={{ mb: 2 }}>
                 Los filtros activos están ocultando todos los movimientos (
-                {rawIncomeLines.length} ingresos y {rawExpenseLines.length} gastos en el período).
+                {rawIncomeLines.length} ingresos y {rawExpenseLines.length} egresos en el período).
                 Ve a la pestaña Filtros y desactívalos para ver los datos.
               </Alert>
             )}
@@ -867,7 +867,7 @@ export default function FinancialReportDialog({ open, onClose, dateFilters = {} 
               !filtersHideAll && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
                   Excluidos por filtros: {filteredReport.excludedIncomeCount} ingreso(s) y{" "}
-                  {filteredReport.excludedExpenseCount} gasto(s).
+                  {filteredReport.excludedExpenseCount} egreso(s).
                 </Typography>
               )}
 
@@ -923,7 +923,7 @@ export default function FinancialReportDialog({ open, onClose, dateFilters = {} 
                     color="success.main"
                   />
                   <MetricRow
-                    label="Gastos"
+                    label="Egresos"
                     value={fmtMoney(filteredReport.totalExpense)}
                     color="error.main"
                   />
@@ -939,13 +939,13 @@ export default function FinancialReportDialog({ open, onClose, dateFilters = {} 
                   </Typography>
                   <MetricRow label="Por cobrar (pedidos)" value={fmtMoney(collectionsPending)} />
                   <MetricRow label="Préstamos por cobrar" value={fmtMoney(loansReceivable)} />
-                  <MetricRow label="Deudas por pagar" value={fmtMoney(debtsPayable)} />
+                  <MetricRow label="Préstamos por pagar" value={fmtMoney(debtsPayable)} />
                   <Divider sx={{ my: 1 }} />
                   <MetricRow label="Dinero esperado" value={fmtMoney(projectedBalance)} bold />
                   {filteredReport.hasActiveFilters && (
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
                       El bloque proyectado sigue mostrando el total general; los filtros aplican a
-                      ingresos y gastos registrados.
+                      ingresos y egresos registrados.
                     </Typography>
                   )}
                 </Paper>
@@ -962,7 +962,7 @@ export default function FinancialReportDialog({ open, onClose, dateFilters = {} 
               </Grid>
               <Grid item xs={12} md={6}>
                 <CategoryTable
-                  title="Gastos por categoría"
+                  title="Egresos por categoría"
                   rows={filteredReport.groups.Gastos}
                   color="error.main"
                 />
@@ -976,7 +976,7 @@ export default function FinancialReportDialog({ open, onClose, dateFilters = {} 
                 type="income"
               />
               <MovementTable
-                title="Gastos registrados"
+                title="Egresos registrados"
                 rows={filteredReport.expenseLines}
                 type="expense"
               />

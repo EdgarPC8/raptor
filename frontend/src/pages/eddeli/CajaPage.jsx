@@ -85,6 +85,10 @@ import {
   resolveEddeliLinePricing,
 } from "../../utils/productLookup.js";
 import {
+  resolvePackOpenLines,
+  unitsOfProductInPack,
+} from "../../utils/packContentsUtils.js";
+import {
   buildReceiptFromCheckout,
   resolveStoredDocumentType,
 } from "../../utils/saleReceiptUtils.js";
@@ -255,17 +259,21 @@ const buildOpenPackSuggestions = (issues, productList) => {
   for (const issue of issues) {
     const packs = productList
       .filter((p) => {
-        if (Number(p.genericProductId) !== Number(issue.productId)) return false;
         if (p.isGenericIngredient) return false;
-        const upp = Number(p.unitsPerPack);
+        const lines = resolvePackOpenLines(p);
+        const line = lines.find((l) => Number(l.productId) === Number(issue.productId));
+        if (!line) return false;
         const stock = Number(p.stock || 0);
-        return Number.isFinite(upp) && upp >= 1 && stock >= 1;
+        return Number(line.qty) >= 1 && stock >= 1;
       })
       .sort((a, b) => Number(b.stock || 0) - Number(a.stock || 0));
     if (!packs.length) continue;
 
     const pack = packs[0];
-    const unitsPerPack = Math.max(1, Math.floor(Number(pack.unitsPerPack)));
+    const unitsPerPack = Math.max(
+      1,
+      Math.floor(Number(unitsOfProductInPack(pack, issue.productId) || pack.unitsPerPack || 1)),
+    );
     const packStock = Math.floor(Number(pack.stock || 0));
     const need = Math.ceil(Number(issue.deficit) / unitsPerPack);
     const packsToOpen = Math.min(Math.max(1, need), packStock);
@@ -377,9 +385,9 @@ export default function CajaPage() {
     tourId: CAJA_TOUR_ID,
     getSteps: getCajaTourSteps,
   });
-  const isProgrammer = user?.loginRol === "Programador";
+  const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const isAdmin = user?.loginRol === "Administrador" || isProgrammer;
-  /** Admin/Programador: canasta de accesos rápidos sin tope de stock. */
+  /** Admin/Propietario: canasta de accesos rápidos sin tope de stock. */
   const allowBasketOverStock = isAdmin;
   /** Config Inventario: Autocompletar stock (caja + pedidos). */
   const allowAutoCompleteStock =
@@ -1395,12 +1403,19 @@ export default function CajaPage() {
     });
     const customer = customers.find((c) => String(c.id) === String(resolvedCustomerId));
     const payMethod = isCreditSale ? "credito" : paymentMethod || "efectivo";
+    const cashReceived =
+      !isCreditSale && payMethod === "efectivo"
+        ? Number(String(amountReceived ?? "").trim().replace(",", "."))
+        : null;
     const { data } = await posCheckoutRequest({
       customerId: Number(resolvedCustomerId),
       notes: orderNotes,
       saleType: isCreditSale ? "credito" : "contado",
       paymentMethod: payMethod,
       documentType: storedDocType,
+      ...(Number.isFinite(cashReceived) && cashReceived >= 0
+        ? { amountReceived: Number(cashReceived.toFixed(2)) }
+        : {}),
       paymentInstallments: isCreditSale
         ? normalizeScheduleForApi(
             creditInstallments.length
@@ -1431,6 +1446,10 @@ export default function CajaPage() {
       paymentMethod: payMethod,
       saleType,
       notes: orderNotes,
+      amountReceived:
+        Number.isFinite(cashReceived) && cashReceived >= 0
+          ? Number(cashReceived.toFixed(2))
+          : null,
       ticketDiscountPercent: ticketPctActive,
       discountTotal,
     });
@@ -1558,7 +1577,7 @@ export default function CajaPage() {
     const settingOn = Boolean(activeApp?.ordersAllowDeliverStockAdjust);
     const hint =
       settingOn && !isAdmin
-        ? "Solo Admin/Programador puede autocompletar stock en caja."
+        ? "Solo Admin/Propietario puede autocompletar stock en caja."
         : "Activá «Autocompletar stock» en Configuración → Inventario (Admin).";
     void toast?.({
       message: `Stock insuficiente: ${issues
@@ -3623,21 +3642,32 @@ export default function CajaPage() {
         open={addCustomerOpen}
         onClose={() => setAddCustomerOpen(false)}
         toast={toast}
-        onCreated={(created) => {
-          if (!created?.id) return;
-          setCustomers((prev) => {
-            const exists = prev.some((c) => Number(c.id) === Number(created.id));
-            if (exists) {
-              return prev.map((c) =>
-                Number(c.id) === Number(created.id) ? { ...c, ...created } : c
+        onCreated={async (created) => {
+          // Igual que productos: recargar lista desde API y seleccionar el nuevo.
+          const raw = created?.id != null ? created : created?.data;
+          const savedId = Number(raw?.id);
+          const loaded = await loadData();
+          const list = loaded?.customers || [];
+          let customer =
+            (Number.isFinite(savedId) &&
+              list.find((c) => Number(c.id) === savedId)) ||
+            null;
+          if (!customer && Number.isFinite(savedId) && raw) {
+            customer = raw;
+            setCustomers((prev) => {
+              if (prev.some((c) => Number(c.id) === savedId)) return prev;
+              return [...prev, raw].sort((a, b) =>
+                buildCustomerDisplayName(a).localeCompare(
+                  buildCustomerDisplayName(b),
+                  "es",
+                ),
               );
-            }
-            return [...prev, created].sort((a, b) =>
-              buildCustomerDisplayName(a).localeCompare(buildCustomerDisplayName(b), "es")
-            );
-          });
-          setCustomerId(String(created.id));
-          setUseCustomerData(true);
+            });
+          }
+          if (customer?.id) {
+            setCustomerId(String(customer.id));
+            setUseCustomerData(true);
+          }
         }}
       />
 

@@ -2,6 +2,14 @@
 
 const money2 = (n) => Number(Number(n || 0).toFixed(2));
 
+export const DEFAULT_MAX_INSTALLMENTS = 200;
+
+export function normalizeMaxInstallments(value) {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_MAX_INSTALLMENTS;
+  return Math.min(5000, n);
+}
+
 export function toDateOnly(v) {
   if (!v) return null;
   if (v instanceof Date && !Number.isNaN(v.getTime())) {
@@ -23,8 +31,8 @@ export function toDateOnly(v) {
  * Reparte N cuotas entre fecha de entrega y fecha de liquidación.
  * Montos iguales; la última ajusta centavos.
  */
-export function buildEqualInstallments({ startDate, endDate, count, total }) {
-  const n = Math.max(1, Math.min(36, Math.floor(Number(count) || 1)));
+export function buildEqualInstallments({ startDate, endDate, count, total, maxCount = DEFAULT_MAX_INSTALLMENTS }) {
+  const n = Math.max(1, Math.min(normalizeMaxInstallments(maxCount), Math.floor(Number(count) || 1)));
   const start = toDateOnly(startDate);
   const end = toDateOnly(endDate) || start;
   const totalAmt = money2(total);

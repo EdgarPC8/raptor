@@ -16,6 +16,9 @@ import {
   Stack,
   Chip,
   IconButton,
+  Alert,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
@@ -26,6 +29,7 @@ import {
   registerProductionFinalFromPayload,
 } from "../../../../api/inventoryControlRequest";
 import { useAuth } from "../../../../context/AuthContext";
+import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
 import ProgrammerMovementDateField, {
   movementDateForApi,
   todayDateInput,
@@ -39,6 +43,54 @@ function toArray(req) {
   return [];
 }
 const clone = (obj) => JSON.parse(JSON.stringify(obj));
+
+function genericGroups(resultado) {
+  const groups = new Map();
+  for (const node of resultado?.requiere || []) {
+    if (node?.kind !== "gramos" || !node.generico) continue;
+    const current = groups.get(node.id) || {
+      id: node.id,
+      producto: node.producto,
+      need: 0,
+      generic: Number(node.gramosGenerico) || 0,
+      empaques: node.empaques || [],
+      aperturaPermitida: Boolean(node.aperturaPermitida),
+      mensaje: node.mensaje,
+    };
+    current.need += Number(node.cantidadGramos) || 0;
+    if (node.mensaje) current.mensaje = node.mensaje;
+    groups.set(node.id, current);
+  }
+  return [...groups.values()];
+}
+
+function actionsFromState(resultado, packQty, merma) {
+  const abrirEmpaques = [];
+  const mermas = [];
+  for (const group of genericGroups(resultado)) {
+    for (const pack of group.empaques) {
+      const packs = Math.floor(Number(packQty[`${group.id}:${pack.productId}`]) || 0);
+      if (packs > 0) {
+        abrirEmpaques.push({ insumoId: group.id, productId: pack.productId, packs });
+      }
+    }
+    const grams = Number(merma[group.id]?.gramos);
+    const motivo = String(merma[group.id]?.motivo || "").trim();
+    if (grams > 0) mermas.push({ insumoId: group.id, gramos: grams, motivo });
+  }
+  return { abrirEmpaques, mermas };
+}
+
+function groupCovered(group, packQty, merma, autocomplete) {
+  const waste = Number(merma[group.id]?.gramos) || 0;
+  const opened = (group.empaques || []).reduce((sum, pack) => {
+    const packs = Math.floor(Number(packQty[`${group.id}:${pack.productId}`]) || 0);
+    return sum + packs * Number(pack.gramosPorEmpaque || 0);
+  }, 0);
+  const available = Math.max(0, group.generic - waste) + opened;
+  if (available + 1e-6 >= group.need) return true;
+  return Boolean(autocomplete && group.aperturaPermitida);
+}
 
 /** Aplica una actualización inmutable en la ruta dada (path) dentro del árbol. */
 function applyAtPath(rootArray, path, updater) {
@@ -133,11 +185,13 @@ function TreeEditor({ requiere = [], level = 0, onChange }) {
 
           const cantidadOriginal = item.cantidadGramos ?? item.cantidadUnidades ?? 0;
 
-          const rawStock = Number(item.stockActual || 0);
-          const mostrarStock =
-            item.unit === "unidad" || item.unitId === 1
-              ? `${rawStock} unidades`
-              : `${rawStock.toFixed(2)}g`;
+          const esGramos = item.kind === "gramos" || item.cantidadGramos !== undefined;
+          const rawStock = Number(
+            esGramos ? (item.gramosDisponibles ?? item.stockActual ?? 0) : (item.stockActual || 0),
+          );
+          const mostrarStock = esGramos
+            ? `${rawStock.toLocaleString("es-EC")} g`
+            : `${rawStock} unidades`;
 
           return (
             <Box
@@ -154,7 +208,7 @@ function TreeEditor({ requiere = [], level = 0, onChange }) {
             >
               <ListItem
                 secondaryAction={
-                  editing ? (
+                  esGramos ? null : editing ? (
                     <IconButton
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handleSaveClick(path, pathKey)}
@@ -279,10 +333,18 @@ export default function RenderFromFinal({
   const [quantity, setQuantity] = useState("1");
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState(null);
+  const [simError, setSimError] = useState("");
 
   const { toast: toastAuth, user } = useAuth();
-  const isProgrammer = user?.loginRol === "Programador";
+  const { activeApp } = useAppSettings();
+  const canOpenPack =
+    Boolean(activeApp?.productionOpenPackaging) &&
+    (user?.loginRol === "Administrador" || user?.loginRol === "Propietario");
+  const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const [movementDate, setMovementDate] = useState(todayDateInput());
+  const [packQty, setPackQty] = useState({});
+  const [merma, setMerma] = useState({});
+  const [autocomplete, setAutocomplete] = useState(false);
   const onSimulatedRef = useRef(onSimulated);
   onSimulatedRef.current = onSimulated;
 
@@ -299,6 +361,9 @@ export default function RenderFromFinal({
         if (r) {
           const cloned = clone(r);
           setResultado(cloned);
+          setPackQty({});
+          setMerma({});
+          setAutocomplete(false);
           onSimulatedRef.current?.(cloned);
         } else {
           setResultado(null);
@@ -318,11 +383,16 @@ export default function RenderFromFinal({
   /* --- Página: simular al tener producto y cantidad --- */
   useEffect(() => {
     if (isEmbed || !productId) return;
-    const n = Number(quantity);
-    if (!Number.isFinite(n) || n <= 0) {
+    if (!/^[1-9]\d*$/.test(String(quantity).trim())) {
       setResultado(null);
+      setSimError(
+        String(quantity).trim()
+          ? "La cantidad a producir debe ser un entero mayor que 0"
+          : "",
+      );
       return;
     }
+    const n = Number(quantity);
     let cancelled = false;
     setLoading(true);
     (async () => {
@@ -332,9 +402,18 @@ export default function RenderFromFinal({
         if (cancelled) return;
         if (r) setResultado(clone(r));
         else setResultado(null);
+        if (!cancelled) {
+          setSimError("");
+          setPackQty({});
+          setMerma({});
+          setAutocomplete(false);
+        }
       } catch (e) {
         console.error("Error en simulación:", e);
-        if (!cancelled) setResultado(null);
+        if (!cancelled) {
+          setResultado(null);
+          setSimError(e?.response?.data?.message || "No se pudo simular la producción");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -344,8 +423,34 @@ export default function RenderFromFinal({
     };
   }, [isEmbed, productId, quantity]);
 
+  const productionActions = actionsFromState(resultado, packQty, merma);
+  const groups = genericGroups(resultado);
+  const unitsShort = (resultado?.requiere || []).some(
+    (node) => node.kind === "unidad" && !node.suficiente,
+  );
+  const gramsShort = groups.some(
+    (group) => !groupCovered(group, packQty, merma, autocomplete),
+  );
+  const canProcess = Boolean(resultado?.requiere?.length) && !unitsShort && !gramsShort;
+
+  useEffect(() => {
+    if (!isEmbed || !resultado) return;
+    onSimulatedRef.current?.({
+      ...resultado,
+      abrirEmpaques: productionActions.abrirEmpaques,
+      mermas: productionActions.mermas,
+      autocompletarStock: autocomplete,
+    });
+  }, [isEmbed, resultado, packQty, merma, autocomplete]);
+
   const handleProcess = async () => {
-    if (!resultado) return;
+    if (!resultado || !canProcess) return;
+    if (autocomplete) {
+      const accepted = window.confirm(
+        "Se registrará un ajuste visible solo por los gramos que falten. ¿Confirmas el autocompletado?",
+      );
+      if (!accepted) return;
+    }
 
     const dateApi = isProgrammer ? movementDateForApi(movementDate) : undefined;
     const payload = {
@@ -354,6 +459,9 @@ export default function RenderFromFinal({
       simulated: resultado,
       type: "produccion",
       description: `Producción final de ${resultado.producto}`,
+      abrirEmpaques: productionActions.abrirEmpaques,
+      mermas: productionActions.mermas,
+      ...(autocomplete ? { autocompletarStock: true } : {}),
       ...(dateApi ? { movementDate: dateApi } : {}),
     };
 
@@ -371,6 +479,106 @@ export default function RenderFromFinal({
     });
   };
 
+  const actionsPanel = groups.length ? (
+    <Stack spacing={1.5} sx={{ mb: 2 }}>
+      {groups.map((group) => {
+        const waste = Number(merma[group.id]?.gramos) || 0;
+        const opened = (group.empaques || []).reduce((sum, pack) => {
+          const packs = Math.floor(Number(packQty[`${group.id}:${pack.productId}`]) || 0);
+          return sum + packs * Number(pack.gramosPorEmpaque || 0);
+        }, 0);
+        const quedan = group.generic - waste + opened - group.need;
+        return (
+          <Paper key={group.id} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+            <Typography variant="body2">
+              <strong>{group.producto}</strong>: se necesitan {group.need.toLocaleString("es-EC")} g.
+              Saldo suelto {group.generic.toLocaleString("es-EC")} g.{" "}
+              {quedan >= -1e-6
+                ? `Quedan ${Math.max(0, quedan).toLocaleString("es-EC")} g después de descontar.`
+                : `Faltan ${Math.abs(quedan).toLocaleString("es-EC")} g.`}
+            </Typography>
+            {group.mensaje && quedan < -1e-6 ? (
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                {group.mensaje}
+              </Alert>
+            ) : null}
+            {canOpenPack && group.aperturaPermitida ? (
+              <Stack spacing={1} sx={{ mt: 1 }}>
+                {(group.empaques || []).map((pack) => (
+                  <Stack key={pack.productId} direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body2" fontWeight={700}>
+                        {pack.nombre}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Stock {pack.stock} · aporta {Number(pack.gramosPorEmpaque).toLocaleString("es-EC")} g
+                        {pack.sinPrecio
+                          ? " · sin precio"
+                          : ` · $${Number(pack.costoPorGramo).toFixed(6)}/g`}
+                      </Typography>
+                    </Box>
+                    <TextField
+                      label="Empaques a abrir"
+                      type="number"
+                      size="small"
+                      value={packQty[`${group.id}:${pack.productId}`] ?? ""}
+                      onChange={(e) =>
+                        setPackQty((prev) => ({
+                          ...prev,
+                          [`${group.id}:${pack.productId}`]: e.target.value,
+                        }))
+                      }
+                      inputProps={{ min: 0, max: pack.stock, step: 1 }}
+                      sx={{ width: { sm: 160 } }}
+                    />
+                  </Stack>
+                ))}
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                  <TextField
+                    label="Merma (g)"
+                    type="number"
+                    size="small"
+                    value={merma[group.id]?.gramos ?? ""}
+                    onChange={(e) =>
+                      setMerma((prev) => ({
+                        ...prev,
+                        [group.id]: { ...prev[group.id], gramos: e.target.value },
+                      }))
+                    }
+                    inputProps={{ min: 0, step: 0.01 }}
+                  />
+                  <TextField
+                    label="Motivo de la merma"
+                    size="small"
+                    fullWidth
+                    value={merma[group.id]?.motivo ?? ""}
+                    onChange={(e) =>
+                      setMerma((prev) => ({
+                        ...prev,
+                        [group.id]: { ...prev[group.id], motivo: e.target.value },
+                      }))
+                    }
+                  />
+                </Stack>
+              </Stack>
+            ) : null}
+          </Paper>
+        );
+      })}
+      {canOpenPack && gramsShort ? (
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={autocomplete}
+              onChange={(e) => setAutocomplete(e.target.checked)}
+            />
+          }
+          label="Autocompletar solo los gramos que falten, con un ajuste visible"
+        />
+      ) : null}
+    </Stack>
+  ) : null;
+
   if (isEmbed) {
     return (
       <Box>
@@ -380,6 +588,7 @@ export default function RenderFromFinal({
             <Typography variant="subtitle2" sx={{ mb: 1 }} color="text.secondary">
               Requerimientos según receta (producción)
             </Typography>
+            {actionsPanel}
             <TreeEditor
               requiere={resultado.requiere}
               onChange={(newTree) => setResultado((prev) => ({ ...prev, requiere: newTree }))}
@@ -403,9 +612,10 @@ export default function RenderFromFinal({
               label="Cantidad a producir"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              inputProps={{ step: "0.01", min: 0 }}
+              inputProps={{ step: "1", min: 1 }}
               onWheel={(e) => e.target.blur()}
-              helperText="La simulación se actualiza al cambiar la cantidad."
+              error={Boolean(simError)}
+              helperText={simError || "Solo enteros mayores que 0. La simulación muestra los gramos."}
             />
           </Grid>
           <Grid item xs={12} md={6} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -427,6 +637,43 @@ export default function RenderFromFinal({
             />
           </Stack>
 
+          <Stack spacing={0.5} sx={{ mb: 2 }}>
+            {(resultado.requiere || []).map((nodo, index) => (
+              <Typography key={`${nodo.id}-${index}`} variant="body2">
+                {nodo.kind === "gramos" ? (
+                  <>
+                    <strong>{nodo.producto}</strong>: descontar{" "}
+                    {Number(nodo.cantidadGramos).toLocaleString("es-EC")} g del insumo suelto.
+                    Disponible {Number(nodo.gramosDisponibles).toLocaleString("es-EC")} g.
+                    {nodo.suficiente ? "" : " No alcanza."}
+                  </>
+                ) : (
+                  <>
+                    <strong>{nodo.producto}</strong>: {nodo.cantidadUnidades} unidades. Disponible{" "}
+                    {nodo.stockActual}.
+                  </>
+                )}
+              </Typography>
+            ))}
+            <Typography variant="body2">
+              Fundas resultantes: {Number(resultado.fundasResultantes ?? resultado.cantidadDeseada).toLocaleString("es-EC")}
+            </Typography>
+            {resultado.costoPorFunda != null ? (
+              <Typography variant="body2">
+                Costo por funda: ${Number(resultado.costoPorFunda).toFixed(4)} (insumo $
+                {Number(resultado.costoInsumo).toFixed(4)} + extras ${Number(resultado.extras).toFixed(4)})
+              </Typography>
+            ) : (
+              (resultado.advertencias || []).map((msg) => (
+                <Typography key={msg} variant="body2" color="warning.main">
+                  {msg}
+                </Typography>
+              ))
+            )}
+          </Stack>
+
+          {actionsPanel}
+
           <TreeEditor
             requiere={resultado.requiere}
             onChange={(newTree) => setResultado((prev) => ({ ...prev, requiere: newTree }))}
@@ -442,7 +689,7 @@ export default function RenderFromFinal({
             <Button
               variant="contained"
               onClick={handleProcess}
-              disabled={!resultado || !resultado?.requiere}
+              disabled={!canProcess}
             >
               Procesar producción
             </Button>

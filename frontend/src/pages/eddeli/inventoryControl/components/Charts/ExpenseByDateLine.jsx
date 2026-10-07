@@ -1,4 +1,4 @@
-// ExpenseByDateLine.jsx — gastos por fecha, líneas por producto (con filtros Top N + Otros)
+// ExpenseByDateLine.jsx — egresos por fecha, líneas por producto (con filtros Top N + Otros)
 import * as React from 'react';
 import { LineChart } from '@mui/x-charts/LineChart';
 import {
@@ -251,8 +251,8 @@ export default function ExpenseByDateLine({ sampleExpenses = [] }) {
     <Box>
       <Stack spacing={1.5} sx={{ mb: 1.5 }}>
         <ChartBlockHeader
-          title="Gastos por fecha (por producto)"
-          subtitle="Cada línea es un producto vinculado al gasto (referenceId). Usa Top N y «Otros» para no saturar el gráfico. El modo Monto suma importes; Cantidad cuenta movimientos."
+          title="Egresos por fecha (por producto)"
+          subtitle="Cada línea es un producto vinculado al egreso (referenceId). Usa Top N y «Otros» para no saturar el gráfico. El modo Monto suma importes; Cantidad cuenta movimientos."
         />
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
@@ -310,7 +310,7 @@ export default function ExpenseByDateLine({ sampleExpenses = [] }) {
           )}
 
           <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 420 }}>
-            Se ordenan por total ({mode === 'amount' ? '$' : 'nº gastos'}) en el período. Las líneas chicas
+            Se ordenan por total ({mode === 'amount' ? '$' : 'nº egresos'}) en el período. Las líneas chicas
             pasan a «Otros» si activas el agrupado.
           </Typography>
         </Stack>
@@ -318,7 +318,7 @@ export default function ExpenseByDateLine({ sampleExpenses = [] }) {
 
       {displayProducts.length === 0 ? (
         <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-          No hay gastos con producto asociado en estos datos.
+          No hay egresos con producto asociado en estos datos.
         </Typography>
       ) : (
         <LineChart

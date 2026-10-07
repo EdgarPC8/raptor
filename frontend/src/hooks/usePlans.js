@@ -1,6 +1,6 @@
 /**
- * Catálogo local de planes (informativo).
- * La activación real la hace el gestor Raptor (push entitlement).
+ * Catálogo fijo de planes comerciales (systemPlansCatalog.js).
+ * No depende del gestor Raptor Solutions.
  */
 import { useMemo } from "react";
 import { SYSTEM_PLANS } from "../config/systemPlansCatalog.js";

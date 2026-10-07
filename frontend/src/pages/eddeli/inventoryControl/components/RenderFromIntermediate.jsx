@@ -326,7 +326,7 @@ export default function RenderFromIntermediate({ productId, fetchData }) {
   const [cantidades, setCantidades] = React.useState({});
   const [openMap, setOpenMap] = React.useState({});
   const { toast: toastAuth, user } = useAuth();
-  const isProgrammer = user?.loginRol === "Programador";
+  const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const [movementDate, setMovementDate] = React.useState(todayDateInput());
 
   // refs para inputs de cantidad

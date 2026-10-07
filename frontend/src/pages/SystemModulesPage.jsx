@@ -3,7 +3,7 @@
  */
 import { useMemo, useState } from "react";
 import { Link as RouterLink, Navigate } from "react-router-dom";
-import { Box, Button, Chip, CircularProgress, Grid, Stack, Typography } from "@mui/material";
+import { Box, Button, Chip, Grid, Stack, Typography } from "@mui/material";
 import ExtensionIcon from "@mui/icons-material/Extension";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import BuildCircleIcon from "@mui/icons-material/BuildCircle";
@@ -25,12 +25,13 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   MODULE_STATUS_META,
-  listCatalogModuleGroupsWithStatus,
   normalizeModuleStatus,
 } from "../config/appModulesCatalog.js";
+import { listModulesWithGestorStatus } from "../config/sectionMaintenanceAccess.js";
 import { useSubscriptions } from "../hooks/useSubscriptions.js";
+import { formatDateTime } from "../helpers/functions.js";
 
-const ALLOWED = new Set(["Programador", "Administrador"]);
+const ALLOWED = new Set(["Propietario", "Programador", "Administrador"]);
 
 const FILTERS = [
   { id: "all", label: "Todos" },
@@ -268,7 +269,7 @@ function ModuleCard({ module }) {
 
         {isTrial && endTrial ? (
           <Typography variant="caption" color="warning.main" fontWeight={600}>
-            Prueba hasta {new Date(endTrial).toLocaleDateString()}
+            Prueba hasta {formatDateTime(endTrial)}
           </Typography>
         ) : null}
 
@@ -404,88 +405,31 @@ function ModuleCard({ module }) {
 }
 
 export default function SystemModulesPage() {
-  const { user, isGuest } = useAuth();
-  const [filter, setFilter] = useState("all");
-
+  const { user } = useAuth();
   const { subscription } = useSubscriptions();
-  const subModules = subscription?.subscription?.modules || [];
+  const [filter, setFilter] = useState("all");
+  const subModules = subscription?.subscription?.modules;
+
+  const showDeveloper = user?.loginRol === "Programador";
 
   const visibleFilters = useMemo(
     () =>
-      user?.loginRol === "Programador"
+      showDeveloper
         ? FILTERS
         : FILTERS.filter((f) => f.id !== "developer"),
-    [user?.loginRol],
+    [showDeveloper],
   );
 
-  const catalogByName = useMemo(() => {
-    const map = {};
-    for (const m of listCatalogModuleGroupsWithStatus()) {
-      map[m.name] = m;
-    }
-    return map;
-  }, []);
-
+  /** Estructura local + estados del gestor (si hay entitlement). */
   const allModules = useMemo(() => {
-    const mapped = subModules.map((subModule) => {
-      const catalog = catalogByName[subModule.name] || null;
-      const subSectionsByKey = {};
-      for (const sec of subModule.sections || []) {
-        subSectionsByKey[sec.key] = sec;
-      }
-
-      const sectionItems = (subModule.sections || []).map((sec) => {
-        const secStatus = normalizeModuleStatus(sec.status || "active");
-        return {
-          name: sec.name,
-          path: sec.key,
-          status: secStatus,
-        };
-      });
-
-      const status = normalizeModuleStatus(
-        subModule.status && MODULE_STATUS_META[subModule.status]
-          ? subModule.status
-          : catalog?.status || "active",
-      );
-
-      return {
-        id: catalog?.id || subModule.key || subModule.name,
-        name: subModule.name,
-        description: catalog?.description || "",
-        path: catalog?.path || sectionItems[0]?.path || null,
-        sectionCount: sectionItems.length,
-        plannedSectionCount: sectionItems.filter((s) => s.status === "planned")
-          .length,
-        maintenanceSectionCount: sectionItems.filter(
-          (s) => s.status === "maintenance",
-        ).length,
-        sectionItems,
-        sections: sectionItems.map((sec) =>
-          sec.status === "planned"
-            ? `${sec.name} (próx.)`
-            : sec.status === "maintenance"
-              ? `${sec.name} (mant.)`
-              : sec.name,
-        ),
-        status,
-        statusMeta: MODULE_STATUS_META[status] || MODULE_STATUS_META.active,
-        subscriptionModule: subModule,
-        subModuleId: subModule.id,
-        subSectionsByKey,
-        isTrial: subModule.is_trial || false,
-        startTrial: subModule.start_trial || null,
-        limitDaysTrial: subModule.limit_days_trial || null,
-        endTrial: subModule.end_trial || null,
-        imageUrl: subModule.image_url || null,
-        isMaintainer: subModule.is_maintainer || false,
-      };
-    });
-    // Solo mantenimiento interno ve módulos developer; el cliente (Admin) no.
-    return user?.loginRol === "Programador"
+    const mapped = listModulesWithGestorStatus(subModules).map((m) => ({
+      ...m,
+      statusMeta: MODULE_STATUS_META[m.status] || MODULE_STATUS_META.active,
+    }));
+    return showDeveloper
       ? mapped
       : mapped.filter((m) => normalizeModuleStatus(m.status) !== "developer");
-  }, [subModules, catalogByName, user?.loginRol]);
+  }, [showDeveloper, subModules]);
 
   const counts = useMemo(() => {
     const c = {
@@ -494,6 +438,7 @@ export default function SystemModulesPage() {
       maintenance: 0,
       planned: 0,
       developer: 0,
+      hidden: 0,
     };
     for (const m of allModules) {
       const key = normalizeModuleStatus(m.status);
@@ -504,9 +449,9 @@ export default function SystemModulesPage() {
 
   const modules = useMemo(() => {
     if (filter === "all") return allModules;
-    if (user?.loginRol !== "Programador" && filter === "developer") return [];
+    if (!showDeveloper && filter === "developer") return [];
     return allModules.filter((m) => m.status === filter);
-  }, [allModules, filter, user?.loginRol]);
+  }, [allModules, filter, showDeveloper]);
 
   if (!ALLOWED.has(user?.loginRol)) {
     return <Navigate to="/" replace />;
@@ -526,7 +471,7 @@ export default function SystemModulesPage() {
             Módulos disponibles
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Cada tarjeta es un módulo del menú (con sus secciones dentro).
+            Estados controlados desde Raptor Solutions (mantenimiento, próximamente, oculto).
           </Typography>
         </Box>
         <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>

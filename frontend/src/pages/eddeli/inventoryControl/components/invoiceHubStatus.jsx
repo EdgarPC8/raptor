@@ -25,6 +25,12 @@ function remainingOf(row) {
   return row?.paidAt ? 0 : 1;
 }
 
+/** Filas con saldo / crédito: mostrar botón Abonar en hubs de ventas/compras. */
+export function canAbonarHubRow(statusOrRow) {
+  const key = statusOrRow?.key || statusOrRow?.hubStatus?.key;
+  return key === "delivered_unpaid" || key === "none" || key === "credit";
+}
+
 function hasUnpaidInstallments(row) {
   const list = row?.paymentInstallments || [];
   return list.some(
@@ -145,20 +151,24 @@ export function getPurchaseHubStatus(row) {
   });
 }
 
-/** Venta de caja: contado = entregado y pagado; crédito = naranja. */
+/** Venta / pedido cliente: contado, crédito, entrega y cobro. */
 export function getSaleHubStatus(row) {
   const method = String(row?.paymentMethod || "").toLowerCase();
-  const status = String(row?.status || "").toLowerCase();
   const notes = String(row?.notes || "");
   const isCredit =
     method.includes("credito") ||
-    notes.includes("[CREDITO]") ||
-    status === "pendiente";
+    notes.includes("[CREDITO]");
   const paid =
-    Boolean(row?.paidAt) || status === "pagado" || remainingOf(row) <= 0.009;
+    Boolean(row?.paidAt) ||
+    String(row?.status || "").toLowerCase() === "pagado" ||
+    remainingOf(row) <= 0.009;
   const items = row?.items || row?.ERP_order_items || [];
-  const hasDeliveryInfo = items.some((it) => Object.prototype.hasOwnProperty.call(it || {}, "deliveredAt"));
-  const delivered = hasDeliveryInfo ? items.every((it) => it.deliveredAt) : true;
+  const hasDeliveryInfo = items.some((it) =>
+    Object.prototype.hasOwnProperty.call(it || {}, "deliveredAt"),
+  );
+  const delivered = hasDeliveryInfo
+    ? items.length > 0 && items.every((it) => it.deliveredAt)
+    : Boolean(row?.deliveredAt) || String(row?.status || "").toLowerCase() === "entregado";
 
   if (isCredit && !paid) return creditStatus({ delivered, partyKind: "customer" });
   if (paid && delivered) {

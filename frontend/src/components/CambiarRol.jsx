@@ -8,10 +8,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 export default function CambiarRol({ onClose }) {
   const { user, changeRole } = useAuth();
   const currentRolId = user?.rolId;
-  const showInternalRole = user?.loginRol === "Programador";
-  const roles = (user?.roles || []).filter(
-    (rol) => showInternalRole || rol.name !== "Programador",
-  );
+  const roles = user?.roles || [];
 
   if (!roles.length) {
     return (

@@ -24,9 +24,10 @@ import { useState } from 'react';
 import { 
   markItemAsPaidRequest,
   markItemAsDeliveredRequest,
-  updateOrderItemRequest
+  updateOrderItemRequest,
+  pushOrderToPeerRequest,
 } from '../../../../api/ordersRequest';
-
+import SendIcon from '@mui/icons-material/Send';
 import { formatDateTime } from '../../../../helpers/functions';
 import { useAuth } from "../../../../context/AuthContext";
 import { withMutationToast } from "../../../../utils/mutationToast";
@@ -92,13 +93,43 @@ function OrderRow({ order, onReload, onEdit }) {
         <TableCell>{totalItems}</TableCell>
         <TableCell>${total.toFixed(2)}</TableCell>
         <TableCell>
-          {(['Administrador', 'Programador'].includes(user.loginRol) || order.status === 'pendiente') && (
+          {(['Administrador', 'Propietario'].includes(user.loginRol) || order.status === 'pendiente') && (
             <Tooltip title="Editar Pedido">
               <IconButton onClick={() => onEdit(order)}>
                 <EditIcon />
               </IconButton>
             </Tooltip>
           )}
+          {['Administrador', 'Propietario'].includes(user?.loginRol) &&
+            order?.ERP_customer?.remoteApp &&
+            order.peerAcceptStatus !== 'pending_accept' &&
+            order.status !== 'pagado' &&
+            order.status !== 'entregado' && (
+              <Tooltip
+                title={
+                  order.remotePeerAcceptStatus === "accepted"
+                    ? `Ya aceptado (#${order.remoteSyncSupplierOrderId || "—"})`
+                    : order.remotePeerAcceptStatus === "pending_accept"
+                      ? `Pendiente de aceptación (#${order.remoteSyncSupplierOrderId || "—"})`
+                      : order.remoteSyncStatus?.startsWith("synced")
+                        ? `Consultar / reenviar (#${order.remoteSyncSupplierOrderId || "—"})`
+                    : "Enviar al otro sistema como pedido a proveedor"
+                }
+              >
+                <IconButton
+                  color="primary"
+                  onClick={() => {
+                    withMutationToast(toastAuth, {
+                      promise: pushOrderToPeerRequest(order.id),
+                      successMessage: "Pedido enviado al sistema enlazado",
+                      onSuccess: () => onReload?.(),
+                    });
+                  }}
+                >
+                  <SendIcon />
+                </IconButton>
+              </Tooltip>
+            )}
         </TableCell>
       </TableRow>
       <TableRow>

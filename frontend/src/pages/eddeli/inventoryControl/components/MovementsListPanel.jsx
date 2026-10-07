@@ -25,6 +25,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import PaginatedMovementTable from "./PaginatedMovementTable.jsx";
 import { groupMovements } from "./movementGrouping.js";
+import { movementReasonLabel } from "./movementFormConfig.js";
 import { isoToDateInput, movementDateForApi, todayDateInput } from "./ProgrammerMovementDateField.jsx";
 import { formatDateTime } from "../../../../helpers/functions.js";
 
@@ -64,7 +65,8 @@ function useMovementColumns(isProgrammer, onEdit, onDelete) {
       {
         label: "Motivo",
         id: "reason",
-        getSearchValue: (r) => r.reason || "",
+        getSearchValue: (r) => movementReasonLabel(r.reason),
+        render: (row) => movementReasonLabel(row.reason),
       },
       {
         label: "Cant.",
@@ -93,8 +95,8 @@ function useMovementColumns(isProgrammer, onEdit, onDelete) {
         label: "Fecha",
         id: "date",
         getSortValue: (r) => new Date(r.date || 0).getTime(),
-        getSearchValue: (r) => formatDateTime(r.date),
-        render: (row) => formatDateTime(row.date),
+        getSearchValue: (r) => formatDateTime(r.date, { showSeconds: true }),
+        render: (row) => formatDateTime(row.date, { showSeconds: true }),
       },
       ...(isProgrammer
         ? [
@@ -132,6 +134,9 @@ export default function MovementsListPanel({
   onDelete,
   onBatchDateSaved,
   onBatchDate,
+  canAnular = false,
+  onAnular,
+  total,
 }) {
   const [search, setSearch] = useState("");
   const [groupDateOpen, setGroupDateOpen] = useState(false);
@@ -209,7 +214,7 @@ export default function MovementsListPanel({
         <Typography variant="h6" sx={{ flex: 1 }}>
           Movimientos
         </Typography>
-        <Chip size="small" label={`Total: ${filtered.length}`} variant="outlined" />
+        <Chip size="small" label={`Total: ${total ?? filtered.length}`} variant="outlined" />
         <Chip size="small" color="primary" label={`Producciones: ${productionGroups.length}`} variant="outlined" />
       </Stack>
 
@@ -256,7 +261,7 @@ export default function MovementsListPanel({
                         <Typography sx={{ fontWeight: 800 }}>{group.label}</Typography>
                         <Chip size="small" label={group.opId} variant="outlined" />
                         <Chip size="small" label={`${group.items.length} mov.`} />
-                        <Chip size="small" label={formatDateTime(group.date)} color="primary" variant="outlined" />
+                        <Chip size="small" label={formatDateTime(group.date, { showSeconds: true })} color="primary" variant="outlined" />
                         {isProgrammer && (
                           <Button
                             size="small"
@@ -268,6 +273,18 @@ export default function MovementsListPanel({
                             sx={{ ml: "auto" }}
                           >
                             Fecha grupal
+                          </Button>
+                        )}
+                        {canAnular && onAnular && group.opId.startsWith("PF-") && (
+                          <Button
+                            size="small"
+                            color="warning"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAnular(group.opId);
+                            }}
+                          >
+                            Anular producción
                           </Button>
                         )}
                       </Stack>
@@ -330,8 +347,8 @@ export default function MovementsListPanel({
             salidas de la misma operación).
           </Typography>
           <TextField
-            label="Nueva fecha"
-            type="date"
+            label="Nueva fecha y hora"
+            type="datetime-local"
             fullWidth
             value={groupDateValue}
             onChange={(e) => setGroupDateValue(e.target.value)}

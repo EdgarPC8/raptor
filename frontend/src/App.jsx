@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { Box, CircularProgress } from "@mui/material";
+import { Box, CircularProgress, Typography } from "@mui/material";
 import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
 import ProtectedRoute from "./context/ProtectedRoute.jsx";
 import PublicOnlyRoute from "./context/PublicOnlyRoute.jsx";
@@ -13,7 +13,8 @@ import { APP_ROUTES, LEGACY_ROUTE_REDIRECTS } from "./config/appRoutes.js";
 // Licencia: GET /subscription en backend (push del gestor). Sin Subify.
 // Modo `npm run raptor`: invitado sin backend + exploración de módulos.
 
-const AUTH_ROLES = ["Programador", "Administrador", "Empleado"];
+const AUTH_ROLES = ["Propietario", "Programador", "Administrador", "Empleado", "Proveedor"];
+const HOME_ROLES = AUTH_ROLES;
 
 const Login = lazy(() => import("./pages/Login.jsx"));
 const HomeLogout = lazy(
@@ -66,6 +67,9 @@ const LoansDebtsPage = lazy(
 );
 const RecurringExpensesPage = lazy(
   () => import("./pages/eddeli/inventoryControl/RecurringExpensesPage.jsx"),
+);
+const FinancialReportPage = lazy(
+  () => import("./pages/eddeli/inventoryControl/FinancialReportPage.jsx"),
 );
 const SalesHubPage = lazy(
   () => import("./pages/eddeli/inventoryControl/SalesHubPage.jsx"),
@@ -187,11 +191,23 @@ function PageFallback() {
   );
 }
 
-/** Empleado → caja; Admin/Programador → dashboard. */
+/** Empleado → caja. Proveedor → inicio simple. Admin/Propietario/Programador → dashboard. */
 function RoleHomeRedirect() {
   const { user } = useAuth();
   if (user?.loginRol === "Empleado") {
     return <Navigate to={APP_ROUTES.operation.cash} replace />;
+  }
+  if (user?.loginRol === "Proveedor") {
+    return (
+      <Box sx={{ p: 3, maxWidth: 560 }}>
+        <Typography variant="h5" fontWeight={700}>
+          Inicio
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+          Tu acceso es el inicio, tu perfil y los pedidos que te envían como proveedor.
+        </Typography>
+      </Box>
+    );
   }
   return <DashBoardPage />;
 }
@@ -259,6 +275,8 @@ export default function App() {
               <Route path={APP_ROUTES.finance.transactions} element={<LazyPage><FinancePage /></LazyPage>} />
               <Route path={APP_ROUTES.finance.collections} element={<LazyPage><CollectionsPage /></LazyPage>} />
               <Route path={APP_ROUTES.finance.loansDebts} element={<LazyPage><LoansDebtsPage /></LazyPage>} />
+              <Route path={APP_ROUTES.finance.recurringExpenses} element={<LazyPage><RecurringExpensesPage /></LazyPage>} />
+              <Route path={APP_ROUTES.finance.financialReport} element={<LazyPage><FinancialReportPage /></LazyPage>} />
               <Route path={APP_ROUTES.inventory.products} element={<LazyPage><ProductsPage /></LazyPage>} />
               <Route path={APP_ROUTES.inventory.movement} element={<LazyPage><MovementPage /></LazyPage>} />
               <Route path={APP_ROUTES.inventory.categories} element={<LazyPage><CategoryPage /></LazyPage>} />
@@ -358,21 +376,24 @@ export default function App() {
           <Route path="/punto_venta" element={<Navigate to={APP_ROUTES.public.stores} replace />} />
           <Route path="/backery" element={<Navigate to={APP_ROUTES.public.catalog} replace />} />
 
-          <Route element={<ProtectedRoute requiredRol={AUTH_ROLES} />}>
+          <Route element={<ProtectedRoute requiredRol={HOME_ROLES} />}>
             <Route path={APP_ROUTES.dashboard} element={<RoleHomeRedirect />} />
             {APP_ID !== "store" ? (
               <Route path="/inicio" element={<HomeLogout />} />
             ) : null}
             <Route path={APP_ROUTES.system.profile} element={<ProfilePage />} />
-            <Route path={APP_ROUTES.system.notifications} element={<NotificationsPage />} />
             <Route path={APP_ROUTES.info} element={<InfoPage />} />
             <Route path={APP_ROUTES.system.donations} element={<DonacionesPage />} />
           </Route>
 
+          <Route element={<ProtectedRoute requiredRol={AUTH_ROLES} />}>
+            <Route path={APP_ROUTES.system.notifications} element={<NotificationsPage />} />
+          </Route>
+
           <Route element={<ProtectedRoute requiredRol={["Programador"]} />}>
+            <Route path={APP_ROUTES.developer.logs} element={<LogsPage />} />
             <Route path={APP_ROUTES.developer.commands} element={<ComandosPage />} />
             <Route path={APP_ROUTES.developer.backups} element={<BackupsPage />} />
-            <Route path={APP_ROUTES.developer.logs} element={<LogsPage />} />
             <Route path={APP_ROUTES.developer.images} element={<ImgManagerPage />} />
             <Route path={APP_ROUTES.developer.files} element={<FileManagerPage />} />
           </Route>
@@ -380,18 +401,37 @@ export default function App() {
           <Route
             element={
               <ProtectedRoute
-                requiredRol={["Administrador", "Programador", "Empleado"]}
+                requiredRol={["Administrador", "Propietario", "Programador", "Empleado"]}
               />
             }
           >
             <Route path={APP_ROUTES.operation.cash} element={<CajaPage />} />
             <Route path={APP_ROUTES.operation.shifts} element={<TurnoPage />} />
             <Route path={APP_ROUTES.operation.tasks} element={<TareasPage />} />
+            <Route path={APP_ROUTES.sales.customers} element={<CustomerPage />} />
+            <Route path={APP_ROUTES.marketing.news} element={<NoticiasPage />} />
           </Route>
 
           <Route
             element={
-              <ProtectedRoute requiredRol={["Administrador", "Programador"]} />
+              <ProtectedRoute
+                requiredRol={["Administrador", "Propietario", "Programador"]}
+              />
+            }
+          >
+            <Route path={APP_ROUTES.admin.controlPanel} element={<PanelControlPage />} />
+            <Route
+              path={APP_ROUTES.admin.notificationPrograms}
+              element={<NotificationProgramsPage />}
+            />
+            <Route path={APP_ROUTES.admin.users} element={<UsersPage />} />
+            <Route path={APP_ROUTES.admin.accounts} element={<CuentasPage />} />
+            <Route path={APP_ROUTES.admin.roles} element={<RolesPage />} />
+          </Route>
+
+          <Route
+            element={
+              <ProtectedRoute requiredRol={["Administrador", "Propietario", "Programador"]} />
             }
             >
             <Route path={APP_ROUTES.operation.posReceipts} element={<FacturacionPage />} />
@@ -409,17 +449,9 @@ export default function App() {
               path={APP_ROUTES.operation.shiftSupervision}
               element={<TurnoSupervisionPage />}
             />
-            <Route path={APP_ROUTES.admin.controlPanel} element={<PanelControlPage />} />
             <Route path={APP_ROUTES.system.settings} element={<AppSettingsPage />} />
             <Route path={APP_ROUTES.system.plans} element={<SystemPlansPage />} />
             <Route path={APP_ROUTES.system.modules} element={<SystemModulesPage />} />
-            <Route
-              path={APP_ROUTES.admin.notificationPrograms}
-              element={<NotificationProgramsPage />}
-            />
-            <Route path={APP_ROUTES.admin.users} element={<UsersPage />} />
-            <Route path={APP_ROUTES.admin.accounts} element={<CuentasPage />} />
-            <Route path={APP_ROUTES.admin.roles} element={<RolesPage />} />
             <Route path={APP_ROUTES.channel.catalog} element={<CatalogManagerPage />} />
             <Route
               path={APP_ROUTES.channel.compareGroups}
@@ -456,7 +488,6 @@ export default function App() {
               element={<PublicidadPlayerPage />}
             />
             <Route path={APP_ROUTES.marketing.promotions} element={<PromocionesPage />} />
-            <Route path={APP_ROUTES.marketing.news} element={<NoticiasPage />} />
 
             <Route path={APP_ROUTES.inventory.products} element={<ProductsPage />} />
             <Route path={APP_ROUTES.inventory.categories} element={<CategoryPage />} />
@@ -471,7 +502,6 @@ export default function App() {
               element={<GenericIngredientsPage />}
             />
             <Route path={APP_ROUTES.sales.orders} element={<OrderPage />} />
-            <Route path={APP_ROUTES.sales.customers} element={<CustomerPage />} />
             <Route path={APP_ROUTES.sales.suppliers} element={<SupplierPage />} />
             <Route path={APP_ROUTES.sales.salesHub} element={<SalesHubPage />} />
             <Route path={APP_ROUTES.sales.purchasesHub} element={<PurchasesHubPage />} />
@@ -488,6 +518,10 @@ export default function App() {
             <Route
               path={APP_ROUTES.finance.recurringExpenses}
               element={<RecurringExpensesPage />}
+            />
+            <Route
+              path={APP_ROUTES.finance.financialReport}
+              element={<FinancialReportPage />}
             />
             <Route
               path={APP_ROUTES.production.manufacturing}

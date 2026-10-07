@@ -29,7 +29,7 @@ import { saveBackup, downloadBackup, getPanelStats } from "../api/comandsRequest
 import { useAuth } from "../context/AuthContext.jsx";
 import { PanelSkeleton } from "../components/ContentSkeleton.jsx";
 
-const ALLOWED = new Set(["Administrador", "Programador"]);
+const ALLOWED = new Set(["Administrador", "Propietario", "Programador"]);
 const BANNER_MS = 10000;
 
 const STAT_CARDS = [
@@ -117,7 +117,8 @@ export default function PanelControlPage() {
   const [showRoleBanner, setShowRoleBanner] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const isProgrammer = user?.loginRol === "Programador";
+  const isOwner = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
+  const isProgrammerRole = user?.loginRol === "Programador";
   const isAdmin = user?.loginRol === "Administrador";
 
   const loadPanelData = useCallback(async () => {
@@ -154,7 +155,7 @@ export default function PanelControlPage() {
   const lastBackup = backupInfo?.lastBackup;
   const roleBannerText = isAdmin
     ? "Como administrador puedes guardar una copia de seguridad de la base de datos en el servidor."
-    : isProgrammer
+    : isOwner || isProgrammerRole
       ? "Puedes guardar una copia de seguridad de la base de datos y descargarla a tu equipo cuando lo necesites."
       : null;
 
@@ -200,7 +201,7 @@ export default function PanelControlPage() {
 
       {showRoleBanner && roleBannerText ? (
         <Alert
-          severity={isProgrammer ? "success" : "info"}
+          severity={isOwner || isProgrammerRole ? "success" : "info"}
           sx={{ mb: 2 }}
           onClose={() => setShowRoleBanner(false)}
         >
@@ -283,7 +284,7 @@ export default function PanelControlPage() {
           >
             {saving ? "Guardando…" : "Hacer copia de seguridad"}
           </Button>
-          {isProgrammer && (
+          {(isOwner || isProgrammerRole) && (
             <Button
               variant="outlined"
               startIcon={<CloudDownloadIcon />}

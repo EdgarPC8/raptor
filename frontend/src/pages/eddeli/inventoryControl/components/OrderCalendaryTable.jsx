@@ -27,12 +27,15 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AddIcon from '@mui/icons-material/Add';
 import PrintIcon from '@mui/icons-material/Print';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import TodayIcon from '@mui/icons-material/Today';
 import TuneIcon from '@mui/icons-material/Tune';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import UndoIcon from '@mui/icons-material/Undo';
+import SendIcon from '@mui/icons-material/Send';
+import LinkIcon from '@mui/icons-material/Link';
 
 import {
   markItemAsDeliveredRequest,
@@ -40,6 +43,7 @@ import {
   deleteOrder,
   unmarkOrderAsPaidRequest,
   addOrderItemToOrderRequest,
+  pushOrderToPeerRequest,
 } from '../../../../api/ordersRequest';
 import {
   getAllProductsAll,
@@ -48,6 +52,7 @@ import {
   registerMovement,
 } from '../../../../api/inventoryControlRequest';
 import { useAuth } from '../../../../context/AuthContext';
+import { usePeerOrderRealtime } from '../../../../hooks/usePeerOrderRealtime.js';
 import { useAppSettings } from '../../../../context/AppSettingsContext.jsx';
 import {
   locationKindLabel,
@@ -122,6 +127,8 @@ import { formatOrderItemFromApi } from '../../../../utils/orderListUtils';
 import { toDateOnly } from '../../../../utils/orderPaymentSchedule.js';
 import SupplierOrderAccordion from './SupplierOrderAccordion';
 import CustomerOrderPayDialog from './CustomerOrderPayDialog';
+import PeerSupplierOrderAcceptDialog from './PeerSupplierOrderAcceptDialog.jsx';
+import { useSearchParams } from 'react-router-dom';
 
 /** Naranja brillante: cuota / crédito a pagar. */
 const CREDIT_ORANGE = '#FF6D00';
@@ -463,6 +470,8 @@ export default forwardRef(function OrderCalendarView({
   const [openDeleteOrder, setOpenDeleteOrder] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [payCustomerOrder, setPayCustomerOrder] = useState(null);
+  const [peerAcceptCustomerOrderId, setPeerAcceptCustomerOrderId] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [dateDialogOpen, setDateDialogOpen] = useState(false);
   const [dateDraft, setDateDraft] = useState({
     orderId: null,
@@ -495,17 +504,41 @@ export default forwardRef(function OrderCalendarView({
     }
   };
 
-  const canManageOrders = ['Administrador', 'Programador'].includes(user?.loginRol);
+  const canManageOrders = ['Administrador', 'Propietario', 'Programador'].includes(user?.loginRol);
   const canFinanceCorrections =
+    user?.loginRol === 'Propietario' ||
     user?.loginRol === 'Programador' ||
     (canManageOrders && activeApp?.financeAllowAdminCorrections !== false);
-  /** Ajuste de stock con movimiento `ajuste`: solo Programador y Administrador */
+  /** Ajuste de stock con movimiento `ajuste`: solo Propietario y Administrador */
   const canAdjustStock = canManageOrders;
-  /** Config: Autocompletar stock (caja + entrega de pedidos). Solo Admin/Programador. */
+  /** Config: Autocompletar stock (caja + entrega de pedidos). Solo Admin/Propietario. */
   const allowDeliverStockAdjust =
     Boolean(activeApp?.ordersAllowDeliverStockAdjust) && canAdjustStock;
 
   const [products, setProducts] = useState([]);
+
+  useEffect(() => {
+    const id = Number(searchParams.get('peerAcceptCustomerOrderId'));
+    if (Number.isFinite(id) && id > 0) {
+      setPeerAcceptCustomerOrderId(id);
+      const next = new URLSearchParams(searchParams);
+      next.delete('peerAcceptCustomerOrderId');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  usePeerOrderRealtime({
+    onSupplierOrder: useCallback(() => {
+      void onReload?.();
+    }, [onReload]),
+    onCustomerOrder: useCallback(
+      ({ orderId }) => {
+        void onReload?.();
+        if (orderId) setPeerAcceptCustomerOrderId(orderId);
+      },
+      [onReload],
+    ),
+  });
   /** Borrador por pedido: agregar línea sin abrir otro formulario */
   const [addLineDraft, setAddLineDraft] = useState({});
   const [printOpen, setPrintOpen] = useState(false);
@@ -1716,6 +1749,19 @@ export default forwardRef(function OrderCalendarView({
                                   ...(statusMeta.chipSx || {}),
                                 }}
                               />
+                              {order.peerAcceptStatus === 'pending_accept' ? (
+                                <Chip
+                                  size="small"
+                                  color="warning"
+                                  icon={<LinkIcon sx={{ fontSize: '0.9rem !important' }} />}
+                                  label="Pendiente aceptar"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPeerAcceptCustomerOrderId(order.id);
+                                  }}
+                                  sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700 }}
+                                />
+                              ) : null}
                             </Stack>
                             <Typography variant="caption" color="text.secondary" display="block">
                               Pedido #{order.id} · Total ${orderTotal.toFixed(2)}
@@ -1794,7 +1840,58 @@ export default forwardRef(function OrderCalendarView({
                                 <PrintIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                            {canManageOrders && hasUnpaid && (
+                            {canManageOrders && order.peerAcceptStatus === 'pending_accept' && (
+                              <Tooltip title="Aceptar pedido y enlazar productos">
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPeerAcceptCustomerOrderId(order.id);
+                                  }}
+                                  onFocus={(e) => e.stopPropagation()}
+                                  aria-label="Aceptar pedido enlazado"
+                                >
+                                  <LinkIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {canManageOrders &&
+                              order.peerAcceptStatus !== 'pending_accept' &&
+                              order?.ERP_customer?.remoteApp &&
+                              !(order.orderKind === 'supplier') &&
+                              hasUnpaid &&
+                              progress.deliveredCount < progress.total && (
+                              <Tooltip
+                                title={
+                                  order.remotePeerAcceptStatus === 'accepted'
+                                    ? `Ya aceptado en ${order.ERP_customer.remoteApp} (#${order.remoteSyncSupplierOrderId || '—'})`
+                                    : order.remotePeerAcceptStatus === 'pending_accept'
+                                      ? `Enviado a ${order.ERP_customer.remoteApp}, pendiente de aceptación (#${order.remoteSyncSupplierOrderId || '—'})`
+                                      : String(order.remoteSyncStatus || '').startsWith('synced')
+                                        ? `Consultar estado / reenviar a ${order.ERP_customer.remoteApp} (#${order.remoteSyncSupplierOrderId || '—'})`
+                                        : `Enviar a ${order.ERP_customer.remoteApp} como pedido a proveedor`
+                                }
+                              >
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toastAuth({
+                                      promise: pushOrderToPeerRequest(order.id),
+                                      successMessage: 'Pedido enviado al sistema enlazado',
+                                      onSuccess: () => onReload?.(),
+                                    });
+                                  }}
+                                  onFocus={(e) => e.stopPropagation()}
+                                  aria-label="Enviar al otro sistema"
+                                >
+                                  <SendIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {canManageOrders && hasUnpaid && order.peerAcceptStatus !== 'pending_accept' && (
                               <Tooltip title="Liquidar / abonar pedido">
                                 <IconButton
                                   size="small"
@@ -1806,15 +1903,15 @@ export default forwardRef(function OrderCalendarView({
                                   onFocus={(e) => e.stopPropagation()}
                                   aria-label="Liquidar pedido"
                                 >
-                                  <PaymentsIcon fontSize="small" />
+                                  <AttachMoneyIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
                             )}
-                            {canManageOrders && progress.deliveredCount < progress.total && (
+                            {canManageOrders && progress.deliveredCount < progress.total && order.peerAcceptStatus !== 'pending_accept' && (
                               <Tooltip title="Entregar todo el pedido">
                                 <IconButton
                                   size="small"
-                                  color="info"
+                                  color="primary"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     void handleDeliverOrder(orderWithItems);
@@ -1826,11 +1923,11 @@ export default forwardRef(function OrderCalendarView({
                                 </IconButton>
                               </Tooltip>
                             )}
-                            {canManageOrders && (
+                            {canManageOrders && order.peerAcceptStatus !== 'pending_accept' && (
                               <Tooltip title="Editar fechas de entrega y pago">
                                 <IconButton
                                   size="small"
-                                  color="secondary"
+                                  color="primary"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     openCustomerDateDialog(orderWithItems);
@@ -1965,6 +2062,14 @@ export default forwardRef(function OrderCalendarView({
       open={printOpen}
       onClose={() => setPrintOpen(false)}
       receipt={printReceipt}
+    />
+    <PeerSupplierOrderAcceptDialog
+      open={Boolean(peerAcceptCustomerOrderId)}
+      orderId={peerAcceptCustomerOrderId}
+      kind="customer"
+      onClose={() => setPeerAcceptCustomerOrderId(null)}
+      onAccepted={() => onReload?.()}
+      toast={toastAuth}
     />
     <CustomerOrderPayDialog
       open={Boolean(payCustomerOrder)}
@@ -2221,7 +2326,7 @@ export default forwardRef(function OrderCalendarView({
       <DialogTitle sx={{ fontWeight: 700 }}>Ajuste de stock</DialogTitle>
       <DialogContent dividers>
         <Alert severity="info" sx={{ py: 0.75, mb: 1.5 }}>
-          Rol Programador / Administrador: se crea un movimiento de inventario tipo{' '}
+          Rol Propietario / Administrador: se crea un movimiento de inventario tipo{' '}
           <strong>ajuste</strong>
           {multiStockEnabled ? ' en el local elegido' : ' sobre el stock general'}.
         </Alert>

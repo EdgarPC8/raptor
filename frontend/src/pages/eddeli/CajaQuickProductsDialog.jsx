@@ -42,6 +42,7 @@ import { getRootCategoryFromProduct } from "../../utils/categoryUtils.js";
 import TourHelpButton from "../../components/TourHelpButton.jsx";
 import { usePageTour } from "../../hooks/usePageTour.js";
 import { CAJA_QUICK_TOUR_ID, getCajaQuickTourSteps } from "../../tours/cajaQuickTour.js";
+import { productIsSellable } from "../../utils/productRoleFlags.js";
 
 const to2 = (n) => Number(Number(n || 0).toFixed(2));
 const QUICK_QTY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -98,7 +99,7 @@ export function filterQuickAccessInStock(
   return (products || [])
     .filter((p) => {
       if (!matchesQuickCategory(p, categoryMatch)) return false;
-      if (p.type && p.type !== "final") return false;
+      if (!productIsSellable(p)) return false;
       if (p.isActive === 0 || p.isActive === false) return false;
       if (allowZeroStock) return true;
       return Number(p.stock || 0) > 0;
@@ -127,7 +128,7 @@ export default function CajaQuickProductsDialog({
   onAddSurtido,
   tierGroups = [],
   categoryMatch = "",
-  /** Programador/Administrador: canasta sin tope de stock (se regula al vender). */
+  /** Propietario/Administrador: canasta sin tope de stock (se regula al vender). */
   allowBasketOverStock = false,
 }) {
   const theme = useTheme();

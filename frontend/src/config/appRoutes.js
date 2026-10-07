@@ -41,6 +41,8 @@ export const APP_ROUTES = {
     collections: "/finanzas/cobranzas",
     loansDebts: "/finanzas/prestamos-deudas",
     recurringExpenses: "/finanzas/gastos-recurrentes",
+    /** Reporte financiero (próximamente) */
+    financialReport: "/finanzas/reporte-financiero",
   },
   inventory: {
     products: "/inventario/productos",

@@ -1,4 +1,4 @@
-/** API gestión de archivos en servidor (/files). Solo Programador. */
+/** API gestión de archivos en servidor (/files). Solo Propietario. */
 import axios, { jwt } from "./axios.js";
 
 const auth = () => ({ headers: { Authorization: jwt() } });

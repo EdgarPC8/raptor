@@ -38,7 +38,7 @@ const FONT_OPTIONS = [
 const getBindKey = (layer) => {
   if (!layer) return "";
   if (layer.type === "text") return layer.bind?.textFrom || "";
-  if (layer.type === "image") return layer.bind?.srcFrom || "";
+  if (layer.type === "image" || layer.type === "svg") return layer.bind?.srcFrom || "";
   return "";
 };
 
@@ -67,14 +67,16 @@ const patchBindKey = (layer, nextRaw) => {
   // si vacío: dejamos bind pero limpiamos la key
   if (!next) {
     if (layer.type === "text") return { bind: { ...(layer.bind || {}), textFrom: "" } };
-    if (layer.type === "image") return { bind: { ...(layer.bind || {}), srcFrom: "" } };
+    if (layer.type === "image" || layer.type === "svg") {
+      return { bind: { ...(layer.bind || {}), srcFrom: "" } };
+    }
     return {};
   }
 
   if (layer.type === "text") {
     return { bind: { ...(layer.bind || {}), textFrom: next } };
   }
-  if (layer.type === "image") {
+  if (layer.type === "image" || layer.type === "svg") {
     return { bind: { ...(layer.bind || {}), srcFrom: next } };
   }
   return {};
@@ -90,7 +92,7 @@ export default function InspectorPanel({
 }) {
   const { dispatch, state } = useEditor();
   const { uploading, openFilePicker, HiddenFileInput } = useEditorImageUpload();
-  const { startCrop, splitWithToast, splitEtiquetaWithToast, applyEtiquetaLayoutWithToast, cropBusy } =
+  const { startCrop: _startCrop, splitWithToast: _split, splitEtiquetaWithToast: _splitE, applyEtiquetaLayoutWithToast, cropBusy } =
     useImageCropCtx();
   const layer = useMemo(() => {
     if (!selectedLayer) return null;
@@ -101,7 +103,8 @@ export default function InspectorPanel({
     return (
       <Stack spacing={1.2}>
         <Typography sx={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>
-          Selecciona una capa para editar. Para el fondo usa una capa tipo imagen que ocupe todo el canvas.
+          Seleccioná una capa. Posición y tamaño se editan solo con los inputs numéricos
+          (X, Y, Ancho, Alto). El puntero solo sirve para seleccionar y para el gotero.
         </Typography>
         <Button
           variant="outlined"
@@ -130,7 +133,12 @@ export default function InspectorPanel({
   // ✅ Lee la “referencia” real desde bind.*
   const bindKeyValue = getBindKey(layer);
   const bindMode = getLayerBindMode(layer);
-  const bindPresets = layer.type === "text" ? TEXT_BIND_PRESETS : layer.type === "image" ? IMAGE_BIND_PRESETS : [];
+  const bindPresets =
+    layer.type === "text"
+      ? TEXT_BIND_PRESETS
+      : layer.type === "image" || layer.type === "svg"
+        ? IMAGE_BIND_PRESETS
+        : [];
 
   const setBindKey = (value) => {
     const patch = patchBindKey(layer, value);
@@ -216,7 +224,7 @@ export default function InspectorPanel({
             onChange={(e) => setBindMode(e.target.value)}
             fullWidth
           >
-            <MenuItem value="fixed">Texto / imagen fijo</MenuItem>
+            <MenuItem value="fixed">Texto / archivo fijo</MenuItem>
             <MenuItem value="product">Desde producto (bind)</MenuItem>
           </TextField>
 
@@ -253,7 +261,7 @@ export default function InspectorPanel({
         placeholder={
           layer.type === "text"
             ? "Ej: computed.priceText | product.name | desc"
-            : layer.type === "image"
+            : layer.type === "image" || layer.type === "svg"
             ? "Ej: product.primaryImageUrl | imageUrl"
             : "—"
         }
@@ -437,60 +445,40 @@ export default function InspectorPanel({
         </>
       )}
 
-      {layer.type === "image" && (
+      {(layer.type === "image" || layer.type === "svg") && (
         <>
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
             <Button
               variant="contained"
               size="small"
               disabled={uploading}
-              onClick={() => openFilePicker(bindMode === "product" ? "add" : "replace")}
+              onClick={() =>
+                openFilePicker(
+                  layer.type === "svg"
+                    ? "add-svg"
+                    : bindMode === "product"
+                      ? "add-raster"
+                      : "replace"
+                )
+              }
             >
-              {uploading ? "Subiendo…" : bindMode === "product" ? "Subir imagen fija" : "Cambiar imagen"}
+              {uploading
+                ? "Subiendo…"
+                : layer.type === "svg"
+                  ? "Cambiar SVG"
+                  : bindMode === "product"
+                    ? "Subir imagen fija"
+                    : "Cambiar imagen"}
             </Button>
             <Button
               variant="outlined"
               size="small"
               disabled={uploading}
-              onClick={() => openFilePicker("add")}
+              onClick={() =>
+                openFilePicker(layer.type === "svg" ? "add-svg" : "add-raster")
+              }
             >
-              Nueva capa
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              disabled={!p.src || cropBusy}
-              onClick={() => startCrop(layer.id)}
-            >
-              Recortar
-            </Button>
-          </Stack>
-
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Button
-              variant="outlined"
-              size="small"
-              disabled={!p.src || cropBusy}
-              onClick={() => splitWithToast("horizontal")}
-            >
-              Dividir ↔
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              disabled={!p.src || cropBusy}
-              onClick={() => splitWithToast("vertical")}
-            >
-              Dividir ↕
-            </Button>
-            <Button
-              variant="contained"
-              size="small"
-              color="secondary"
-              disabled={!p.src || cropBusy}
-              onClick={splitEtiquetaWithToast}
-            >
-              Separar etiqueta EdDeli
+              Nueva capa {layer.type === "svg" ? "SVG" : "imagen"}
             </Button>
             <Button
               variant="outlined"
@@ -520,11 +508,11 @@ export default function InspectorPanel({
 
           <TextField
             size="small"
-            label="Ruta imagen (servidor)"
+            label={layer.type === "svg" ? "Ruta SVG (servidor)" : "Ruta imagen (servidor)"}
             value={p.src || ""}
             onChange={(e) => updateLayerProps(layer.id, { src: e.target.value })}
             fullWidth
-            helperText="PNG, JPG, SVG guardados en diseno-promocional/capas"
+            helperText="Preferí SVG para logos/vectores; PNG/JPG para fotos"
           />
 
           <TextField

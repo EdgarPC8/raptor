@@ -511,7 +511,7 @@ function incomeSource(row) {
 
 /**
  * Historial financiero demo (~12 meses): más ventas en fin de semana,
- * pedidos B2B lun/mié/vie, gastos fijos y días ocasionales sin movimiento.
+ * pedidos B2B lun/mié/vie, egresos fijos y días ocasionales sin movimiento.
  */
 function buildFinanceHistoryDemo() {
   const extraOrders = [];
@@ -650,7 +650,7 @@ function buildFinanceHistoryDemo() {
         id: expenseId++,
         date: isoDayOffset(daysAgo),
         amount: 450,
-        category: "Gastos operativos",
+        category: "Egresos operativos",
         concept: "Arriendo local",
         status: "confirmed",
         counterpartyName: "Arrendador",
@@ -674,7 +674,7 @@ function buildFinanceHistoryDemo() {
         id: expenseId++,
         date: isoDayOffset(daysAgo),
         amount: Number((35 + demoRand(daysAgo) * 25).toFixed(2)),
-        category: "Gastos operativos",
+        category: "Egresos operativos",
         concept: "Gas industrial",
         status: "confirmed",
         counterpartyName: "Proveedor gas",
@@ -754,7 +754,7 @@ const baseExpenses = [
   { id: 1, date: isoDayOffset(0), amount: 45.0, category: "Compras", concept: "Harina", status: "confirmed", counterpartyName: "Harinas del Valle" },
   { id: 2, date: isoDayOffset(1), amount: 220.0, category: "Compras", concept: "Insumos varios", status: "confirmed", counterpartyName: "Insumos Costa" },
   { id: 3, date: isoDayOffset(2), amount: 120.0, category: "Pago de servicios", concept: "Luz", status: "confirmed", counterpartyName: "CNEL" },
-  { id: 4, date: isoDayOffset(3), amount: 40.0, category: "Gastos operativos", concept: "Gas", status: "confirmed", counterpartyName: "Proveedor gas" },
+  { id: 4, date: isoDayOffset(3), amount: 40.0, category: "Egresos operativos", concept: "Gas", status: "confirmed", counterpartyName: "Proveedor gas" },
   { id: 5, date: isoDayOffset(4), amount: 55.0, category: "Otro", concept: "Empaques", status: "confirmed", counterpartyName: "Empaques Guayas" },
   { id: 6, date: isoDayOffset(5), amount: 30.0, category: "Honorarios", concept: "Reparación", status: "confirmed", counterpartyName: "Técnico" },
 ];
@@ -961,7 +961,7 @@ const productsStock = {
 export const incomeExpenseBreakdown = {
   platforms: [
     { label: "Ingresos", value: 950.7 },
-    { label: "Gastos", value: 510 },
+    { label: "Egresos", value: 510 },
   ],
   groups: {
     Ingresos: [
@@ -972,7 +972,7 @@ export const incomeExpenseBreakdown = {
     Gastos: [
       { label: "Compras", value: 265 },
       { label: "Pago de servicios", value: 120 },
-      { label: "Gastos operativos", value: 40 },
+      { label: "Egresos operativos", value: 40 },
       { label: "Otro", value: 55 },
       { label: "Honorarios", value: 30 },
     ],

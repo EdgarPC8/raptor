@@ -68,13 +68,6 @@ export default function SearchableSelect({
       renderProductSelectOption(props, option, { showCost: showProductCost });
   }, [renderOptionProp, productMeta, showProductCost]);
 
-  useEffect(() => {
-    if (value === "" || value == null) {
-      setInputValue("");
-      setInputLen(0);
-    }
-  }, [value]);
-
   const emptyOption = useMemo(
     () => (emptyOptionLabel ? { [EMPTY_MARKER]: true } : null),
     [emptyOptionLabel]
@@ -115,6 +108,21 @@ export default function SearchableSelect({
       }) ?? null
     );
   }, [options, value, getOptionValue]);
+
+  // Si el value llega desde afuera (ej. cliente recién creado en caja), el input
+  // controlado debe mostrar el label; si no, queda vacío hasta recargar.
+  useEffect(() => {
+    if (value === "" || value == null) {
+      setInputValue("");
+      setInputLen(0);
+      return;
+    }
+    if (clearInputOnSelect) return;
+    if (!selectedOption) return;
+    const label = String(resolveLabel(selectedOption) || "");
+    setInputValue(label);
+    setInputLen(label.length);
+  }, [value, selectedOption, clearInputOnSelect]);
 
   return (
     <Box sx={{ width: "100%" }}>

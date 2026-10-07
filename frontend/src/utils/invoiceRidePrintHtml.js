@@ -14,6 +14,7 @@ import { getActiveAppSettings } from "../context/AppSettingsContext.jsx";
 import {
   formatReceiptItemDescription,
   normalizeReceiptDetailSettings,
+  applyReceiptIvaSetting,
 } from "./receiptDetailFormat.js";
 import {
   receiptColumnCellValue,
@@ -149,11 +150,12 @@ export function buildInvoiceRidePrintHtml(receipt, format = "a4", options = {}) 
   if (!receipt) return "";
   const layout = getReceiptLayout(format);
   const isTicket = layout.isTicket;
-  const fiscal = receipt.fiscal || {};
-  const items = receipt.items || [];
   const detailCfg = normalizeReceiptDetailSettings(
     options.detailSettings ?? getActiveAppSettings()?.receiptDetailSettings,
   );
+  receipt = applyReceiptIvaSetting(receipt, detailCfg);
+  const fiscal = receipt.fiscal || {};
+  const items = receipt.items || [];
   const docType = receipt.documentType || "factura";
   const ivaRate = dominantIvaRate(items);
   const emissionDate =

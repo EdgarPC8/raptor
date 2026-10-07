@@ -75,7 +75,7 @@ export async function uploadExpenseVoucher(file, expenseId) {
     file,
     entityType: "expense",
     entityId: expenseId,
-    label: "Comprobante de gasto",
+    label: "Comprobante de egreso",
   });
 }
 

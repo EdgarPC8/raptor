@@ -30,6 +30,7 @@ import {
   Chip,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import MenuIcon from "@mui/icons-material/Menu";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -91,6 +92,7 @@ import ThemeSwitcher from "./ThemeSwitcher.jsx";
 import NotificationList from "./NotificationList.jsx";
 import CambiarRol from "./CambiarRol.jsx";
 import SimpleDialog from "./Dialogs/SimpleDialog.jsx";
+import RecurringMonthPrompt from "./RecurringMonthPrompt.jsx";
 import { PageSkeleton } from "./ContentSkeleton.jsx";
 import { getUnreadCount } from "../api/notificationsRequest.js";
 import { getNewsRequest } from "../api/newsRequest.js";
@@ -117,7 +119,7 @@ const DRAWER_COLLAPSED_W = 56;
 /** Accesos directos del drawer (Panel y Notificaciones van en la barra superior). */
 const MENU_ITEMS = [];
 
-const PANEL_ROLES = ["Programador", "Administrador"];
+const PANEL_ROLES = ["Propietario", "Administrador", "Programador"];
 
 /** Módulos agrupados en acordeón. */
 const MENU_GROUPS = [
@@ -129,31 +131,31 @@ const MENU_GROUPS = [
         name: "Caja",
         link: APP_ROUTES.operation.cash,
         icon: <PointOfSaleIcon />,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
       },
       {
         name: "Turno",
         link: APP_ROUTES.operation.shifts,
         icon: <ScheduleIcon />,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
       },
       {
         name: "Tareas",
         link: APP_ROUTES.operation.tasks,
         icon: <AssignmentTurnedInIcon />,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
       },
       {
         name: "Comprobantes POS",
         link: APP_ROUTES.operation.posReceipts,
         icon: <ReceiptIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Supervisión caja",
         link: APP_ROUTES.operation.shiftSupervision,
         icon: <AssessmentIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
     ],
   },
@@ -165,31 +167,31 @@ const MENU_GROUPS = [
         name: "Pedidos",
         link: APP_ROUTES.sales.orders,
         icon: <AssignmentIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Clientes",
         link: APP_ROUTES.sales.customers,
         icon: <PeopleIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
       },
       {
         name: "Proveedores",
         link: APP_ROUTES.sales.suppliers,
         icon: <LocalShippingIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Ventas",
         link: APP_ROUTES.sales.salesHub,
         icon: <PointOfSaleIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Compras",
         link: APP_ROUTES.sales.purchasesHub,
         icon: <RequestQuoteIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
     ],
   },
@@ -201,25 +203,31 @@ const MENU_GROUPS = [
         name: "Finanzas",
         link: APP_ROUTES.finance.transactions,
         icon: <MonetizationOnIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Cobranzas",
         link: APP_ROUTES.finance.collections,
         icon: <RequestQuoteIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
-        name: "Préstamos y deudas",
+        name: "Préstamos",
         link: APP_ROUTES.finance.loansDebts,
         icon: <AccountBalanceWalletIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
-        name: "Gastos recurrentes",
+        name: "Egresos recurrentes",
         link: APP_ROUTES.finance.recurringExpenses,
         icon: <HomeWorkIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
+      },
+      {
+        name: "Reporte financiero",
+        link: APP_ROUTES.finance.financialReport,
+        icon: <AssessmentIcon />,
+        roles: ["Propietario", "Programador", "Administrador"],
       },
     ],
   },
@@ -231,49 +239,49 @@ const MENU_GROUPS = [
         name: "Productos",
         link: APP_ROUTES.inventory.products,
         icon: <Inventory2Icon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Sucursales / locales",
         link: APP_ROUTES.channel.stores,
         icon: <StorefrontRoundedIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Movimientos",
         link: APP_ROUTES.inventory.movement,
         icon: <CompareArrowsIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Categorías",
         link: APP_ROUTES.inventory.categories,
         icon: <CategoryIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Tramos",
         link: APP_ROUTES.inventory.tierGroups,
         icon: <ViewModuleIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Unidades",
         link: APP_ROUTES.inventory.units,
         icon: <StraightenIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Lotes y vencimientos",
         link: APP_ROUTES.inventory.batches,
         icon: <EventBusyIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Valor de inventario",
         link: APP_ROUTES.inventory.value,
         icon: <MonetizationOnOutlinedIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
     ],
   },
@@ -285,19 +293,19 @@ const MENU_GROUPS = [
         name: "Insumos y marcas",
         link: APP_ROUTES.production.ingredients,
         icon: <ScienceIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Recetas",
         link: APP_ROUTES.production.recipes,
         icon: <ReceiptLongIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Producción",
         link: APP_ROUTES.production.manufacturing,
         icon: <FactoryIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
     ],
   },
@@ -309,61 +317,61 @@ const MENU_GROUPS = [
         name: "Promociones",
         link: APP_ROUTES.marketing.promotions,
         icon: <LocalOfferIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Noticias",
         link: APP_ROUTES.marketing.news,
         icon: <NewspaperIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
       },
       {
         name: "Catálogo config",
         link: APP_ROUTES.channel.catalog,
         icon: <ViewModuleIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Grupos comparativos",
         link: APP_ROUTES.channel.compareGroups,
         icon: <CompareArrowsIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Campañas",
         link: APP_ROUTES.advertising.campaigns,
         icon: <TvIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Dispositivos TV",
         link: APP_ROUTES.advertising.devices,
         icon: <TvIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Reproductor",
         link: APP_ROUTES.advertising.player,
         icon: <PlayCircleOutlineIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Editor de diseño",
         link: APP_ROUTES.promoDesign.editor,
         icon: <EditNoteIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Vista con productos",
         link: APP_ROUTES.promoDesign.preview,
         icon: <VolumeUpIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Plantillas",
         link: APP_ROUTES.promoDesign.templates,
         icon: <CollectionsBookmarkIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
     ],
   },
@@ -375,25 +383,25 @@ const MENU_GROUPS = [
         name: "Usuarios",
         link: APP_ROUTES.admin.users,
         icon: <GroupIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Administrador", "Programador"],
       },
       {
         name: "Cuentas",
         link: APP_ROUTES.admin.accounts,
         icon: <ManageAccountsIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Administrador", "Programador"],
       },
       {
         name: "Roles",
         link: APP_ROUTES.admin.roles,
         icon: <SettingsApplicationsIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Administrador", "Programador"],
       },
       {
         name: "Panel de control",
         link: APP_ROUTES.admin.controlPanel,
         icon: <DnsIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Administrador", "Programador"],
       },
     ],
   },
@@ -405,31 +413,31 @@ const MENU_GROUPS = [
         name: "Configuración",
         link: APP_ROUTES.system.settings,
         icon: <SettingsApplicationsIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Planes",
         link: APP_ROUTES.system.plans,
         icon: <WorkspacePremiumIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Módulos",
         link: APP_ROUTES.system.modules,
         icon: <ExtensionIcon />,
-        roles: ["Programador", "Administrador"],
+        roles: ["Propietario", "Programador", "Administrador"],
       },
       {
         name: "Perfil",
         link: APP_ROUTES.system.profile,
         icon: <PersonOutlineIcon />,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Administrador", "Empleado", "Programador"],
       },
       {
         name: "Donaciones",
         link: APP_ROUTES.system.donations,
         icon: <CardGiftcardIcon />,
-        roles: ["Programador", "Administrador", "Empleado"],
+        roles: ["Propietario", "Programador", "Administrador", "Empleado"],
       },
     ],
   },
@@ -490,6 +498,18 @@ function menuItemsForRole(loginRol) {
 }
 
 function menuGroupsForRole(loginRol) {
+  if (loginRol === "Proveedor" || loginRol === "Proovedor") {
+    return [
+      {
+        id: "proveedor",
+        label: "Proveedor",
+        items: [
+          { name: "Inicio", link: "/", roles: ["Proveedor"] },
+          { name: "Mis pedidos", link: "/ventas/pedidos", roles: ["Proveedor"] },
+        ],
+      },
+    ];
+  }
   if (!loginRol) return [];
   return MENU_GROUPS.map((group) => ({
     ...group,
@@ -499,6 +519,7 @@ function menuGroupsForRole(loginRol) {
 
 export default function NavBar() {
   const theme = useTheme();
+  const compactNav = useMediaQuery(theme.breakpoints.down("md"));
   const navigate = useNavigate();
   const location = useLocation();
   const isPromoEditor = /\/diseno-promocional\/editor\/\d+/.test(location.pathname);
@@ -509,7 +530,7 @@ export default function NavBar() {
   const { subscription } = useSubscriptions();
   const subModules = subscription?.subscription?.modules;
 
-  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [expandedGroupId, setExpandedGroupId] = useState(null);
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
   const [notifAnchor, setNotifAnchor] = useState(null);
@@ -540,7 +561,7 @@ export default function NavBar() {
   const profileLoading = isAuthenticated && !profileReady;
   const canSeeNews =
     showUserActions &&
-    ["Programador", "Administrador"].includes(user?.loginRol);
+    ["Propietario", "Administrador", "Empleado", "Proveedor", "Programador"].includes(user?.loginRol);
 
   const displayName =
     [
@@ -559,11 +580,11 @@ export default function NavBar() {
 
   const menuItems = useMemo(() => {
     const items = menuItemsForRole(user?.loginRol);
-    // Invitado: solo Admin/Empleado (nunca menú exclusivo de Programador).
+    // Invitado: solo Admin/Empleado (nunca menú exclusivo de Propietario).
     if (isGuest) {
       return items.filter(
         (item) =>
-          !(item.roles?.length === 1 && item.roles[0] === "Programador"),
+          !(item.roles?.length === 1 && item.roles[0] === "Propietario"),
       );
     }
     return items;
@@ -578,11 +599,16 @@ export default function NavBar() {
   }, [user?.loginRol, isGuest]);
 
   useEffect(() => {
+    setDrawerOpen(!compactNav);
+  }, [compactNav]);
+
+  useEffect(() => {
     const activeGroup = menuGroups.find((group) =>
       group.items.some((item) => item.link === location.pathname),
     );
     if (activeGroup) setExpandedGroupId(activeGroup.id);
-  }, [location.pathname, menuGroups]);
+    if (compactNav) setDrawerOpen(false);
+  }, [location.pathname, menuGroups, compactNav]);
 
   const handleGroupAccordionChange = (groupId) => (_event, isExpanded) => {
     setExpandedGroupId(isExpanded ? groupId : null);
@@ -603,7 +629,7 @@ export default function NavBar() {
         : item.name
       : "";
     const accentColor = inMaintenance
-      ? "error.main"
+      ? "warning.main"
       : isPlanned
         ? "warning.main"
         : "inherit";
@@ -611,26 +637,32 @@ export default function NavBar() {
     return (
       <ListItem
         key={item.link}
+        component={nested ? "div" : "li"}
         disablePadding
-        sx={{ display: "block", pl: nested ? 1 : 0 }}
+        sx={{ display: "block", pl: nested && drawerOpen ? 1 : 0 }}
       >
         <ListItemButton
           selected={location.pathname === item.link}
-          onClick={() => navigate(item.link)}
+          onClick={() => {
+            navigate(item.link);
+            if (compactNav) setDrawerOpen(false);
+          }}
           sx={{
             borderRadius: 2,
             mb: 0.5,
-            justifyContent: drawerOpen ? "initial" : "center",
-            minHeight: 40,
+            justifyContent: drawerOpen ? "flex-start" : "center",
+            minHeight: 44,
+            px: drawerOpen ? 1.25 : 1,
             opacity: statusLabel ? 0.88 : 1,
           }}
         >
           <Tooltip title={tooltip} placement="right">
             <ListItemIcon
               sx={{
-                minWidth: drawerOpen ? 40 : "auto",
+                minWidth: 40,
                 justifyContent: "center",
                 color: accentColor,
+                "& .MuiSvgIcon-root": { fontSize: 22 },
               }}
             >
               {item.icon}
@@ -640,11 +672,12 @@ export default function NavBar() {
             <ListItemText
               primary={item.name}
               secondary={statusLabel}
-              primaryTypographyProps={{ fontSize: 14 }}
+              primaryTypographyProps={{ fontSize: 14, noWrap: true }}
               secondaryTypographyProps={{
                 fontSize: 11,
                 color: accentColor,
                 fontWeight: 600,
+                noWrap: true,
               }}
             />
           )}
@@ -681,7 +714,7 @@ export default function NavBar() {
   }, [fetchUnreadCount]);
 
   useEffect(() => {
-    if (!showUserActions) {
+    if (!showUserActions || user?.loginRol === "Empleado") {
       setStoreLabel("");
       return undefined;
     }
@@ -712,7 +745,7 @@ export default function NavBar() {
     return () => {
       cancelled = true;
     };
-  }, [showUserActions, activeApp?.multiStockEnabled, activeApp?.principalStoreId]);
+  }, [showUserActions, user?.loginRol, activeApp?.multiStockEnabled, activeApp?.principalStoreId]);
 
   useEffect(() => {
     refreshNewsBadge();
@@ -733,6 +766,12 @@ export default function NavBar() {
   const onNewNotification = useCallback(
     (notif) => {
       fetchUnreadCount();
+      const link = String(notif?.link || "");
+      if (link.includes("peerAcceptOrderId=") || link.includes("peerAcceptCustomerOrderId=")) {
+        window.dispatchEvent(
+          new CustomEvent("raptor:peer-order", { detail: notif }),
+        );
+      }
       const cat = notificationToastCategory(notif);
       if (!cat) return;
       const flag = NOTIFICATION_TOAST_FLAG[cat];
@@ -913,9 +952,12 @@ export default function NavBar() {
               <AccordionSummary
                 expandIcon={<ExpandMoreIcon fontSize="small" />}
                 sx={{
-                  minHeight: 36,
-                  px: 0.5,
-                  "& .MuiAccordionSummary-content": { my: 0.5 },
+                  minHeight: 40,
+                  px: 0.75,
+                  "& .MuiAccordionSummary-content": {
+                    my: 0.75,
+                    minWidth: 0,
+                  },
                 }}
               >
                 <Typography
@@ -939,7 +981,7 @@ export default function NavBar() {
           ) : (
             <Box key={group.id} component="li" sx={{ listStyle: "none" }}>
               {groupIndex > 0 && <Divider sx={{ my: 0.75 }} />}
-              {group.items.map((item) => renderMenuItem(item))}
+              {group.items.map((item) => renderMenuItem(item, true))}
             </Box>
           ),
         )}
@@ -961,26 +1003,35 @@ export default function NavBar() {
         position="fixed"
         sx={{
           zIndex: theme.zIndex.drawer + 1,
-          ...(showDrawer && {
-            ml: drawerOpen ? `${DRAWER_W}px` : `${DRAWER_COLLAPSED_W}px`,
-            width: drawerOpen
-              ? `calc(100% - ${DRAWER_W}px)`
-              : `calc(100% - ${DRAWER_COLLAPSED_W}px)`,
-            transition: theme.transitions.create(["margin", "width"], {
-              easing: theme.transitions.easing.sharp,
-              duration: theme.transitions.duration.enteringScreen,
+          // En móvil el drawer es temporal (overlay): la barra va a ancho completo.
+          ...(showDrawer &&
+            !compactNav && {
+              ml: drawerOpen ? `${DRAWER_W}px` : `${DRAWER_COLLAPSED_W}px`,
+              width: drawerOpen
+                ? `calc(100% - ${DRAWER_W}px)`
+                : `calc(100% - ${DRAWER_COLLAPSED_W}px)`,
+              transition: theme.transitions.create(["margin", "width"], {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.enteringScreen,
+              }),
             }),
-          }),
         }}
       >
-        <Toolbar>
-          {showDrawer && !drawerOpen && (
+        <Toolbar
+          sx={{
+            minHeight: { xs: 56, sm: 64 },
+            px: { xs: 1, sm: 2 },
+            gap: { xs: 0.25, sm: 0.5 },
+            overflow: "hidden",
+          }}
+        >
+          {showDrawer && (compactNav || !drawerOpen) && (
             <IconButton
               color="inherit"
               edge="start"
               onClick={() => setDrawerOpen(true)}
-              sx={{ mr: 1 }}
-              aria-label="Expandir menú"
+              sx={{ mr: { xs: 0.25, sm: 0.5 }, flexShrink: 0 }}
+              aria-label="Abrir menú"
             >
               <MenuIcon />
             </IconButton>
@@ -993,13 +1044,20 @@ export default function NavBar() {
             sx={{
               textTransform: "none",
               fontWeight: 600,
-              mr: 1,
+              flexShrink: 0,
+              minWidth: { xs: 40, sm: "auto" },
+              px: { xs: 1, sm: 1.5 },
+              "& .MuiButton-startIcon": {
+                mr: { xs: 0, sm: 0.75 },
+              },
               ...(location.pathname === homePath && {
                 bgcolor: "rgba(255,255,255,0.12)",
               }),
             }}
           >
-            Inicio
+            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+              Inicio
+            </Box>
           </Button>
 
           {canSeePanel ? (
@@ -1010,13 +1068,20 @@ export default function NavBar() {
               sx={{
                 textTransform: "none",
                 fontWeight: 600,
-                mr: 1,
+                flexShrink: 0,
+                minWidth: { xs: 40, sm: "auto" },
+                px: { xs: 1, sm: 1.5 },
+                "& .MuiButton-startIcon": {
+                  mr: { xs: 0, sm: 0.75 },
+                },
                 ...(location.pathname === APP_ROUTES.dashboard && {
                   bgcolor: "rgba(255,255,255,0.12)",
                 }),
               }}
             >
-              Panel
+              <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+                Panel
+              </Box>
             </Button>
           ) : null}
 
@@ -1029,7 +1094,8 @@ export default function NavBar() {
               sx={{
                 textTransform: "none",
                 fontWeight: 600,
-                mr: 1,
+                flexShrink: 0,
+                display: { xs: "none", md: "inline-flex" },
                 ...(location.pathname === item.to && {
                   bgcolor: "rgba(255,255,255,0.12)",
                 }),
@@ -1039,7 +1105,7 @@ export default function NavBar() {
             </Button>
           ))}
 
-          <Box sx={{ flexGrow: 1 }} />
+          <Box sx={{ flexGrow: 1, minWidth: 8 }} />
 
           {isGuest ? (
             <Chip
@@ -1079,26 +1145,30 @@ export default function NavBar() {
             <>
               {canSeeNews ? (
                 <Tooltip title="Noticias">
+                  <span style={{ display: "inline-flex" }}>
                   <IconButton
                     color="inherit"
+                    size="small"
                     onClick={() => navigate(APP_ROUTES.marketing.news)}
                     disabled={location.pathname === APP_ROUTES.marketing.news}
                     aria-label="Noticias"
                   >
                     <Badge badgeContent={newsUnreadCount} color="error">
-                      <NewspaperIcon />
+                      <NewspaperIcon fontSize="small" />
                     </Badge>
                   </IconButton>
+                  </span>
                 </Tooltip>
               ) : null}
 
               <IconButton
                 color="inherit"
+                size="small"
                 onClick={(e) => setNotifAnchor(e.currentTarget)}
                 disabled={location.pathname === APP_ROUTES.system.notifications}
               >
                 <Badge badgeContent={unreadCount} color="error">
-                  <NotificationsIcon />
+                  <NotificationsIcon fontSize="small" />
                 </Badge>
               </IconButton>
 
@@ -1134,7 +1204,7 @@ export default function NavBar() {
             <>
               <Box
                 sx={{
-                  mx: 1.5,
+                  mx: { xs: 0.5, sm: 1.5 },
                   display: { xs: "none", sm: "flex" },
                   flexDirection: "column",
                   alignItems: "flex-end",
@@ -1186,16 +1256,18 @@ export default function NavBar() {
               <IconButton
                 id="user-menu-button"
                 color="inherit"
+                size="small"
                 aria-controls={userMenuAnchor ? "user-menu" : undefined}
                 aria-haspopup="true"
                 aria-expanded={userMenuAnchor ? "true" : undefined}
                 onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+                sx={{ flexShrink: 0 }}
               >
                 <Avatar
                   src={profileImageUser || undefined}
                   sx={{
-                    width: 36,
-                    height: 36,
+                    width: { xs: 32, sm: 36 },
+                    height: { xs: 32, sm: 36 },
                     bgcolor: "secondary.main",
                     color: "secondary.contrastText",
                   }}
@@ -1225,7 +1297,7 @@ export default function NavBar() {
                   </ListItemIcon>
                   Perfil
                 </MenuItem>
-                {["Programador", "Administrador"].includes(user?.loginRol) && (
+                {["Propietario", "Administrador"].includes(user?.loginRol) && (
                   <MenuItem
                     onClick={() => {
                       closeUserMenu();
@@ -1238,7 +1310,7 @@ export default function NavBar() {
                     Configuración
                   </MenuItem>
                 )}
-                {["Programador", "Administrador"].includes(user?.loginRol) && (
+                {["Propietario", "Administrador"].includes(user?.loginRol) && (
                   <MenuItem
                     onClick={() => {
                       closeUserMenu();
@@ -1316,22 +1388,36 @@ export default function NavBar() {
 
       {showDrawer && (
         <Drawer
-          variant="permanent"
-          open={drawerOpen}
+          variant={compactNav ? "temporary" : "permanent"}
+          open={compactNav ? drawerOpen : true}
+          onClose={() => setDrawerOpen(false)}
+          ModalProps={{ keepMounted: true }}
           sx={{
-            width: drawerOpen ? DRAWER_W : DRAWER_COLLAPSED_W,
+            width: compactNav
+              ? 0
+              : drawerOpen
+                ? DRAWER_W
+                : DRAWER_COLLAPSED_W,
             flexShrink: 0,
             "& .MuiDrawer-paper": {
-              width: drawerOpen ? DRAWER_W : DRAWER_COLLAPSED_W,
+              width: compactNav
+                ? `min(${DRAWER_W}px, 86vw)`
+                : drawerOpen
+                  ? DRAWER_W
+                  : DRAWER_COLLAPSED_W,
               boxSizing: "border-box",
               height: "100%",
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
-              transition: theme.transitions.create("width", {
-                easing: theme.transitions.easing.sharp,
-                duration: theme.transitions.duration.enteringScreen,
-              }),
+              ...(compactNav
+                ? {}
+                : {
+                    transition: theme.transitions.create("width", {
+                      easing: theme.transitions.easing.sharp,
+                      duration: theme.transitions.duration.enteringScreen,
+                    }),
+                  }),
             },
           }}
         >
@@ -1376,6 +1462,7 @@ export default function NavBar() {
         >
           <Outlet />
         </Suspense>
+        {showUserActions && <RecurringMonthPrompt role={user?.loginRol} toast={toast} />}
       </Box>
     </Box>
   );

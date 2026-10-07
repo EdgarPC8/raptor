@@ -7,6 +7,7 @@ import {
 } from "../config/appInfo.js";
 import { buildImageUrl, socket } from "../api/axios.js";
 import { SHELL_ONLY } from "../config/deployEnv.js";
+import { normalizeToastPosition, readStoredToastPosition } from "../utils/toastPosition.js";
 import { RAPTOR_LOGO_URL } from "../config/raptorBrand.js";
 import {
   normalizeMoneyDisplayDecimals,
@@ -16,6 +17,10 @@ import {
   DEFAULT_RECEIPT_DETAIL_SETTINGS,
   normalizeReceiptDetailSettings,
 } from "../utils/receiptDetailFormat.js";
+import {
+  DEFAULT_TABLE_COLUMN_VISIBILITY,
+  normalizeTableColumnVisibility,
+} from "../utils/tableColumnVisibility.js";
 import {
   DEFAULT_THEME_PALETTE,
   normalizeThemePalette,
@@ -128,6 +133,11 @@ function toActiveApp(settings, { offline = false } = {}) {
           settings?.suggestOpenPackOnPosShortage ??
             resolved.suggestOpenPackOnPosShortage,
         ),
+    productionOpenPackaging: SHELL_ONLY
+      ? false
+      : Boolean(
+          settings?.productionOpenPackaging ?? resolved.productionOpenPackaging,
+        ),
     cajaAllowCreateProductFromSelect: SHELL_ONLY
       ? false
       : Boolean(
@@ -189,10 +199,19 @@ function toActiveApp(settings, { offline = false } = {}) {
           settings?.notificationsExpiryEnabled ??
             resolved.notificationsExpiryEnabled,
         ),
+    toastPosition: normalizeToastPosition(
+      settings?.toastPosition || readStoredToastPosition(),
+    ),
     receiptDetailSettings: unconfigured
       ? { ...DEFAULT_RECEIPT_DETAIL_SETTINGS }
       : normalizeReceiptDetailSettings(
           settings?.receiptDetailSettings ?? resolved.receiptDetailSettings,
+        ),
+    // 5 tablas anchas → BD; el resto de TablePro usa localStorage (ver tableColumnVisibility.js).
+    tableColumnVisibility: unconfigured
+      ? { ...DEFAULT_TABLE_COLUMN_VISIBILITY }
+      : normalizeTableColumnVisibility(
+          settings?.tableColumnVisibility ?? resolved.tableColumnVisibility,
         ),
     themePalette: unconfigured
       ? normalizeThemePalette(DEFAULT_THEME_PALETTE)

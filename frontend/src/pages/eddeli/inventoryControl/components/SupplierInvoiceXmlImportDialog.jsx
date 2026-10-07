@@ -41,10 +41,19 @@ import {
 } from "../../../../api/inventoryControlRequest.js";
 import {
   buildSupplierCodeMap,
+  findProductByXmlDescription,
   findSupplierForXmlInvoice,
   matchProductForXmlLine,
 } from "../../../../utils/parseSriPurchaseInvoiceXml.js";
 import { mediaStoragePath } from "../../../../utils/mediaPaths.js";
+import axios, { jwt } from "../../../../api/axios.js";
+
+async function fetchProductById(id) {
+  const { data } = await axios.get(`/inventory/products/${id}`, {
+    headers: { Authorization: jwt() },
+  });
+  return data;
+}
 
 function money(n) {
   return Number(Number(n || 0).toFixed(4));
@@ -446,6 +455,11 @@ export default function SupplierInvoiceXmlImportDialog({
     const codeKey = String(seedCode || "")
       .trim()
       .toLowerCase();
+    const productNameKey = String(product.name || "")
+      .trim()
+      .toLowerCase()
+      .replace(/^\*+\s*/, "")
+      .replace(/\s+/g, " ");
     setRows((prev) =>
       prev.map((r) => {
         if (r.productId) return r;
@@ -453,11 +467,12 @@ export default function SupplierInvoiceXmlImportDialog({
           .map((c) => String(c || "").trim().toLowerCase())
           .filter(Boolean);
         const byCode = codeKey && codes.includes(codeKey);
-        const byName =
-          !codeKey &&
-          String(r.description || "")
-            .trim()
-            .toLowerCase() === String(product.name || "").trim().toLowerCase();
+        const rowNameKey = String(r.description || "")
+          .trim()
+          .toLowerCase()
+          .replace(/^\*+\s*/, "")
+          .replace(/\s+/g, " ");
+        const byName = productNameKey && rowNameKey === productNameKey;
         if (!byCode && !byName) return r;
         return {
           ...r,
@@ -584,9 +599,40 @@ export default function SupplierInvoiceXmlImportDialog({
     const seed = xmlLineToProductSeed(line);
     if (!seed.name) throw new Error("Línea sin descripción");
     if (!unitId) throw new Error("No hay unidad de medida en el sistema");
+    // Si ya existe por nombre, reutilizarlo (no fallar el lote).
+    const existingLocal = findProductByXmlDescription(products, seed.name);
+    if (existingLocal?.id) {
+      return { ...existingLocal, _reused: true };
+    }
     const fd = buildCreateFormData(seed, unitId);
-    const { data } = await createProduct(fd);
-    return data;
+    try {
+      const { data } = await createProduct(fd);
+      return data;
+    } catch (err) {
+      const status = err?.response?.status;
+      const body = err?.response?.data || {};
+      const msg = String(body?.message || err?.message || "");
+      if (status === 409 || /ya existe un producto/i.test(msg)) {
+        let product = body.product || null;
+        const existingId = Number(body.existingProductId || product?.id);
+        if (!product && existingId) {
+          product =
+            (products || []).find((p) => Number(p.id) === existingId) || null;
+        }
+        if (!product && existingId) {
+          try {
+            product = await fetchProductById(existingId);
+          } catch {
+            product = null;
+          }
+        }
+        if (!product) {
+          product = findProductByXmlDescription(products, seed.name);
+        }
+        if (product?.id) return { ...product, _reused: true };
+      }
+      throw err;
+    }
   };
 
   const openSupplierFromXml = () => {
@@ -633,6 +679,7 @@ export default function SupplierInvoiceXmlImportDialog({
     setCreateProgress({ done: 0, total: uniqueLines.length });
 
     let ok = 0;
+    let reused = 0;
     let fail = 0;
     const errors = [];
 
@@ -641,6 +688,7 @@ export default function SupplierInvoiceXmlImportDialog({
         const line = uniqueLines[i];
         try {
           const product = await createOneProductFromLine(line, defaultUnitId);
+          if (product?._reused) reused += 1;
           await handleProductCreated(product);
           assignProductToMatchingMissing(
             product,
@@ -650,6 +698,8 @@ export default function SupplierInvoiceXmlImportDialog({
           if (!line.code && !line.auxCode) {
             assignProductToRow(line.key, product);
           }
+          // También por nombre normalizado (códigos distintos / * en descripción)
+          assignProductToRow(line.key, product);
           ok += 1;
         } catch (err) {
           fail += 1;
@@ -663,8 +713,10 @@ export default function SupplierInvoiceXmlImportDialog({
       }
       if (fail) {
         setBulkError(
-          `Creados ${ok}, fallaron ${fail}. ${errors.slice(0, 3).join(" · ")}`,
+          `Listos ${ok} (${reused} ya existían), fallaron ${fail}. ${errors.slice(0, 3).join(" · ")}`,
         );
+      } else if (reused && reused === ok) {
+        setBulkError("");
       }
     } finally {
       setCreatingAll(false);
@@ -853,11 +905,10 @@ export default function SupplierInvoiceXmlImportDialog({
                 }
               >
                 <Typography variant="body2">
-                  {missingMap} línea(s) sin producto. Podés asignarlas a mano, crearlas{" "}
-                  <strong>una por una</strong> (botón Crear) o{" "}
-                  <strong>registrar todas</strong>. El código del proveedor queda en la
-                  descripción y se vincula al proveedor al agregar al pedido (no va al código
-                  de barras).
+                  {missingMap} línea(s) sin producto. Asignalas a mano con el buscador
+                  (solo se auto-llenan si ya tienen código de proveedor enlazado). También
+                  podés crearlas <strong>una por una</strong> o{" "}
+                  <strong>registrar todas</strong>.
                 </Typography>
               </Alert>
             ) : null}
@@ -997,7 +1048,7 @@ export default function SupplierInvoiceXmlImportDialog({
                               }
                               placeholder="Buscar producto…"
                               getSearchText={(p) =>
-                                [p?.barcode, p?.sku].filter(Boolean).join(" ")
+                                [p?.name, p?.barcode, p?.sku].filter(Boolean).join(" ")
                               }
                             />
                           </Box>

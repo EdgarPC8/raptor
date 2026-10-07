@@ -8,7 +8,7 @@ import NotificationProgramsPage from "./NotificationProgramsPage.jsx";
 import NotificationToastSettings from "../components/NotificationToastSettings.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
-const CAN_PROGRAM = new Set(["Programador", "Administrador"]);
+const CAN_PROGRAM = new Set(["Propietario", "Programador", "Administrador"]);
 
 export default function NotificationsPage() {
   const { user } = useAuth();

@@ -22,10 +22,9 @@ import {
   FormControlLabel,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import PaymentsIcon from "@mui/icons-material/Payments";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import EditIcon from "@mui/icons-material/Edit";
-import SkipNextIcon from "@mui/icons-material/SkipNext";
+import DeleteIcon from "@mui/icons-material/Delete";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
 import TablePro from "../../../components/Tables/TablePro";
@@ -36,9 +35,11 @@ import {
   getRecurringWorkbenchRequest,
   createRecurringTemplateRequest,
   updateRecurringTemplateRequest,
+  deleteRecurringTemplateRequest,
   updateRecurringOccurrenceRequest,
   payRecurringOccurrenceRequest,
   skipRecurringOccurrenceRequest,
+  restoreRecurringOccurrenceRequest,
   generateRecurringOccurrencesRequest,
 } from "../../../api/financeRequest";
 import { getStoresRequest } from "../../../api/inventoryControlRequest";
@@ -47,8 +48,8 @@ import {
   locationKindLabel,
   sortStoresByKind,
 } from "../../../utils/storeLocationKind.js";
-import { format, parseISO } from "date-fns";
-import { es } from "date-fns/locale";
+import RecurringExpensesCalendar from "./components/RecurringExpensesCalendar.jsx";
+import LoanColorPicker, { DEFAULT_LOAN_COLOR } from "./components/LoanColorPicker.jsx";
 
 const CATEGORIES = [
   { value: "arriendo", label: "Arriendo" },
@@ -58,9 +59,21 @@ const CATEGORIES = [
 ];
 
 const FREQUENCIES = [
+  { value: "weekly", label: "Semanal" },
   { value: "monthly", label: "Mensual" },
+  { value: "bimonthly", label: "Bimestral" },
   { value: "quarterly", label: "Trimestral" },
   { value: "annual", label: "Anual" },
+];
+
+const WEEKDAYS = [
+  { value: 1, label: "Lunes" },
+  { value: 2, label: "Martes" },
+  { value: 3, label: "Miércoles" },
+  { value: 4, label: "Jueves" },
+  { value: 5, label: "Viernes" },
+  { value: 6, label: "Sábado" },
+  { value: 7, label: "Domingo" },
 ];
 
 const MONTHS = [
@@ -78,12 +91,6 @@ const MONTHS = [
   { value: 12, label: "Diciembre" },
 ];
 
-const STATUS_CHIP = {
-  pending: { label: "Pendiente", color: "warning" },
-  paid: { label: "Pagado", color: "success" },
-  skipped: { label: "Omitido", color: "default" },
-};
-
 const emptyTemplateForm = () => ({
   storeId: "",
   name: "",
@@ -93,6 +100,9 @@ const emptyTemplateForm = () => ({
   baseAmount: "",
   dueDayOfMonth: Math.min(28, Math.max(1, new Date().getDate())),
   dueMonth: 1,
+  labelColor: DEFAULT_LOAN_COLOR,
+  startDate: "",
+  endDate: "",
   providerName: "",
   reminderDaysBefore: 7,
   note: "",
@@ -117,21 +127,11 @@ function SummaryCard({ title, amount, color, subtitle }) {
   );
 }
 
-function formatDueDate(value) {
-  if (!value) return "—";
-  try {
-    const d = typeof value === "string" ? parseISO(value) : new Date(value);
-    return format(d, "d MMM yyyy", { locale: es });
-  } catch {
-    return "—";
-  }
-}
-
 export default function RecurringExpensesPage() {
   const { toast } = useAuth();
   const { activeApp } = useAppSettings();
   const principalStoreId = activeApp?.principalStoreId ?? null;
-  const [tab, setTab] = useState("occurrences");
+  const [tab, setTab] = useState("calendar");
   const [monthKey, setMonthKey] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -155,6 +155,7 @@ export default function RecurringExpensesPage() {
   const [amountOpen, setAmountOpen] = useState(false);
   const [amountRow, setAmountRow] = useState(null);
   const [amountValue, setAmountValue] = useState("");
+  const [deleteTemplate, setDeleteTemplate] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -172,7 +173,7 @@ export default function RecurringExpensesPage() {
       setStores(sortStoresByKind(rawStores));
     } catch (e) {
       console.error(e);
-      toast({ message: "Error al cargar gastos recurrentes", variant: "error" });
+      toast({ message: "Error al cargar egresos recurrentes", variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -228,6 +229,9 @@ export default function RecurringExpensesPage() {
       baseAmount: String(row.baseAmount ?? ""),
       dueDayOfMonth: row.dueDayOfMonth || 5,
       dueMonth: row.dueMonth || 1,
+      labelColor: row.labelColor || DEFAULT_LOAN_COLOR,
+      startDate: row.startDate ? String(row.startDate).slice(0, 10) : "",
+      endDate: row.endDate ? String(row.endDate).slice(0, 10) : "",
       providerName: row.providerName || "",
       reminderDaysBefore: row.reminderDaysBefore ?? 7,
       note: row.note || "",
@@ -265,6 +269,7 @@ export default function RecurringExpensesPage() {
         baseAmount: Number(form.baseAmount),
         dueDayOfMonth: Number(form.dueDayOfMonth) || 5,
         dueMonth: form.frequency === "annual" ? Number(form.dueMonth) : null,
+        labelColor: form.labelColor,
         providerName: form.providerName.trim() || null,
         reminderDaysBefore: Number(form.reminderDaysBefore) || 7,
         note: form.note.trim() || null,
@@ -284,7 +289,7 @@ export default function RecurringExpensesPage() {
           setForm(emptyTemplateForm());
           // Tras crear, mostrar cuotas (ya se genera la del mes) y también
           // dejar claro que la plantilla quedó registrada.
-          if (!editTemplate) setTab("occurrences");
+          if (!editTemplate) setTab("calendar");
         },
         successMessage: editTemplate ? "Plantilla actualizada" : "Plantilla creada",
       });
@@ -345,6 +350,29 @@ export default function RecurringExpensesPage() {
     });
   };
 
+  const handleRestore = async (row) => {
+    await runMutationReload(toast, {
+      promise: restoreRecurringOccurrenceRequest(row.id),
+      reload: load,
+      successMessage: "Cuota pendiente de nuevo",
+    });
+  };
+
+  const handleDeleteTemplate = async () => {
+    if (!deleteTemplate?.id) return;
+    setSaving(true);
+    try {
+      await runMutationReload(toast, {
+        promise: deleteRecurringTemplateRequest(deleteTemplate.id),
+        reload: load,
+        onClose: () => setDeleteTemplate(null),
+        successMessage: "Plantilla eliminada",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleGenerate = async () => {
     await runMutationReload(toast, {
       promise: generateRecurringOccurrencesRequest(),
@@ -355,7 +383,24 @@ export default function RecurringExpensesPage() {
 
   const templateColumns = useMemo(
     () => [
-      { id: "name", label: "Nombre" },
+      {
+        id: "name",
+        label: "Nombre",
+        render: (row) => (
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Box
+              sx={{
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                bgcolor: row.labelColor || DEFAULT_LOAN_COLOR,
+                flexShrink: 0,
+              }}
+            />
+            <span>{row.name}</span>
+          </Stack>
+        ),
+      },
       {
         id: "storeName",
         label: "Local",
@@ -387,10 +432,15 @@ export default function RecurringExpensesPage() {
       {
         id: "due",
         label: "Vence",
-        render: (row) =>
-          row.frequency === "annual"
-            ? `Día ${row.dueDayOfMonth} · ${MONTHS.find((m) => m.value === row.dueMonth)?.label || row.dueMonth}`
-            : `Día ${row.dueDayOfMonth}`,
+        render: (row) => {
+          if (row.frequency === "weekly") {
+            return WEEKDAYS.find((d) => d.value === Number(row.dueDayOfMonth))?.label || `Día ${row.dueDayOfMonth}`;
+          }
+          if (row.frequency === "annual") {
+            return `Día ${row.dueDayOfMonth} · ${MONTHS.find((m) => m.value === row.dueMonth)?.label || row.dueMonth}`;
+          }
+          return `Día ${row.dueDayOfMonth}`;
+        },
       },
       {
         id: "isActive",
@@ -407,127 +457,66 @@ export default function RecurringExpensesPage() {
         id: "actions",
         label: "",
         render: (row) => (
-          <Tooltip title="Editar plantilla">
-            <IconButton size="small" onClick={() => openEditTemplate(row)}>
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        ),
-      },
-    ],
-    []
-  );
-
-  const occurrenceColumns = useMemo(
-    () => [
-      {
-        id: "dueDate",
-        label: "Vence",
-        render: (row) => formatDueDate(row.dueDate),
-      },
-      { id: "displayName", label: "Concepto" },
-      { id: "storeName", label: "Local" },
-      {
-        id: "displayAmount",
-        label: "Monto",
-        render: (row) => (
-          <Stack direction="row" alignItems="center" spacing={0.5}>
-            <Typography fontWeight={700}>{money(row.displayAmount)}</Typography>
-            {row.amountType === "variable" && (
-              <Chip size="small" label="est." variant="outlined" sx={{ height: 20 }} />
-            )}
+          <Stack direction="row" spacing={0.25}>
+            <Tooltip title="Editar plantilla">
+              <IconButton size="small" onClick={() => openEditTemplate(row)}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Eliminar plantilla">
+              <IconButton size="small" color="error" onClick={() => setDeleteTemplate(row)}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Stack>
         ),
-      },
-      {
-        id: "status",
-        label: "Estado",
-        render: (row) => {
-          const cfg = STATUS_CHIP[row.status] || STATUS_CHIP.pending;
-          const extra =
-            row.isOverdue && row.status === "pending"
-              ? " · vencido"
-              : row.isDueSoon
-                ? " · pronto"
-                : "";
-          return (
-            <Chip
-              size="small"
-              color={row.isOverdue ? "error" : cfg.color}
-              label={`${cfg.label}${extra}`}
-            />
-          );
-        },
-      },
-      {
-        id: "actions",
-        label: "",
-        render: (row) =>
-          row.status === "pending" ? (
-            <Stack direction="row" spacing={0.5}>
-              {row.amountType === "variable" && (
-                <Tooltip title="Ajustar monto (factura)">
-                  <IconButton size="small" onClick={() => openSetAmount(row)}>
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              )}
-              <Tooltip title="Registrar pago">
-                <IconButton size="small" color="primary" onClick={() => openPay(row)}>
-                  <PaymentsIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Omitir este período">
-                <IconButton size="small" color="warning" onClick={() => handleSkip(row)}>
-                  <SkipNextIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-          ) : null,
       },
     ],
     []
   );
 
   const templateFormFields = (
-    <Stack spacing={2} sx={{ pt: 1 }}>
-      <FormControl fullWidth size="small">
-        <InputLabel>Local / punto de venta</InputLabel>
-        <Select
-          label="Local / punto de venta"
-          value={form.storeId}
-          onChange={(e) => setForm((f) => ({ ...f, storeId: e.target.value }))}
-        >
-          <MenuItem value="">General (sin local)</MenuItem>
-          {storeOptions.map((s) => {
-            const isPrincipal =
-              principalStoreId != null &&
-              Number(s.id) === Number(principalStoreId);
-            const inactive =
-              !(s?.isActive === true || s?.isActive === 1 || s?.isActive === "1");
-            return (
-              <MenuItem key={s.id} value={s.id}>
-                {s.name}
-                {isPrincipal ? " · activo (SRI)" : ""}
-                {!isPrincipal ? ` · ${locationKindLabel(s.locationKind)}` : ""}
-                {inactive ? " · inactivo" : ""}
-              </MenuItem>
-            );
-          })}
-        </Select>
-      </FormControl>
+    <Grid container spacing={1.25} sx={{ pt: 0.5 }}>
+      <Grid item xs={12} sm={6}>
+        <FormControl fullWidth size="small">
+          <InputLabel>Local / punto de venta</InputLabel>
+          <Select
+            label="Local / punto de venta"
+            value={form.storeId}
+            onChange={(e) => setForm((f) => ({ ...f, storeId: e.target.value }))}
+          >
+            <MenuItem value="">General (sin local)</MenuItem>
+            {storeOptions.map((s) => {
+              const isPrincipal =
+                principalStoreId != null &&
+                Number(s.id) === Number(principalStoreId);
+              const inactive =
+                !(s?.isActive === true || s?.isActive === 1 || s?.isActive === "1");
+              return (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                  {isPrincipal ? " · activo (SRI)" : ""}
+                  {!isPrincipal ? ` · ${locationKindLabel(s.locationKind)}` : ""}
+                  {inactive ? " · inactivo" : ""}
+                </MenuItem>
+              );
+            })}
+          </Select>
+        </FormControl>
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <TextField
+          label="Nombre"
+          size="small"
+          required
+          fullWidth
+          value={form.name}
+          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          placeholder="Ej: Arriendo Local Centro"
+        />
+      </Grid>
 
-      <TextField
-        label="Nombre"
-        size="small"
-        required
-        fullWidth
-        value={form.name}
-        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        placeholder="Ej: Arriendo Local Centro"
-      />
-
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+      <Grid item xs={12} sm={4}>
         <FormControl fullWidth size="small">
           <InputLabel>Categoría</InputLabel>
           <Select
@@ -542,6 +531,8 @@ export default function RecurringExpensesPage() {
             ))}
           </Select>
         </FormControl>
+      </Grid>
+      <Grid item xs={12} sm={4}>
         <FormControl fullWidth size="small">
           <InputLabel>Tipo de monto</InputLabel>
           <Select
@@ -553,15 +544,24 @@ export default function RecurringExpensesPage() {
             <MenuItem value="variable">Variable / estimado (luz, agua)</MenuItem>
           </Select>
         </FormControl>
-      </Stack>
-
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+      </Grid>
+      <Grid item xs={12} sm={4}>
         <FormControl fullWidth size="small">
           <InputLabel>Frecuencia</InputLabel>
           <Select
             label="Frecuencia"
             value={form.frequency}
-            onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value }))}
+            onChange={(e) => {
+              const frequency = e.target.value;
+              setForm((f) => ({
+                ...f,
+                frequency,
+                dueDayOfMonth:
+                  frequency === "weekly"
+                    ? Math.min(7, Math.max(1, Number(f.dueDayOfMonth) || 1))
+                    : f.dueDayOfMonth,
+              }));
+            }}
           >
             {FREQUENCIES.map((f) => (
               <MenuItem key={f.value} value={f.value}>
@@ -570,6 +570,9 @@ export default function RecurringExpensesPage() {
             ))}
           </Select>
         </FormControl>
+      </Grid>
+
+      <Grid item xs={12} sm={4}>
         <TextField
           label={form.amountType === "fixed" ? "Monto" : "Monto estimado"}
           type="number"
@@ -580,19 +583,39 @@ export default function RecurringExpensesPage() {
           value={form.baseAmount}
           onChange={(e) => setForm((f) => ({ ...f, baseAmount: e.target.value }))}
         />
-      </Stack>
-
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-        <TextField
-          label="Día de vencimiento"
-          type="number"
-          size="small"
-          fullWidth
-          inputProps={{ min: 1, max: 31 }}
-          value={form.dueDayOfMonth}
-          onChange={(e) => setForm((f) => ({ ...f, dueDayOfMonth: e.target.value }))}
-        />
-        {form.frequency === "annual" && (
+      </Grid>
+      {form.frequency === "weekly" ? (
+        <Grid item xs={12} sm={4}>
+          <FormControl fullWidth size="small">
+            <InputLabel>Día de la semana</InputLabel>
+            <Select
+              label="Día de la semana"
+              value={Number(form.dueDayOfMonth) >= 1 && Number(form.dueDayOfMonth) <= 7 ? Number(form.dueDayOfMonth) : 1}
+              onChange={(e) => setForm((f) => ({ ...f, dueDayOfMonth: e.target.value }))}
+            >
+              {WEEKDAYS.map((d) => (
+                <MenuItem key={d.value} value={d.value}>
+                  {d.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+      ) : (
+        <Grid item xs={12} sm={4}>
+          <TextField
+            label="Día del mes"
+            type="number"
+            size="small"
+            fullWidth
+            inputProps={{ min: 1, max: 31 }}
+            value={form.dueDayOfMonth}
+            onChange={(e) => setForm((f) => ({ ...f, dueDayOfMonth: e.target.value }))}
+          />
+        </Grid>
+      )}
+      {form.frequency === "annual" ? (
+        <Grid item xs={12} sm={4}>
           <FormControl fullWidth size="small">
             <InputLabel>Mes (anual)</InputLabel>
             <Select
@@ -607,7 +630,22 @@ export default function RecurringExpensesPage() {
               ))}
             </Select>
           </FormControl>
-        )}
+        </Grid>
+      ) : null}
+      <Grid item xs={12}>
+        <Typography variant="caption" color="text.secondary">
+          {form.frequency === "weekly"
+            ? "Al generar, salen todas las semanas de este mes en el día elegido."
+            : form.frequency === "bimonthly"
+              ? "Ese día en enero, marzo, mayo, julio, septiembre y noviembre."
+              : form.frequency === "quarterly"
+                ? "Ese día en enero, abril, julio y octubre."
+                : form.frequency === "annual"
+                  ? "Ese día del mes elegido. La cuota sale solo cuando llega ese mes."
+                  : "Al generar, sale la cuota de este mes en el día elegido."}
+        </Typography>
+      </Grid>
+      <Grid item xs={12} sm={4}>
         <TextField
           label="Avisar días antes"
           type="number"
@@ -617,39 +655,47 @@ export default function RecurringExpensesPage() {
           value={form.reminderDaysBefore}
           onChange={(e) => setForm((f) => ({ ...f, reminderDaysBefore: e.target.value }))}
         />
-      </Stack>
-
-      <TextField
-        label="Proveedor / beneficiario"
-        size="small"
-        fullWidth
-        value={form.providerName}
-        onChange={(e) => setForm((f) => ({ ...f, providerName: e.target.value }))}
-        placeholder="Arrendador, CNEL, municipio..."
-      />
-
-      <TextField
-        label="Nota"
-        size="small"
-        fullWidth
-        multiline
-        minRows={2}
-        value={form.note}
-        onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-      />
-
-      {editTemplate && (
-        <FormControlLabel
-          control={
-            <Switch
-              checked={form.isActive}
-              onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
-            />
-          }
-          label="Plantilla activa"
+      </Grid>
+      <Grid item xs={12} sm={editTemplate ? 6 : 8}>
+        <TextField
+          label="Proveedor / beneficiario"
+          size="small"
+          fullWidth
+          value={form.providerName}
+          onChange={(e) => setForm((f) => ({ ...f, providerName: e.target.value }))}
+          placeholder="Arrendador, CNEL, municipio..."
         />
-      )}
-    </Stack>
+      </Grid>
+      <Grid item xs={12} sm={4} sx={{ display: "flex", alignItems: "center" }}>
+        <LoanColorPicker
+          value={form.labelColor}
+          onChange={(color) => setForm((f) => ({ ...f, labelColor: color }))}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={editTemplate ? 8 : 12}>
+        <TextField
+          label="Nota"
+          size="small"
+          fullWidth
+          value={form.note}
+          onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+        />
+      </Grid>
+      {editTemplate ? (
+        <Grid item xs={12} sm={4} sx={{ display: "flex", alignItems: "center" }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={form.isActive}
+                onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
+              />
+            }
+            label="Plantilla activa"
+          />
+        </Grid>
+      ) : null}
+    </Grid>
   );
 
   return (
@@ -665,7 +711,7 @@ export default function RecurringExpensesPage() {
           <Stack direction="row" alignItems="center" spacing={1}>
             <HomeWorkIcon color="secondary" />
             <Typography variant="h5" fontWeight={800}>
-              Gastos recurrentes
+              Egresos recurrentes
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary">
@@ -728,7 +774,7 @@ export default function RecurringExpensesPage() {
 
       {!summary.isProfitable && summary.gapToCover > 0 && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          Para cubrir gastos fijos estimados ({money(summary.monthlyBurden)}) faltan{" "}
+          Para cubrir egresos fijos estimados ({money(summary.monthlyBurden)}) faltan{" "}
           <strong>{money(summary.gapToCover)}</strong> de ventas este mes. Ingresos actuales:{" "}
           {money(summary.monthIncome)}.
         </Alert>
@@ -736,7 +782,7 @@ export default function RecurringExpensesPage() {
 
       {summary.overdueCount > 0 && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Tienes {summary.overdueCount} pago(s) vencido(s). Revisa las cuotas del mes.
+          Tienes {summary.overdueCount} pago(s) vencido(s). En el calendario siguen en su día para que los registres.
         </Alert>
       )}
 
@@ -749,35 +795,25 @@ export default function RecurringExpensesPage() {
           sx={{ px: 2, pt: 1, borderBottom: 1, borderColor: "divider" }}
         >
           <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-            <Tab
-              value="occurrences"
-              label={`Cuotas del mes${occurrences.length ? ` (${occurrences.length})` : ""}`}
-            />
+            <Tab value="calendar" label="Calendario" />
             <Tab
               value="templates"
               label={`Plantillas${templates.length ? ` (${templates.length})` : ""}`}
             />
           </Tabs>
-          {tab === "occurrences" && (
-            <TextField
-              type="month"
-              size="small"
-              label="Mes"
-              value={monthKey}
-              onChange={(e) => setMonthKey(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: { xs: 1, sm: 0 }, minWidth: 160 }}
-            />
-          )}
         </Stack>
 
         <Box sx={{ p: 2 }}>
-          {tab === "occurrences" ? (
-            <TablePro
-              columns={occurrenceColumns}
-              rows={occurrences}
+          {tab === "calendar" ? (
+            <RecurringExpensesCalendar
+              monthKey={monthKey}
+              onMonthChange={setMonthKey}
+              occurrences={occurrences}
               loading={loading}
-              emptyMessage="No hay cuotas para este mes. Revisá la pestaña Plantillas o pulsá «Generar cuotas». Si el vencimiento es de otro mes, cambiá el selector de mes."
+              onPay={openPay}
+              onSkip={handleSkip}
+              onRestore={handleRestore}
+              onAdjustAmount={openSetAmount}
             />
           ) : (
             <TablePro
@@ -796,8 +832,10 @@ export default function RecurringExpensesPage() {
           setCreateOpen(false);
           setEditTemplate(null);
         }}
-        title={editTemplate ? "Editar plantilla" : "Nueva plantilla de gasto"}
-        maxWidth="sm"
+        title={editTemplate ? "Editar plantilla" : "Nueva plantilla de egreso"}
+        maxWidth="md"
+        fullWidth
+        contentSx={{ py: 1, overflow: "visible" }}
         actions={
           <>
             <Button onClick={() => setCreateOpen(false)} disabled={saving}>
@@ -809,7 +847,7 @@ export default function RecurringExpensesPage() {
           </>
         }
       >
-        <Box component="form" onSubmit={handleSaveTemplate}>
+        <Box component="form" onSubmit={handleSaveTemplate} sx={{ overflow: "hidden" }}>
           {templateFormFields}
         </Box>
       </SimpleDialog>
@@ -858,7 +896,7 @@ export default function RecurringExpensesPage() {
             onChange={(e) => setPayForm((f) => ({ ...f, note: e.target.value }))}
           />
           <Typography variant="caption" color="text.secondary">
-            Se creará un gasto en Finanzas vinculado a esta cuota.
+            Se creará un egreso en Finanzas vinculado a esta cuota.
           </Typography>
         </Stack>
       </SimpleDialog>
@@ -890,9 +928,31 @@ export default function RecurringExpensesPage() {
             onChange={(e) => setAmountValue(e.target.value)}
           />
           <Typography variant="caption" color="text.secondary">
-            Úsalo para luz, agua u otros gastos variables antes de pagar.
+            Úsalo para luz, agua u otros egresos variables antes de pagar.
           </Typography>
         </Stack>
+      </SimpleDialog>
+
+      <SimpleDialog
+        open={Boolean(deleteTemplate)}
+        onClose={() => setDeleteTemplate(null)}
+        title="Eliminar plantilla"
+        maxWidth="xs"
+        actions={
+          <>
+            <Button onClick={() => setDeleteTemplate(null)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button color="error" variant="contained" onClick={handleDeleteTemplate} disabled={saving}>
+              Eliminar
+            </Button>
+          </>
+        }
+      >
+        <Typography variant="body2">
+          Se borra «{deleteTemplate?.name || "esta plantilla"}» y sus cuotas pendientes u omitidas.
+          Si alguna ya se pagó, el egreso sigue en Finanzas.
+        </Typography>
       </SimpleDialog>
     </Container>
   );

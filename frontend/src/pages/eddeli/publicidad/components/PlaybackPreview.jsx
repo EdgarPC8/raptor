@@ -70,24 +70,32 @@ export default function PlaybackPreview({
         <LinearProgress variant="determinate" value={progress} sx={{ mb: 1.5, borderRadius: 1 }} />
         <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center">
           <Tooltip title="Reiniciar">
-            <IconButton size="small" onClick={reset} disabled={!total}>
-              <ReplayIcon fontSize="small" />
-            </IconButton>
+            <span>
+              <IconButton size="small" onClick={reset} disabled={!total}>
+                <ReplayIcon fontSize="small" />
+              </IconButton>
+            </span>
           </Tooltip>
           <Tooltip title="Anterior">
-            <IconButton size="small" onClick={prev} disabled={!total}>
-              <SkipPreviousIcon fontSize="small" />
-            </IconButton>
+            <span>
+              <IconButton size="small" onClick={prev} disabled={!total}>
+                <SkipPreviousIcon fontSize="small" />
+              </IconButton>
+            </span>
           </Tooltip>
           <Tooltip title={playing ? "Pausar" : "Reproducir"}>
-            <IconButton color="primary" onClick={toggle} disabled={!total}>
-              {playing ? <PauseIcon /> : <PlayArrowIcon />}
-            </IconButton>
+            <span>
+              <IconButton color="primary" onClick={toggle} disabled={!total}>
+                {playing ? <PauseIcon /> : <PlayArrowIcon />}
+              </IconButton>
+            </span>
           </Tooltip>
           <Tooltip title="Siguiente">
-            <IconButton size="small" onClick={next} disabled={!total}>
-              <SkipNextIcon fontSize="small" />
-            </IconButton>
+            <span>
+              <IconButton size="small" onClick={next} disabled={!total}>
+                <SkipNextIcon fontSize="small" />
+              </IconButton>
+            </span>
           </Tooltip>
         </Stack>
         <Typography variant="caption" color="text.secondary" display="block" textAlign="center" sx={{ mt: 1 }}>

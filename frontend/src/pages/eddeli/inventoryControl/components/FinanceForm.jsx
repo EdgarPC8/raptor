@@ -9,6 +9,7 @@ import { useAuth } from "../../../../context/AuthContext";
 import AttachmentField from "./AttachmentField.jsx";
 import { uploadExpenseVoucher } from "../../../../api/documentRequest.js";
 import { nowLocalDateTime, toLocalDateTimeInput } from "../collections/helpers.js";
+import { showEgreso } from "../../../../utils/financeWords";
 
 const categories = {
   income: ["Venta", "Donación", "Carrera", "Servicio", "Otro"],
@@ -145,7 +146,7 @@ const FinanceForm = ({ type = "income", data = null, onClose, onSaved }) => {
               >
                 {categoryOptions.map((cat) => (
                   <MenuItem key={cat} value={cat}>
-                    {cat}
+                    {showEgreso(cat)}
                   </MenuItem>
                 ))}
               </TextField>
@@ -161,12 +162,12 @@ const FinanceForm = ({ type = "income", data = null, onClose, onSaved }) => {
                 entityId={data.id}
                 pendingFile={pendingVoucherFile}
                 onPendingFileChange={setPendingVoucherFile}
-                label="Comprobante de gasto"
+                label="Comprobante de egreso"
               />
             ) : (
               <AttachmentField
-                label="Comprobante de gasto (opcional)"
-                helperText="Factura, recibo o captura del gasto."
+                label="Comprobante de egreso (opcional)"
+                helperText="Factura, recibo o captura del egreso."
                 pendingFile={pendingVoucherFile}
                 onPendingFileChange={setPendingVoucherFile}
               />

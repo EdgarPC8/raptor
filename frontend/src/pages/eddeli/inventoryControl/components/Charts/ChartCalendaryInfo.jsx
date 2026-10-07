@@ -69,7 +69,7 @@ const LEGEND_ALL = [
   { key: 'orderMoney', label: 'Pedidos', colorKey: 'orderMoney' },
   { key: 'posSales', label: 'Caja', colorKey: 'posSales' },
   { key: 'collected', label: 'Ingresos', colorKey: 'collected' },
-  { key: 'expense', label: 'Gastos', colorKey: 'expense' },
+  { key: 'expense', label: 'Egresos', colorKey: 'expense' },
 ];
 
 const LEGEND_INCOME = [
@@ -427,7 +427,7 @@ export default function ChartCalendaryInfo({
         subtitle={
           isIncomeView
             ? 'Caja y cobros de pedidos por fecha en que entró el dinero (Income). Misma fecha; solo cambia el origen.'
-            : 'Pedidos y caja por fecha del pedido; cobros y gastos por fecha en Income/Expense (igual que velas). Clic en un día para detalle.'
+            : 'Pedidos y caja por fecha del pedido; cobros y egresos por fecha en Income/Expense (igual que velas). Clic en un día para detalle.'
         }
         sx={{ mb: 0.75 }}
       />
@@ -593,7 +593,7 @@ export default function ChartCalendaryInfo({
                 `Pedidos (fecha pedido): ${m.ordersCount} · ${moneyFmt(m.ordersAmount)}\n` +
                 `Caja (fecha pedido): ${m.posSalesCount} · ${moneyFmt(m.posSalesAmount)}\n` +
                 `Cobros pedidos (entrada $): ${moneyFmt(incomeCobrosAmount(m))}\n` +
-                `Gastos (Expense): ${moneyFmt(m.expensesAmount)}`;
+                `Egresos (Expense): ${moneyFmt(m.expensesAmount)}`;
 
             return (
               <Box
@@ -802,7 +802,7 @@ export default function ChartCalendaryInfo({
           )}
           {!isIncomeView && (
             <Grid item xs={6} sm={4} md={3}>
-              <MonthTotalItem label="Gastos" value={monthData.totals.expenses} color={chartColors.expense} moneyFmt={moneyFmt} />
+              <MonthTotalItem label="Egresos" value={monthData.totals.expenses} color={chartColors.expense} moneyFmt={moneyFmt} />
             </Grid>
           )}
         </Grid>

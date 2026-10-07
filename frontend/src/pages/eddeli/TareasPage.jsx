@@ -1,8 +1,11 @@
 import React, { useMemo, useState } from "react";
 import {
+  Autocomplete,
   Box,
   Button,
+  Checkbox,
   Chip,
+  FormControlLabel,
   Grid,
   IconButton,
   MenuItem,
@@ -14,7 +17,6 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import AddIcon from "@mui/icons-material/Add";
-import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import TablePro from "../../components/Tables/TablePro.jsx";
 import SimpleDialog from "../../components/Dialogs/SimpleDialog.jsx";
@@ -26,12 +28,17 @@ import {
   getTaskAssignees,
   getTaskPlans,
   publishTaskPlan,
+  closeTaskPlan,
   updateTaskItemStatus,
   updateTaskPlan,
 } from "../../api/taskRequest.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { APP_ID } from "../../config/appInfo.js";
+import { getAllProductsAll } from "../../api/inventoryControlRequest.js";
+import TaskProductionCard from "./TaskProductionCard.jsx";
 
-const ADMIN_ROLES = new Set(["Administrador", "Programador"]);
+const ADMIN_ROLES = new Set(["Administrador", "Propietario", "Programador"]);
+const CAN_PRODUCE = APP_ID === "eddeli";
 
 const statusLabel = {
   pending: "Pendiente",
@@ -47,6 +54,15 @@ const chipColorByStatus = {
   blocked: "default",
 };
 
+const emptyPayload = () => ({
+  boxProductId: "",
+  unitProductId: "",
+  unitsPerBox: "",
+  boxesToOpen: "1",
+  productId: "",
+  quantity: "1",
+});
+
 const emptyItem = () => ({
   title: "",
   description: "",
@@ -54,7 +70,7 @@ const emptyItem = () => ({
   priority: 0,
   dueDate: "",
   actionType: "none",
-  actionPayload: { boxProductId: "", unitProductId: "", unitsPerBox: "", boxesToOpen: "1" },
+  actionPayload: emptyPayload(),
 });
 
 const emptyForm = () => ({
@@ -65,20 +81,13 @@ const emptyForm = () => ({
   items: [emptyItem()],
 });
 
-function parseActionPayload(raw) {
-  if (!raw) return emptyItem().actionPayload;
-  if (typeof raw === "object") {
-    return {
-      boxProductId: raw.boxProductId ?? "",
-      unitProductId: raw.unitProductId ?? "",
-      unitsPerBox: raw.unitsPerBox ?? "",
-      boxesToOpen: raw.boxesToOpen ?? "1",
-    };
-  }
+function readPayload(raw) {
+  if (!raw) return emptyPayload();
+  if (typeof raw === "object") return { ...emptyPayload(), ...raw };
   try {
-    return parseActionPayload(JSON.parse(raw));
+    return readPayload(JSON.parse(raw));
   } catch {
-    return emptyItem().actionPayload;
+    return emptyPayload();
   }
 }
 
@@ -96,8 +105,8 @@ function planToForm(plan) {
             assignedUserId: it.assignedUserId || "",
             priority: it.priority ?? 0,
             dueDate: it.dueDate || "",
-            actionType: it.actionType === "open_box" ? "open_box" : "none",
-            actionPayload: parseActionPayload(it.actionPayload),
+            actionType: ["open_box", "produce"].includes(it.actionType) ? it.actionType : "none",
+            actionPayload: readPayload(it.actionPayload),
           }))
         : [emptyItem()],
   };
@@ -114,17 +123,17 @@ export default function TareasPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState([]);
 
   const load = async () => {
     setLoading(true);
     try {
+      const mine = await getMyTaskItems({ active: 1 });
+      setMyItems(mine.data || []);
       if (isAdmin) {
         const [p, a] = await Promise.all([getTaskPlans(), getTaskAssignees()]);
         setPlans(p.data || []);
         setAssignees(a.data || []);
-      } else {
-        const r = await getMyTaskItems({ active: 1 });
-        setMyItems(r.data || []);
       }
     } catch (e) {
       void toast?.({
@@ -157,12 +166,28 @@ export default function TareasPage() {
     setEditingPlanId(null);
     setForm(emptyForm());
     setOpenDialog(true);
+    if (CAN_PRODUCE && products.length === 0) {
+      getAllProductsAll()
+        .then((res) => {
+          const list = Array.isArray(res?.data) ? res.data : [];
+          setProducts(list.filter((p) => p?.type === "final" || p?.type === "intermediate"));
+        })
+        .catch(() => setProducts([]));
+    }
   };
 
   const openEdit = (plan) => {
     setEditingPlanId(plan.id);
     setForm(planToForm(plan));
     setOpenDialog(true);
+    if (CAN_PRODUCE && products.length === 0) {
+      getAllProductsAll()
+        .then((res) => {
+          const list = Array.isArray(res?.data) ? res.data : [];
+          setProducts(list.filter((p) => p?.type === "final" || p?.type === "intermediate"));
+        })
+        .catch(() => setProducts([]));
+    }
   };
 
   const closeDialog = () => {
@@ -194,7 +219,12 @@ export default function TareasPage() {
               unitsPerBox: Number(it.actionPayload.unitsPerBox),
               boxesToOpen: Number(it.actionPayload.boxesToOpen || 1),
             }
-          : null,
+          : it.actionType === "produce"
+            ? {
+                productId: Number(it.actionPayload.productId),
+                quantity: Number(it.actionPayload.quantity),
+              }
+            : null,
     })),
   });
 
@@ -230,6 +260,22 @@ export default function TareasPage() {
     } catch (e) {
       void toast?.({
         message: e?.response?.data?.message || "No se pudo publicar el plan.",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onClosePlan = async (planId) => {
+    try {
+      setSaving(true);
+      await closeTaskPlan(planId);
+      void toast?.({ message: "Plan cerrado.", variant: "success" });
+      await load();
+    } catch (e) {
+      void toast?.({
+        message: e?.response?.data?.message || "No se pudo cerrar el plan.",
         variant: "error",
       });
     } finally {
@@ -319,8 +365,19 @@ export default function TareasPage() {
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Stack>
+                ) : r.status === "published" ? (
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Button size="small" disabled={saving} onClick={() => onClosePlan(r.id)}>
+                      Cerrar
+                    </Button>
+                    <IconButton size="small" color="error" disabled={saving} onClick={() => onDeletePlan(r)} title="Eliminar">
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
                 ) : (
-                  "—"
+                  <IconButton size="small" color="error" disabled={saving} onClick={() => onDeletePlan(r)} title="Eliminar">
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
                 ),
             },
           ]}
@@ -330,6 +387,70 @@ export default function TareasPage() {
           defaultRowsPerPage={10}
           loading={loading}
         />
+
+        <Typography variant="h6" fontWeight={700} sx={{ mt: 3, mb: 1 }}>
+          Mis tareas
+        </Typography>
+        {myItemsByPlan.length === 0 ? (
+          <Paper sx={{ p: 2, borderRadius: 2, mb: 2 }}>
+            <Typography color="text.secondary">No tienes tareas activas asignadas.</Typography>
+          </Paper>
+        ) : (
+          <Stack spacing={1.5} sx={{ mb: 2 }}>
+            {myItemsByPlan.map((group) => (
+              <Paper key={`admin-plan-${group.plan?.id || "none"}`} sx={{ p: 1.5, borderRadius: 2 }}>
+                <Typography fontWeight={700}>
+                  {group.plan?.title || "Plan"} ({group.plan?.startDate} → {group.plan?.endDate})
+                </Typography>
+                <Stack spacing={1} sx={{ mt: 1 }}>
+                  {group.items.map((item) => (
+                    <Paper key={`admin-task-${item.id}`} variant="outlined" sx={{ p: 1 }}>
+                      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1} alignItems={{ md: "center" }}>
+                        <Box>
+                          <Typography fontWeight={600}>{item.title}</Typography>
+                          {item.description ? (
+                            <Typography variant="body2" color="text.secondary">
+                              {item.description}
+                            </Typography>
+                          ) : null}
+                        </Box>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Chip size="small" label={statusLabel[item.status] || item.status} color={chipColorByStatus[item.status] || "default"} />
+                          {item.actionType === "open_box" ? (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<PlayArrowIcon />}
+                              onClick={() => onRunOpenBox(item.id)}
+                              disabled={item.status === "done"}
+                            >
+                              Abrir caja
+                            </Button>
+                          ) : null}
+                          {item.actionType !== "produce" ? (
+                            <FormControlLabel
+                              sx={{ m: 0 }}
+                              control={
+                                <Checkbox
+                                  checked={item.status === "done"}
+                                  onChange={() => onMarkStatus(item.id, item.status === "done" ? "pending" : "done")}
+                                />
+                              }
+                              label={item.status === "done" ? "Hecha" : "Marcar hecha"}
+                            />
+                          ) : null}
+                        </Stack>
+                      </Stack>
+                      {item.actionType === "produce" ? (
+                        <TaskProductionCard item={item} onCompleted={() => void load()} />
+                      ) : null}
+                    </Paper>
+                  ))}
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+        )}
 
         <SimpleDialog
           open={openDialog}
@@ -374,7 +495,8 @@ export default function TareasPage() {
                       </Grid>
                       <Grid item xs={12} md={2}>
                         <TextField select fullWidth size="small" label="Acción" value={item.actionType} onChange={(e) => onUpdateItemRow(idx, { actionType: e.target.value })}>
-                          <MenuItem value="none">Solo checklist</MenuItem>
+                          <MenuItem value="none">Checklist</MenuItem>
+                          {CAN_PRODUCE ? <MenuItem value="produce">Producción</MenuItem> : null}
                           <MenuItem value="open_box">Abrir caja</MenuItem>
                         </TextField>
                       </Grid>
@@ -389,6 +511,44 @@ export default function TareasPage() {
                           <DeleteIcon />
                         </IconButton>
                       </Grid>
+
+                      {item.actionType === "produce" ? (
+                        <>
+                          <Grid item xs={12} md={8}>
+                            <Autocomplete
+                              size="small"
+                              options={products}
+                              getOptionLabel={(p) => p?.name || ""}
+                              isOptionEqualToValue={(a, b) => a?.id === b?.id}
+                              value={products.find((p) => String(p.id) === String(item.actionPayload.productId)) || null}
+                              onChange={(_, product) =>
+                                onUpdateItemRow(idx, {
+                                  actionPayload: { ...item.actionPayload, productId: product?.id || "" },
+                                  title: item.title || (product ? `Producir ${product.name}` : item.title),
+                                })
+                              }
+                              renderInput={(params) => (
+                                <TextField {...params} label="Producto a producir" placeholder="Debe tener receta" />
+                              )}
+                            />
+                          </Grid>
+                          <Grid item xs={12} md={4}>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              type="number"
+                              label="Cuántas salen"
+                              value={item.actionPayload.quantity}
+                              onChange={(e) =>
+                                onUpdateItemRow(idx, {
+                                  actionPayload: { ...item.actionPayload, quantity: e.target.value },
+                                })
+                              }
+                              helperText="Unidades de la receta."
+                            />
+                          </Grid>
+                        </>
+                      ) : null}
 
                       {item.actionType === "open_box" ? (
                         <>
@@ -501,7 +661,7 @@ export default function TareasPage() {
               <Stack spacing={1} sx={{ mt: 1 }}>
                 {group.items.map((item) => (
                   <Paper key={`task-item-${item.id}`} variant="outlined" sx={{ p: 1 }}>
-                    <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1}>
+                    <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1} alignItems={{ md: "center" }}>
                       <Box>
                         <Typography fontWeight={600}>{item.title}</Typography>
                         {item.description ? (
@@ -523,16 +683,23 @@ export default function TareasPage() {
                             Abrir caja
                           </Button>
                         ) : null}
-                        <Button
-                          size="small"
-                          variant="contained"
-                          startIcon={<AssignmentTurnedInIcon />}
-                          onClick={() => onMarkStatus(item.id, item.status === "done" ? "pending" : "done")}
-                        >
-                          {item.status === "done" ? "Quitar check" : "Check"}
-                        </Button>
+                        {item.actionType !== "produce" ? (
+                          <FormControlLabel
+                            sx={{ m: 0 }}
+                            control={
+                              <Checkbox
+                                checked={item.status === "done"}
+                                onChange={() => onMarkStatus(item.id, item.status === "done" ? "pending" : "done")}
+                              />
+                            }
+                            label={item.status === "done" ? "Hecha" : "Marcar hecha"}
+                          />
+                        ) : null}
                       </Stack>
                     </Stack>
+                    {item.actionType === "produce" ? (
+                      <TaskProductionCard item={item} onCompleted={() => void load()} />
+                    ) : null}
                   </Paper>
                 ))}
               </Stack>

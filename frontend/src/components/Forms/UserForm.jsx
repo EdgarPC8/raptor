@@ -12,12 +12,18 @@ import {
   FormHelperText,
   FormControlLabel,
   Switch,
+  IconButton,
+  InputAdornment,
 } from "@mui/material";
+import Visibility from "@mui/icons-material/Visibility";
+import VisibilityOff from "@mui/icons-material/VisibilityOff";
 
 import { useRoles } from "../../hooks/useRoles";
 import { useAuth } from "../../context/AuthContext.jsx";
 
-const INTERNAL_ROLE = "Programador";
+const INTERNAL_ROLES = new Set(["Propietario", "Programador"]);
+const PASSWORD_MIN = 8;
+const PASSWORD_HINT = `Mínimo ${PASSWORD_MIN} caracteres`;
 
 const EMPTY_FORM = {
   email: "",
@@ -32,28 +38,36 @@ const EMPTY_FORM = {
   isActive: true,
 };
 
-export default function UsersForm({ onSubmit, initialData }) {
-  const { user } = useAuth();
+export default function UsersForm({
+  onSubmit,
+  initialData,
+  presetRoles = null,
+  isEditing = null,
+}) {
+  const { user, toast } = useAuth();
   const { roles } = useRoles();
   const [form, setForm] = useState(EMPTY_FORM);
+  const [showPass, setShowPass] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const editing = isEditing == null ? Boolean(initialData?.id) : Boolean(isEditing);
 
-  const canManageProgramador = user?.loginRol === INTERNAL_ROLE;
-  const programadorRoleId = useMemo(
-    () => roles?.find((r) => r.name === INTERNAL_ROLE)?.id ?? null,
-    [roles],
-  );
-  const lockedProgramador =
-    !canManageProgramador &&
-    programadorRoleId != null &&
-    (initialData?.roles || []).includes(programadorRoleId);
+  const canManageInternal =
+    user?.loginRol === "Propietario" || user?.loginRol === "Programador";
+  const lockedRoleIds = useMemo(() => {
+    if (canManageInternal) return new Set();
+    const assigned = new Set(initialData?.roles || []);
+    return new Set(
+      (roles || [])
+        .filter((role) => INTERNAL_ROLES.has(role.name) && assigned.has(role.id))
+        .map((role) => role.id),
+    );
+  }, [canManageInternal, roles, initialData]);
 
   const visibleRoles = useMemo(() => {
     const list = roles || [];
-    if (canManageProgramador) return list;
-    return list.filter(
-      (r) => r.name !== INTERNAL_ROLE || (lockedProgramador && r.id === programadorRoleId),
-    );
-  }, [canManageProgramador, roles, lockedProgramador, programadorRoleId]);
+    if (canManageInternal) return list;
+    return list.filter((role) => !INTERNAL_ROLES.has(role.name) || lockedRoleIds.has(role.id));
+  }, [canManageInternal, roles, lockedRoleIds]);
 
   useEffect(() => {
     if (initialData) {
@@ -66,27 +80,34 @@ export default function UsersForm({ onSubmit, initialData }) {
         firstLastName: initialData.firstLastName || "",
         secondLastName: initialData.secondLastName || "",
         password: initialData.password || "",
-        roles: initialData.roles || [],
+        roles: initialData.roles || presetRoles || [],
         isActive: initialData.isActive !== false,
       });
     } else {
-      setForm(EMPTY_FORM);
+      setForm({
+        ...EMPTY_FORM,
+        roles: Array.isArray(presetRoles) ? presetRoles : [],
+      });
     }
-  }, [initialData]);
+  }, [initialData, presetRoles]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    if (name === "password") {
+      const len = String(value || "").length;
+      if (!editing && len > 0 && len < PASSWORD_MIN) {
+        setPasswordError(`Faltan ${PASSWORD_MIN - len} caracteres (mínimo ${PASSWORD_MIN})`);
+      } else {
+        setPasswordError("");
+      }
+    }
   };
 
   const handleRolesChange = (e) => {
     let next = e.target.value;
-    if (
-      lockedProgramador &&
-      programadorRoleId != null &&
-      !next.includes(programadorRoleId)
-    ) {
-      next = [...next, programadorRoleId];
+    if (lockedRoleIds.size && [...lockedRoleIds].some((id) => !next.includes(id))) {
+      next = [...new Set([...next, ...lockedRoleIds])];
     }
     setForm((prev) => ({ ...prev, roles: next }));
   };
@@ -94,13 +115,19 @@ export default function UsersForm({ onSubmit, initialData }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     let payload = form;
-    if (
-      lockedProgramador &&
-      programadorRoleId != null &&
-      !form.roles.includes(programadorRoleId)
-    ) {
-      payload = { ...form, roles: [...form.roles, programadorRoleId] };
+    if (lockedRoleIds.size) {
+      payload = { ...form, roles: [...new Set([...form.roles, ...lockedRoleIds])] };
     }
+    const pwd = String(payload.password || "");
+    if (!editing || pwd) {
+      if (pwd.length < PASSWORD_MIN) {
+        const msg = `La contraseña debe tener al menos ${PASSWORD_MIN} caracteres`;
+        setPasswordError(msg);
+        void toast?.({ message: msg, variant: "warning" });
+        return;
+      }
+    }
+    setPasswordError("");
     onSubmit(payload);
   };
 
@@ -111,34 +138,33 @@ export default function UsersForm({ onSubmit, initialData }) {
           <TextField
             fullWidth
             size="small"
-            label="Email"
+            label="Email (opcional)"
             name="email"
             type="email"
             value={form.email}
             onChange={handleChange}
-            required
           />
         </Grid>
         <Grid item xs={12}>
           <TextField
             fullWidth
             size="small"
-            label="Nombre de usuario"
+            label="Usuario de acceso (login)"
             name="username"
             value={form.username}
             onChange={handleChange}
             required
+            helperText="Con este usuario entra al sistema"
           />
         </Grid>
         <Grid item xs={12}>
           <TextField
             fullWidth
             size="small"
-            label="CI / Cédula de identidad"
+            label="CI / Cédula (opcional)"
             name="ci"
             value={form.ci}
             onChange={handleChange}
-            required
           />
         </Grid>
         <Grid item xs={12} sm={6}>
@@ -202,11 +228,7 @@ export default function UsersForm({ onSubmit, initialData }) {
                         key={id}
                         label={role?.name || id}
                         size="small"
-                        color={
-                          lockedProgramador && id === programadorRoleId
-                            ? "default"
-                            : undefined
-                        }
+                        color={lockedRoleIds.has(id) ? "default" : undefined}
                       />
                     );
                   })}
@@ -217,18 +239,18 @@ export default function UsersForm({ onSubmit, initialData }) {
                 <MenuItem
                   key={c.id}
                   value={c.id}
-                  disabled={lockedProgramador && c.id === programadorRoleId}
+                  disabled={lockedRoleIds.has(c.id)}
                 >
                   {c.name}
-                  {lockedProgramador && c.id === programadorRoleId
-                    ? " (solo Programador puede quitarlo)"
+                  {lockedRoleIds.has(c.id)
+                    ? " (solo Propietario/Programador puede quitarlo)"
                     : ""}
                 </MenuItem>
               ))}
             </Select>
-            {lockedProgramador ? (
+            {lockedRoleIds.size ? (
               <FormHelperText>
-                Como Administrador no puedes quitar el rol Programador de este usuario.
+                Como Administrador no puedes quitar los roles Propietario ni Programador.
               </FormHelperText>
             ) : null}
           </FormControl>
@@ -251,32 +273,42 @@ export default function UsersForm({ onSubmit, initialData }) {
           />
         </Grid>
         <Grid item xs={12}>
-          {!!initialData ? (
-            <TextField
-              fullWidth
-              size="small"
-              label="Nueva Contraseña"
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={handleChange}
-            />
-          ) : (
-            <TextField
-              fullWidth
-              size="small"
-              label="Contraseña"
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={handleChange}
-              required
-            />
-          )}
+          <TextField
+            fullWidth
+            size="small"
+            label={editing ? "Nueva contraseña" : "Contraseña de acceso"}
+            name="password"
+            type={showPass ? "text" : "password"}
+            value={form.password}
+            onChange={handleChange}
+            required={!editing}
+            error={Boolean(passwordError)}
+            helperText={
+              passwordError ||
+              (editing
+                ? `Dejá vacío para no cambiarla. Si la cambiás: ${PASSWORD_HINT.toLowerCase()}.`
+                : PASSWORD_HINT)
+            }
+            inputProps={{ minLength: editing ? undefined : PASSWORD_MIN }}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label={showPass ? "Ocultar contraseña" : "Ver contraseña"}
+                    onClick={() => setShowPass((v) => !v)}
+                    edge="end"
+                    size="small"
+                  >
+                    {showPass ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
         </Grid>
         <Grid item xs={12}>
           <Button type="submit" variant="contained" fullWidth>
-            {initialData ? "Actualizar" : "Registrar"}
+            {editing ? "Actualizar" : "Crear usuario y cuenta"}
           </Button>
         </Grid>
       </Grid>

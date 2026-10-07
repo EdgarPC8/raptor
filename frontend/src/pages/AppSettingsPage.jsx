@@ -38,6 +38,13 @@ import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import BackupOutlinedIcon from "@mui/icons-material/BackupOutlined";
 import KeyboardIcon from "@mui/icons-material/Keyboard";
+import ViewColumnIcon from "@mui/icons-material/ViewColumn";
+import Checkbox from "@mui/material/Checkbox";
+import FormGroup from "@mui/material/FormGroup";
+import Accordion from "@mui/material/Accordion";
+import AccordionSummary from "@mui/material/AccordionSummary";
+import AccordionDetails from "@mui/material/AccordionDetails";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
 import { useSubscriptions } from "../hooks/useSubscriptions.js";
@@ -55,6 +62,10 @@ import { uploadImageRequest, deleteImageRequest } from "../api/imgRequest.js";
 import { buildImageUrl } from "../api/axios.js";
 import AppTimeClockPanel from "../components/AppTimeClockPanel.jsx";
 import NotificationToastSettings from "../components/NotificationToastSettings.jsx";
+import ToastPositionSettings from "../components/ToastPositionSettings.jsx";
+import PasswordSecuritySettings from "../components/PasswordSecuritySettings.jsx";
+import InstallmentLimitSettings from "../components/InstallmentLimitSettings.jsx";
+import LoanPurgeSettings from "../components/LoanPurgeSettings.jsx";
 import SriBillingSettingsPanel from "../components/SriBillingSettingsPanel.jsx";
 import BackupsPage from "./BackupsPage.jsx";
 import ReceiptDetailPreviewDialog from "../components/settings/ReceiptDetailPreviewDialog.jsx";
@@ -76,6 +87,11 @@ import {
   normalizeReceiptDetailSettings,
 } from "../utils/receiptDetailFormat.js";
 import {
+  DB_TABLE_COLUMN_CATALOG,
+  DEFAULT_TABLE_COLUMN_VISIBILITY,
+  normalizeTableColumnVisibility,
+} from "../utils/tableColumnVisibility.js";
+import {
   DEFAULT_THEME_PALETTE,
   normalizeThemePalette,
 } from "../theme/themePalette.js";
@@ -89,7 +105,7 @@ import {
 import { APP_ROUTES } from "../config/appRoutes.js";
 import { APP_ID } from "../config/appInfo.js";
 
-const ALLOWED = new Set(["Administrador", "Programador"]);
+const ALLOWED = new Set(["Administrador", "Propietario", "Programador"]);
 /** Multistock solo en EdDeli (desbloqueado por gestor). Store/Tienda = un local. */
 const MULTI_STOCK_APP = APP_ID === "eddeli";
 
@@ -116,6 +132,15 @@ const SETTINGS_TABS = [
     id: "comprobantes",
     label: "Comprobantes",
     icon: <ReceiptLongOutlinedIcon fontSize="small" />,
+    saveKind: "app",
+  },
+  {
+    // Las 5 tablas anchas (comprobantes POS, ventas, compras, locales, préstamos)
+    // se guardan en BD (app_settings.tableColumnVisibility). El resto de tablas
+    // solo usan localStorage desde el ícono de columnas en cada pantalla.
+    id: "tablas",
+    label: "Tablas",
+    icon: <ViewColumnIcon fontSize="small" />,
     saveKind: "app",
   },
   {
@@ -226,12 +251,13 @@ export default function AppSettingsPage() {
   const { user, toast } = useAuth();
   const { settings, activeApp, loading, reload, setSettings } = useAppSettings();
   const { subscription } = useSubscriptions();
+  const appBlocked = Boolean(subscription?.maintenance || subscription?.updating);
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = resolveTabId(searchParams.get("tab"));
   const visibleTabs = useMemo(
     () =>
       SETTINGS_TABS.filter(
-        (t) => !t.programmerOnly || user?.loginRol === "Programador",
+        (t) => !t.programmerOnly || user?.loginRol === "Propietario" || user?.loginRol === "Programador",
       ),
     [user?.loginRol],
   );
@@ -312,6 +338,7 @@ export default function AppSettingsPage() {
         ordersAllowDeliverStockAdjust: Boolean(settings.ordersAllowDeliverStockAdjust),
         financeAllowAdminCorrections: settings.financeAllowAdminCorrections !== false,
         suggestOpenPackOnPosShortage: Boolean(settings.suggestOpenPackOnPosShortage),
+        productionOpenPackaging: Boolean(settings.productionOpenPackaging),
         cajaAllowCreateProductFromSelect: Boolean(settings.cajaAllowCreateProductFromSelect),
         cajaAllowCreateProductFromScan: Boolean(settings.cajaAllowCreateProductFromScan),
         cajaAllowEditProductFromCart: Boolean(settings.cajaAllowEditProductFromCart),
@@ -325,6 +352,9 @@ export default function AppSettingsPage() {
         notificationsExpiryEnabled: Boolean(settings.notificationsExpiryEnabled),
         receiptDetailSettings: normalizeReceiptDetailSettings(
           settings.receiptDetailSettings || DEFAULT_RECEIPT_DETAIL_SETTINGS,
+        ),
+        tableColumnVisibility: normalizeTableColumnVisibility(
+          settings.tableColumnVisibility || DEFAULT_TABLE_COLUMN_VISIBILITY,
         ),
         themePalette: normalizeThemePalette(
           settings.themePalette || DEFAULT_THEME_PALETTE,
@@ -342,7 +372,7 @@ export default function AppSettingsPage() {
     () =>
       MULTI_STOCK_APP &&
       isFeatureUnlocked(multiStockFeatureStatus, {
-        isProgrammer: user?.loginRol === "Programador",
+        isProgrammer: user?.loginRol === "Propietario" || user?.loginRol === "Programador",
       }),
     [multiStockFeatureStatus, user?.loginRol],
   );
@@ -1043,8 +1073,40 @@ export default function AppSettingsPage() {
               </SettingsSection>
 
               <SettingsSection
+                title="Toast"
+                hint="Esquina o centro donde aparecen los avisos."
+                tourId="config-toast-position"
+              >
+                <ToastPositionSettings />
+              </SettingsSection>
+
+              <SettingsSection
+                title="Acceso"
+                hint="Estas dos opciones empiezan apagadas."
+                tourId="config-password-policy"
+              >
+                <PasswordSecuritySettings />
+              </SettingsSection>
+
+              <SettingsSection
+                title="Cuotas"
+                hint="Tope de plazos en préstamos y de cuotas de crédito."
+                tourId="config-max-installments"
+              >
+                <InstallmentLimitSettings />
+              </SettingsSection>
+
+              <SettingsSection
+                title="Borrar préstamo con cuotas"
+                hint="Apagado. Solo para una equivocación fuerte."
+                tourId="config-loan-purge"
+              >
+                <LoanPurgeSettings />
+              </SettingsSection>
+
+              <SettingsSection
                 title="Notificaciones"
-                hint="Bandeja y toasts abajo a la derecha, por tipo de aviso."
+                hint="Bandeja y toasts por tipo de aviso."
                 tourId="config-notifications"
               >
                 <NotificationToastSettings />
@@ -1312,7 +1374,7 @@ export default function AppSettingsPage() {
               />
               <SettingsRow
                 label="Correcciones financieras (Admin)"
-                description="Permite a Administrador anular cobros/pagos y eliminar pedidos borrando ingresos/gastos vinculados en Finanzas. Programador siempre puede."
+                description="Permite a Administrador anular cobros/pagos y eliminar pedidos borrando ingresos/egresos vinculados en Finanzas. Propietario siempre puede."
                 control={
                   <FormControlLabel
                     sx={{ m: 0 }}
@@ -1329,7 +1391,7 @@ export default function AppSettingsPage() {
               />
               <SettingsRow
                 label="Autocompletar stock"
-                description="Si falta stock al cobrar en caja o al entregar un pedido, permite registrar un ajuste e completar. Solo Admin/Programador."
+                description="Si falta stock al cobrar en caja o al entregar un pedido, permite registrar un ajuste e completar. Solo Admin/Propietario."
                 control={
                   <FormControlLabel
                     sx={{ m: 0 }}
@@ -1341,6 +1403,23 @@ export default function AppSettingsPage() {
                       />
                     }
                     label={form.ordersAllowDeliverStockAdjust ? "Activado" : "Desactivado"}
+                  />
+                }
+              />
+              <SettingsRow
+                label="Abrir empaque en producción"
+                description="Si el insumo genérico no alcanza, Administrador y Propietario pueden abrir un empaque, registrar merma o autocompletar lo que falta. Apagado: no abre nada."
+                control={
+                  <FormControlLabel
+                    sx={{ m: 0 }}
+                    control={
+                      <Switch
+                        size="small"
+                        checked={Boolean(form.productionOpenPackaging)}
+                        onChange={onToggle("productionOpenPackaging")}
+                      />
+                    }
+                    label={form.productionOpenPackaging ? "Activado" : "Desactivado"}
                   />
                 }
               />
@@ -1453,6 +1532,96 @@ export default function AppSettingsPage() {
             </SettingsSection>
           )}
 
+          {tab === "tablas" && (
+            <SettingsSection
+              title="Columnas de tablas"
+              hint="Solo estas 5 tablas anchas se guardan en la BD (app_settings.tableColumnVisibility). El resto de TablePro usa localStorage del navegador. También podés ocultar columnas desde el ícono de columnas en cada tabla."
+              tourId="config-tablas"
+            >
+              <Stack spacing={1}>
+                {DB_TABLE_COLUMN_CATALOG.map((table) => {
+                  const hidden = new Set(
+                    form.tableColumnVisibility?.[table.key]?.hidden || [],
+                  );
+                  return (
+                    <Accordion
+                      key={table.key}
+                      disableGutters
+                      elevation={0}
+                      sx={{
+                        border: 1,
+                        borderColor: "divider",
+                        borderRadius: 1,
+                        "&:before": { display: "none" },
+                      }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box>
+                          <Typography variant="subtitle2" fontWeight={700}>
+                            {table.label}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {table.hint}
+                          </Typography>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ pt: 0 }}>
+                        <FormGroup>
+                          {table.columns.map((col) => {
+                            const locked = Boolean(col.required);
+                            const checked = locked || !hidden.has(col.id);
+                            return (
+                              <FormControlLabel
+                                key={col.id}
+                                control={
+                                  <Checkbox
+                                    size="small"
+                                    checked={checked}
+                                    disabled={locked}
+                                    onChange={(_, visible) => {
+                                      setForm((f) => {
+                                        const current = normalizeTableColumnVisibility(
+                                          f.tableColumnVisibility,
+                                        );
+                                        const nextHidden = new Set(
+                                          current[table.key]?.hidden || [],
+                                        );
+                                        if (visible) nextHidden.delete(col.id);
+                                        else nextHidden.add(col.id);
+                                        return {
+                                          ...f,
+                                          tableColumnVisibility: {
+                                            ...current,
+                                            [table.key]: {
+                                              hidden: [...nextHidden],
+                                            },
+                                          },
+                                        };
+                                      });
+                                    }}
+                                  />
+                                }
+                                label={
+                                  <Typography variant="body2">
+                                    {col.label}
+                                    {locked ? " *" : ""}
+                                  </Typography>
+                                }
+                              />
+                            );
+                          })}
+                        </FormGroup>
+                      </AccordionDetails>
+                    </Accordion>
+                  );
+                })}
+                <Typography variant="caption" color="text.secondary">
+                  * columnas obligatorias (no se pueden ocultar)
+                </Typography>
+              </Stack>
+            </SettingsSection>
+          )}
+
           {tab === "teclado" && (
             <SettingsSection
               title="Atajos de teclado"
@@ -1490,7 +1659,7 @@ export default function AppSettingsPage() {
               </Stack>
               <SettingsRow
                 label="Formato"
-                description="Vale para caja, pedidos y para editar columnas abajo. Cada tamaño tiene su propio layout."
+                description="Vale para caja, pedidos y para las columnas de abajo. Cada tamaño (A4, 80 mm, 55 mm) tiene su orden, y ese orden se usa en factura y en nota de venta."
                 align="flex-start"
                 wide
                 control={
@@ -1571,7 +1740,7 @@ export default function AppSettingsPage() {
 
           {tab === "sri" && <SriBillingSettingsPanel ref={sriPanelRef} />}
 
-          {tab === "backups" && user?.loginRol === "Programador" ? (
+          {tab === "backups" && (user?.loginRol === "Propietario" || user?.loginRol === "Programador") ? (
             <Box data-tour="config-backups">
               <BackupsPage embedded />
             </Box>
@@ -1650,7 +1819,7 @@ export default function AppSettingsPage() {
         onFormatChange={onDefaultPrintFormat}
       />
 
-      {!isBackupsTab ? (
+      {!isBackupsTab && !appBlocked ? (
       <Button
         data-tour="config-save"
         variant="contained"

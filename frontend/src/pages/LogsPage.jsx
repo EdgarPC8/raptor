@@ -1,5 +1,5 @@
 /**
- * Consulta y limpieza de logs HTTP (Admin/Programador).
+ * Consulta y limpieza de logs HTTP (Admin/Propietario).
  */
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
@@ -30,7 +30,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { formatDateTime } from "../helpers/functions.js";
 import { displayLogAction } from "../utils/logActionCatalog.js";
 
-const ALLOWED = new Set(["Programador", "Administrador"]);
+const ALLOWED = new Set(["Programador"]);
 
 function EllipsisCell({ text, maxWidth = 180 }) {
   const value = text == null || text === "" ? "—" : String(text);
@@ -138,11 +138,11 @@ export default function LogsPage() {
     {
       id: "date",
       label: "Fecha",
-      width: 150,
+      width: 175,
       getSortValue: (r) => r.date,
       render: (row) => (
         <Typography variant="body2" noWrap sx={{ maxWidth: 145 }}>
-          {formatDateTime(row.date)}
+          {formatDateTime(row.date, { showSeconds: true })}
         </Typography>
       ),
     },

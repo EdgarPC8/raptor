@@ -1,6 +1,7 @@
 /**
- * Suscripción local (backend de la app). El gestor solo EMPUJA el entitlement;
- * en runtime la app lee su propio backend — el gestor puede estar apagado.
+ * Suscripción local (backend de la app): licencia, features y estados de
+ * módulos/secciones (active / maintenance / planned / hidden) desde el gestor.
+ * Planes comerciales y noticias del periódico siguen en catálogos fijos del frontend.
  */
 import { useCallback, useEffect, useState } from "react";
 import axios from "../api/axios.js";
@@ -33,6 +34,7 @@ const BYPASS_SUBSCRIPTION = {
   subscription: { modules: [] },
   features: [],
   maintenance: false,
+  updating: false,
 };
 
 const CACHE_KEY = `${APP_ID}_entitlement_cache_v2`;
@@ -105,6 +107,7 @@ export const useSubscriptions = () => {
             subscribed: false,
             subscription: null,
             maintenance: false,
+            updating: false,
           },
         );
       }

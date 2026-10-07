@@ -28,6 +28,7 @@ import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import { Link as RouterLink } from "react-router-dom";
 import { APP_ROUTES } from "../../config/appRoutes.js";
 import TablePro from "../../components/Tables/TablePro.jsx";
+import TableColumnVisibilityControl from "../../components/Tables/TableColumnVisibilityControl.jsx";
 import SearchableSelect from "../../components/SearchableSelect.jsx";
 import TourHelpButton from "../../components/TourHelpButton.jsx";
 import PrintFormatDialog from "../../components/saleReceipt/PrintFormatDialog.jsx";
@@ -36,6 +37,7 @@ import { getPosSalesRequest } from "../../api/ordersRequest.js";
 import { fetchSriBillingSettings } from "../../api/sriBillingRequest.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { usePageTour } from "../../hooks/usePageTour.js";
+import { useTableColumnVisibility } from "../../hooks/useTableColumnVisibility.js";
 import {
   COMPROBANTES_POS_TOUR_ID,
   getComprobantesPosTourSteps,
@@ -226,7 +228,7 @@ export default function FacturacionPage() {
     setLoading(true);
     try {
       const [{ data }, sri] = await Promise.all([
-        getPosSalesRequest({ limit: 500 }),
+        getPosSalesRequest({ limit: 5000 }),
         fetchSriBillingSettings().catch(() => null),
       ]);
       setSales(data || []);
@@ -403,6 +405,140 @@ export default function FacturacionPage() {
   const toggleExpand = (row) => {
     setExpandedRowId((prev) => (prev === row.id ? null : row.id));
   };
+
+  // Columnas Comprobantes POS → app_settings.tableColumnVisibility (BD)
+  const columns = useMemo(
+    () => [
+      {
+        id: "expand",
+        label: "",
+        sortable: false,
+        stopRowClick: true,
+        minWidth: 1,
+        cellSx: { width: "1px", px: 0.15 },
+        headerSx: { width: "1px", px: 0.15 },
+        render: (row) => {
+          const open = expandedRowId === row.id;
+          return (
+            <Tooltip title={open ? "Ocultar productos" : "Ver productos"}>
+              <IconButton
+                size="small"
+                color="primary"
+                aria-label={open ? "Ocultar productos" : "Ver productos"}
+                onClick={() => toggleExpand(row)}
+              >
+                {open ? (
+                  <KeyboardArrowUpIcon fontSize="small" />
+                ) : (
+                  <KeyboardArrowDownIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Tooltip>
+          );
+        },
+      },
+      {
+        id: "keyIcon",
+        label: "",
+        sortable: false,
+        minWidth: 1,
+        cellSx: { width: "1px", px: 0.25 },
+        headerSx: { width: "1px", px: 0.25 },
+        render: (row) =>
+          row.hasAccessKey ? (
+            <Tooltip title={row.sri?.accessKey || "Clave acceso SRI"}>
+              <VpnKeyIcon fontSize="small" color="action" />
+            </Tooltip>
+          ) : (
+            "—"
+          ),
+      },
+      {
+        id: "emissionDateLabel",
+        label: "Fecha",
+        ...FIT_COL,
+        getSortValue: (r) => r.dateIso || r.emissionDateLabel || "",
+      },
+      { id: "estabPtoEmi", label: "Estab", ...FIT_COL },
+      {
+        id: "sequentialLabel",
+        label: "Núm.",
+        ...FIT_COL,
+        getSortValue: (r) => Number(r.sri?.sequential || 0),
+      },
+      { id: "customerLabel", label: "Cliente", ...TEXT_COL(140) },
+      { id: "environmentLabel", label: "Amb.", ...FIT_COL },
+      { id: "sellerLabel", label: "Vendedor", ...TEXT_COL(110) },
+      {
+        id: "subtotalLabel",
+        label: "Subtotal",
+        ...MONEY_COL,
+        getSortValue: (r) => Number(r.subtotal || 0),
+      },
+      {
+        id: "iceLabel",
+        label: "ICE",
+        ...MONEY_COL,
+        getSortValue: (r) => Number(r.ice || 0),
+      },
+      {
+        id: "ivaLabel",
+        label: "IVA",
+        ...MONEY_COL,
+        getSortValue: (r) => Number(r.iva || 0),
+      },
+      {
+        id: "totalLabel",
+        label: "Total",
+        ...MONEY_COL,
+        getSortValue: (r) => Number(r.total || 0),
+      },
+      { id: "sriStatusLabel", label: "Estado", ...FIT_COL },
+      { id: "paymentMethodLabel", label: "Forma pago", ...FIT_COL },
+      { id: "paymentStateLabel", label: "Pago", ...FIT_COL },
+      {
+        id: "actions",
+        label: "Acciones",
+        sortable: false,
+        stopRowClick: true,
+        minWidth: 1,
+        cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+        headerSx: { width: "1px", px: 0.25 },
+        render: (row) => (
+          <Stack
+            direction="row"
+            spacing={0}
+            justifyContent="flex-end"
+            data-tour="pos-row-actions"
+          >
+            <Tooltip title="Ver detalle / reporte">
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => setDetailRow(row)}
+              >
+                <VisibilityIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Imprimir comprobante">
+              <IconButton size="small" color="primary" onClick={() => openPrint(row)}>
+                <PrintIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        ),
+      },
+      SPACER_COL,
+    ],
+    [expandedRowId],
+  );
+
+  const {
+    visibleColumns,
+    hiddenIds,
+    requiredIds,
+    toggleColumn,
+  } = useTableColumnVisibility("comprobantesPos", columns);
 
   const { startTour } = usePageTour({
     tourId: COMPROBANTES_POS_TOUR_ID,
@@ -614,128 +750,15 @@ export default function FacturacionPage() {
         rows={filteredRows}
         dense
         tableMaxHeight="calc(100vh - 340px)"
-        columns={[
-          {
-            id: "expand",
-            label: "",
-            sortable: false,
-            stopRowClick: true,
-            minWidth: 1,
-            cellSx: { width: "1px", px: 0.15 },
-            headerSx: { width: "1px", px: 0.15 },
-            render: (row) => {
-              const open = expandedRowId === row.id;
-              return (
-                <Tooltip title={open ? "Ocultar productos" : "Ver productos"}>
-                  <IconButton
-                    size="small"
-                    color="primary"
-                    aria-label={open ? "Ocultar productos" : "Ver productos"}
-                    onClick={() => toggleExpand(row)}
-                  >
-                    {open ? (
-                      <KeyboardArrowUpIcon fontSize="small" />
-                    ) : (
-                      <KeyboardArrowDownIcon fontSize="small" />
-                    )}
-                  </IconButton>
-                </Tooltip>
-              );
-            },
-          },
-          {
-            id: "keyIcon",
-            label: "",
-            sortable: false,
-            minWidth: 1,
-            cellSx: { width: "1px", px: 0.25 },
-            headerSx: { width: "1px", px: 0.25 },
-            render: (row) =>
-              row.hasAccessKey ? (
-                <Tooltip title={row.sri?.accessKey || "Clave acceso SRI"}>
-                  <VpnKeyIcon fontSize="small" color="action" />
-                </Tooltip>
-              ) : (
-                "—"
-              ),
-          },
-          {
-            id: "emissionDateLabel",
-            label: "Fecha",
-            ...FIT_COL,
-            getSortValue: (r) => r.dateIso || r.emissionDateLabel || "",
-          },
-          { id: "estabPtoEmi", label: "Estab", ...FIT_COL },
-          {
-            id: "sequentialLabel",
-            label: "Núm.",
-            ...FIT_COL,
-            getSortValue: (r) => Number(r.sri?.sequential || 0),
-          },
-          { id: "customerLabel", label: "Cliente", ...TEXT_COL(140) },
-          { id: "environmentLabel", label: "Amb.", ...FIT_COL },
-          { id: "sellerLabel", label: "Vendedor", ...TEXT_COL(110) },
-          {
-            id: "subtotalLabel",
-            label: "Subtotal",
-            ...MONEY_COL,
-            getSortValue: (r) => Number(r.subtotal || 0),
-          },
-          {
-            id: "iceLabel",
-            label: "ICE",
-            ...MONEY_COL,
-            getSortValue: (r) => Number(r.ice || 0),
-          },
-          {
-            id: "ivaLabel",
-            label: "IVA",
-            ...MONEY_COL,
-            getSortValue: (r) => Number(r.iva || 0),
-          },
-          {
-            id: "totalLabel",
-            label: "Total",
-            ...MONEY_COL,
-            getSortValue: (r) => Number(r.total || 0),
-          },
-          { id: "sriStatusLabel", label: "Estado", ...FIT_COL },
-          { id: "paymentMethodLabel", label: "Forma pago", ...FIT_COL },
-          { id: "paymentStateLabel", label: "Pago", ...FIT_COL },
-          {
-            id: "print",
-            label: "Acciones",
-            sortable: false,
-            stopRowClick: true,
-            minWidth: 1,
-            cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
-            headerSx: { width: "1px", px: 0.25 },
-            render: (row) => (
-              <Stack
-                direction="row"
-                spacing={0}
-                justifyContent="flex-end"
-                data-tour="pos-row-actions"
-              >
-                <Tooltip title="Ver detalle / reporte">
-                  <IconButton
-                    size="small"
-                    color="primary"
-                    onClick={() => setDetailRow(row)}
-                  >
-                    <VisibilityIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Imprimir comprobante">
-                  <IconButton size="small" color="primary" onClick={() => openPrint(row)}>
-                    <PrintIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Stack>
-            ),
-          },
-          SPACER_COL,
-        ]}
+        columns={visibleColumns}
+        toolbarExtra={
+          <TableColumnVisibilityControl
+            tableKey="comprobantesPos"
+            hiddenIds={hiddenIds}
+            requiredIds={requiredIds}
+            onToggle={toggleColumn}
+          />
+        }
         showSearch
         showPagination
         showIndex={false}

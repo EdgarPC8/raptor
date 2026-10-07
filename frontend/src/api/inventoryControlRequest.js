@@ -235,7 +235,7 @@ export const getProductSalesSummaryRequest = async ({ days = 365 } = {}) => {
   });
 };
 
-/** Ajuste directo de stock/minStock (solo Programador, sin movimiento). */
+/** Ajuste directo de stock/minStock (solo Propietario, sin movimiento). */
 export const patchProductStockRequest = async (id, data) => {
   if (isGuestDataMode()) return guestDenied();
   return await axios.patch(`/inventory/products/${id}/stock`, data, {
@@ -285,7 +285,7 @@ export const deleteMovement = async (movementId) =>
     headers: { Authorization: jwt() },
   });
 
-/** Actualizar fecha de varios movimientos (p. ej. toda una producción) — solo Programador */
+/** Actualizar fecha de varios movimientos (p. ej. toda una producción) — solo Propietario */
 export const updateMovementsDateBatch = async (data) =>
   await axios.put("/inventory/movements/batch/date", data, {
     headers: { Authorization: jwt() },
@@ -320,6 +320,11 @@ export const simulateProduction = async (productId, cantidad) =>
   await axios.post("/inventory/registerProductionIntermediateFromPayload", payload, {
     headers: { Authorization: jwt() },
   });
+  export const anularProduccion = async (opId) =>
+  await axios.post("/inventory/productions/anular", { opId }, {
+    headers: { Authorization: jwt() },
+  });
+
   export const registerProductionFinalFromPayload = async (payload) =>
   await axios.post("/inventory/registerProductionFinalFromPayload", payload, {
     headers: { Authorization: jwt() },
@@ -356,6 +361,18 @@ export const getRecipeCosting = (
     params: { extrasPercent, laborPercent, producedQty, debug },
   });
 };
+
+export const getIngredientPriceAlerts = (productFinalId) =>
+  axios.get(`/inventory/recipes/ingredient-price-alerts/${productFinalId}`, {
+    headers: { Authorization: jwt() },
+  });
+
+export const applyIngredientPriceAlerts = (genericIds) =>
+  axios.post(
+    `/inventory/recipes/ingredient-price-alerts/apply`,
+    { genericIds },
+    { headers: { Authorization: jwt() } },
+  );
 
 
 // Crear receta (uno o varios ingredientes)
@@ -753,3 +770,16 @@ export const getProductStoreStocksRequest = (productId) => {
     headers: { Authorization: jwt() },
   });
 };
+
+
+export const getSupplierAccountsRequest = async (id) =>
+  axios.get(`/inventory/suppliers/${id}/accounts`, { headers: { Authorization: jwt() } });
+
+export const linkSupplierAccountRequest = async (id, accountId) =>
+  axios.post(`/inventory/suppliers/${id}/accounts`, { accountId }, { headers: { Authorization: jwt() } });
+
+export const unlinkSupplierAccountRequest = async (id, accountId) =>
+  axios.delete(`/inventory/suppliers/${id}/accounts/${accountId}`, { headers: { Authorization: jwt() } });
+
+export const generateSupplierPeerSecretRequest = async (id) =>
+  axios.post(`/inventory/suppliers/${id}/peer-secret`, {}, { headers: { Authorization: jwt() } });

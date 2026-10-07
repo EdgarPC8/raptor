@@ -51,44 +51,53 @@ export const makeDefaultLayer = ({ type, groupId }) => {
     locked: false,
   };
 
-// editorActions.js  (solo cambia el bloque type === "text")
-if (type === "text") {
-  return {
-    ...base,
-    type: "text",
-    x: 0,
-    y: 0,
-    w: 600,
-    h: 80,
-    zIndex: 100,
-    props: {
-      text: "NUEVO TEXTO",
+  // editorActions.js  (solo cambia el bloque type === "text")
+  if (type === "text") {
+    return {
+      ...base,
+      type: "text",
+      x: 0,
+      y: 0,
+      w: 600,
+      h: 80,
+      zIndex: 100,
+      props: {
+        text: "NUEVO TEXTO",
+        fontFamily: "Inter, system-ui, Arial",
+        fontSize: 48,
+        fontWeight: 800,
+        color: "#1A1A1A",
+        align: "left",
+        letterSpacing: 0,
+        lineHeight: 1.05,
+        stroke: "#D4AF37",
+        strokeWidth: 0,
+        shadowColor: "rgba(0,0,0,0.45)",
+        shadowBlur: 0,
+        shadowOffsetX: 0,
+        shadowOffsetY: 0,
+      },
+      bind: null,
+    };
+  }
 
-      // tipografías
-      fontFamily: "Inter, system-ui, Arial",
-      fontSize: 48,
-      fontWeight: 800,
-      color: "#1A1A1A",
-      align: "left",
-
-      // NUEVO (no rompe nada)
-      letterSpacing: 0,      // px
-      lineHeight: 1.05,      // relativo
-
-      // borde (para “título dorado”)
-      stroke: "#D4AF37",
-      strokeWidth: 0,        // 0 = sin borde
-
-      // sombra/glow
-      shadowColor: "rgba(0,0,0,0.45)",
-      shadowBlur: 0,
-      shadowOffsetX: 0,
-      shadowOffsetY: 0,
-    },
-    bind: null,
-  };
-}
-
+  if (type === "svg") {
+    return {
+      ...base,
+      type: "svg",
+      x: 0,
+      y: 0,
+      w: 1920,
+      h: 1080,
+      zIndex: 100,
+      props: {
+        src: "",
+        fit: "contain",
+        borderRadius: 0,
+      },
+      bind: null,
+    };
+  }
 
   if (type === "image") {
     return {
@@ -96,13 +105,13 @@ if (type === "text") {
       type: "image",
       x: 0,
       y: 0,
-      w: 500,
-      h: 500,
+      w: 1920,
+      h: 1080,
       zIndex: 100,
       props: {
         src: img(mediaStoragePath("ads/placeholders/no_image.png")),
-        fit: "cover",
-        borderRadius: 20,
+        fit: "contain",
+        borderRadius: 0,
       },
       bind: null,
     };
@@ -119,4 +128,13 @@ if (type === "text") {
     props: { fill: "rgba(0,0,0,0.35)", borderRadius: 18 },
     bind: null,
   };
+};
+
+/** Capas con archivo gráfico (raster o vector). */
+export const isMediaLayerType = (type) => type === "image" || type === "svg";
+
+export const isSvgFile = (file) => {
+  if (!file) return false;
+  const name = String(file.name || "").toLowerCase();
+  return file.type === "image/svg+xml" || name.endsWith(".svg");
 };

@@ -15,9 +15,34 @@ export const isNonEmptyString = (v) =>
 
 export const getByPath = (obj, path) => {
   try {
-    return String(path || "")
+    const segments = String(path || "")
       .split(".")
-      .reduce((acc, k) => acc?.[k], obj);
+      .filter((segment) => segment !== "");
+
+    if (!segments.length) return undefined;
+
+    let current = obj;
+
+    for (const segment of segments) {
+      if (current == null) return undefined;
+
+      if (Array.isArray(current)) {
+        if (segment === "*" || segment === "[]") {
+          return current;
+        }
+
+        const mapped = current
+          .map((item) => (item && typeof item === "object" ? item[segment] : undefined))
+          .filter((value) => value !== undefined);
+
+        current = mapped.length <= 1 ? mapped[0] : mapped;
+        continue;
+      }
+
+      current = current?.[segment];
+    }
+
+    return current;
   } catch {
     return undefined;
   }
@@ -54,4 +79,38 @@ export const resolveImageUrl = (value, { base = pathImg, prefix = "" } = {}) => 
   if (isNonEmptyString(prefix)) return joinUrl(prefix, v);
 
   return joinUrl(baseClean, v);
+};
+
+export const serializeBoundValue = (value) => {
+  if (value === undefined || value === null) return "";
+
+  if (Array.isArray(value)) {
+    const pieces = value
+      .flatMap((item) => {
+        const normalized = serializeBoundValue(item);
+        return normalized === "" ? [] : [normalized];
+      })
+      .filter((item) => item !== "");
+
+    return pieces.join(", ");
+  }
+
+  if (typeof value === "object") {
+    const candidates = [
+      value.id,
+      value.name,
+      value.label,
+      value.displayName,
+      value.title,
+      value.sku,
+      value.barcode,
+      value.value,
+      value.code,
+    ].filter((item) => item !== undefined && item !== null && String(item).trim() !== "");
+
+    if (candidates.length) return String(candidates[0]);
+    return "";
+  }
+
+  return String(value);
 };

@@ -1,10 +1,11 @@
-import axios, { jwt } from "./axios.js";
+/**
+ * Noticias del periódico — catálogo fijo en código (appNewsCatalog.js).
+ * Ya no se pide al backend ni se sincroniza desde el gestor.
+ */
 import { isGuestDataMode, guestFrom } from "../mocks/guest/guestApi.js";
+import { APP_NEWS_CATALOG } from "../config/appNewsCatalog.js";
 
-/** Noticias locales sincronizadas desde Raptor Solutions. */
 export const getNewsRequest = async () => {
   if (isGuestDataMode()) return guestFrom("news");
-  return axios.get("/news", {
-    headers: { Authorization: jwt() },
-  });
+  return { data: APP_NEWS_CATALOG };
 };

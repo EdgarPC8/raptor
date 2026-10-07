@@ -43,6 +43,8 @@ export const EMPTY_SUPPLIER_FORM = {
   paymentTermDays: "",
   preferredPaymentMethod: "",
   notes: "",
+  remoteApp: "",
+  accountIdToLink: "",
 };
 
 export function supplierToForm(supplier) {
@@ -73,6 +75,8 @@ export function supplierToForm(supplier) {
         : "",
     preferredPaymentMethod: supplier.preferredPaymentMethod || "",
     notes: supplier.notes || "",
+    remoteApp: supplier.remoteApp || "",
+    accountIdToLink: "",
   };
 }
 
@@ -109,6 +113,7 @@ export function formToSupplierPayload(form) {
     paymentTermDays,
     preferredPaymentMethod: trimOrNull(form.preferredPaymentMethod),
     notes: trimOrNull(form.notes),
+    remoteApp: trimOrNull(form.remoteApp),
   };
 }
 

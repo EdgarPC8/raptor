@@ -79,7 +79,7 @@ function lineTotal(it) {
  * Resumen pendiente proveedores:
  * - Por pedidos: accordion + Abonar este pedido (como clientes)
  * - Por producto: mismo producto+precio agrupado, columna Pedidos
- * - Programador edita líneas dentro del pedido
+ * - Propietario edita líneas dentro del pedido
  */
 export default function SupplierPendingSummaryPanel({
   debtTotal,

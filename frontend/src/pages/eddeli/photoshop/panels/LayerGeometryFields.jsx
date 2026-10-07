@@ -68,7 +68,7 @@ export default function LayerGeometryFields({ layer, canvas, onPatch }) {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.75 }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.25 }}>
         <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 700 }}>
           Posición y tamaño
         </Typography>
@@ -87,6 +87,9 @@ export default function LayerGeometryFields({ layer, canvas, onPatch }) {
           </ToggleButton>
         </ToggleButtonGroup>
       </Stack>
+      <Typography sx={{ fontSize: 10, color: "rgba(255,255,255,0.45)", mb: 0.75 }}>
+        Sin arrastre: editá X/Y/Ancho/Alto acá
+      </Typography>
 
       <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
         <TextField

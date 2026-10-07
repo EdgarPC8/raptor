@@ -67,6 +67,14 @@ export const RECEIPT_COLUMN_META = {
     required: true,
     docTypes: ["nota_venta"],
   },
+  iva: {
+    id: "iva",
+    label: "IVA",
+    headerFactura: "IVA",
+    headerNota: "IVA",
+    align: "right",
+    required: false,
+  },
 };
 
 const FACTURA_A4_DEFAULT = [
@@ -76,6 +84,7 @@ const FACTURA_A4_DEFAULT = [
   { id: "unitPrice", visible: true, widthPct: 15 },
   { id: "discount", visible: true, widthPct: 8 },
   { id: "subtotal", visible: true, widthPct: 17 },
+  { id: "iva", visible: false, widthPct: 10 },
 ];
 
 const FACTURA_TICKET_DEFAULT = [
@@ -84,6 +93,7 @@ const FACTURA_TICKET_DEFAULT = [
   { id: "unitPrice", visible: true, widthPct: 18 },
   { id: "discount", visible: true, widthPct: 12 },
   { id: "subtotal", visible: true, widthPct: 18 },
+  { id: "iva", visible: false, widthPct: 10 },
 ];
 
 const NOTA_A4_DEFAULT = [
@@ -93,6 +103,7 @@ const NOTA_A4_DEFAULT = [
   { id: "unitPrice", visible: true, widthPct: 14 },
   { id: "discount", visible: false, widthPct: 10 },
   { id: "total", visible: true, widthPct: 14 },
+  { id: "iva", visible: false, widthPct: 10 },
 ];
 
 const NOTA_TICKET_DEFAULT = [
@@ -100,6 +111,7 @@ const NOTA_TICKET_DEFAULT = [
   { id: "qty", visible: true, widthPct: 12 },
   { id: "unitPrice", visible: true, widthPct: 24 },
   { id: "total", visible: true, widthPct: 24 },
+  { id: "iva", visible: false, widthPct: 10 },
 ];
 
 /** Layouts guardados en receiptDetailSettings.tableLayouts */
@@ -121,6 +133,7 @@ export const DEFAULT_RECEIPT_TABLE_LAYOUTS = {
     { id: "unitPrice", visible: true, widthPct: 18 },
     { id: "discount", visible: true, widthPct: 12 },
     { id: "subtotal", visible: true, widthPct: 18 },
+    { id: "iva", visible: false, widthPct: 10 },
   ],
   nota_a4: NOTA_A4_DEFAULT,
   nota_ticket80: NOTA_TICKET_DEFAULT.map((c) => ({ ...c })),
@@ -129,15 +142,40 @@ export const DEFAULT_RECEIPT_TABLE_LAYOUTS = {
     { id: "qty", visible: true, widthPct: 14 },
     { id: "unitPrice", visible: true, widthPct: 24 },
     { id: "total", visible: true, widthPct: 24 },
+    { id: "iva", visible: false, widthPct: 10 },
   ],
 };
 
+function paperKey(format) {
+  const fmt = normalizePrintFormat(format, "a4");
+  if (fmt === "ticket55") return "ticket55";
+  if (fmt === "ticket80") return "ticket80";
+  return "a4";
+}
+
 export function receiptTableLayoutKey(documentType, format) {
   const isFactura = String(documentType || "").toLowerCase() === "factura";
-  const fmt = normalizePrintFormat(format, "a4");
-  const paper =
-    fmt === "ticket55" ? "ticket55" : fmt === "ticket80" ? "ticket80" : "a4";
-  return `${isFactura ? "factura" : "nota"}_${paper}`;
+  return `${isFactura ? "factura" : "nota"}_${paperKey(format)}`;
+}
+
+/**
+ * Misma fila de columnas para factura y nota.
+ * En la nota, la columna Subtotal de la factura pasa a ser Total.
+ */
+export function mirrorReceiptColumns(cols, targetDoc) {
+  const isFactura = String(targetDoc || "").toLowerCase() === "factura";
+  const keep = isFactura ? "subtotal" : "total";
+  const drop = isFactura ? "total" : "subtotal";
+  const out = [];
+  const seen = new Set();
+  for (const col of cols || []) {
+    let id = String(col?.id || "");
+    if (id === drop) id = keep;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ ...col, id });
+  }
+  return out;
 }
 
 function allowedIdsForDoc(documentType) {
@@ -290,6 +328,22 @@ export function normalizeReceiptTableLayouts(raw) {
 }
 
 /**
+ * Columnas del tamaño (A4 / 80 / 55) según la factura.
+ * Nota de venta, comprobante y consumidor final usan ese mismo orden y ancho.
+ */
+export function layoutColumnsForDocument(layouts, documentType, format) {
+  const paper = paperKey(format);
+  const facturaCols =
+    layouts?.[`factura_${paper}`] || defaultColsForKey(`factura_${paper}`);
+  const isFactura = String(documentType || "").toLowerCase() === "factura";
+  if (isFactura) return facturaCols.map((c) => ({ ...c }));
+  return normalizeReceiptTableColumns(
+    mirrorReceiptColumns(facturaCols, "nota_venta"),
+    `nota_${paper}`,
+  );
+}
+
+/**
  * Columnas visibles listas para render (con label, align, width%).
  */
 export function resolveReceiptTableColumns(settingsOrLayouts, documentType, format) {
@@ -297,8 +351,7 @@ export function resolveReceiptTableColumns(settingsOrLayouts, documentType, form
     settingsOrLayouts?.tableLayouts != null
       ? normalizeReceiptTableLayouts(settingsOrLayouts.tableLayouts)
       : normalizeReceiptTableLayouts(settingsOrLayouts);
-  const key = receiptTableLayoutKey(documentType, format);
-  const cols = layouts[key] || defaultColsForKey(key);
+  const cols = layoutColumnsForDocument(layouts, documentType, format);
   const isFactura = String(documentType || "").toLowerCase() === "factura";
   const ticket = isTicketFormat(format);
   return cols
@@ -361,6 +414,8 @@ export function receiptColumnCellValue(colId, item, index, formatters = {}) {
       return money(item?.discount || 0);
     case "subtotal":
       return money(item?.subtotal ?? item?.lineTotal);
+    case "iva":
+      return money(item?.iva || 0);
     case "total":
       return money(item?.lineTotal ?? item?.subtotal);
     default:

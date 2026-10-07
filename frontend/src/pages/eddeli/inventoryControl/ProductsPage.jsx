@@ -60,6 +60,13 @@ import { useAppSettings } from "../../../context/AppSettingsContext.jsx";
 import { usePageTour } from "../../../hooks/usePageTour.js";
 import { PRODUCTOS_TOUR_ID, getProductosTourSteps } from "../../../tours/productosTour.js";
 
+function formatStoredPrice(value) {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return "—";
+  if (n !== 0 && Math.abs(n) < 0.01) return `$${n.toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}`;
+  return `$${n.toFixed(2)}`;
+}
+
 function ProductsPage() {
   const { activeApp } = useAppSettings();
   const multiStockEnabled = activeApp?.multiStockEnabled !== false;
@@ -290,7 +297,7 @@ function ProductsPage() {
       label: "P. proveedor",
       id: "supplierPrice",
       width: 90,
-      render: (row) => `$${Number(row.supplierPrice ?? 0).toFixed(2)}`,
+      render: (row) => formatStoredPrice(row.supplierPrice),
     },
     {
       label: "P. distribuidor",
@@ -302,7 +309,7 @@ function ProductsPage() {
       label: "P. venta",
       id: "price",
       width: 80,
-      render: (row) => `$${Number(row.price ?? 0).toFixed(2)}`,
+      render: (row) => formatStoredPrice(row.price),
     },
     {
       label: multiStockEnabled ? "Stock (suma)" : "Stock",

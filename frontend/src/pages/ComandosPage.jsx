@@ -1,4 +1,4 @@
-/** Comandos admin: backup y recarga BD. Solo Programador. */
+/** Comandos: backup y recarga BD. Solo Programador (módulo Desarrollador). */
 import { useEffect, useRef, useState } from "react";
 import {
   Card,

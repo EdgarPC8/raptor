@@ -16,9 +16,22 @@ import {
   TableHead,
   TableRow,
   Chip,
+  Badge,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
-import { Edit, Delete, RestaurantMenu } from "@mui/icons-material";
+import { keyframes } from "@mui/system";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Edit,
+  Delete,
+  RestaurantMenu,
+  NotificationsActive,
+  PriceChange,
+} from "@mui/icons-material";
 
 import TablePro from "../../../components/Tables/TablePro";
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
@@ -30,9 +43,11 @@ import {
   getRecipeByProduct,
   deleteRecipeRequest,
   getRecipeCosting,
+  applyIngredientPriceAlerts,
 } from "../../../api/inventoryControlRequest";
 import CostingAccordionTable from "./components/CostingAccordionTable";
 import SearchableSelect from "../../../components/SearchableSelect";
+import { productIsRecipe, productIsSellable } from "../../../utils/productRoleFlags.js";
 
 const fmt = (n, d = 2) =>
   typeof n === "number" && Number.isFinite(n) ? n.toFixed(d) : "—";
@@ -40,10 +55,146 @@ const fmt = (n, d = 2) =>
 const fmtMoney = (n, d = 2) =>
   typeof n === "number" && Number.isFinite(n) ? `$${n.toFixed(d)}` : "—";
 
+const fmtCostUnit = (n, unitLabel = "/g") => {
+  if (!(typeof n === "number" && Number.isFinite(n))) return "—";
+  const digits = unitLabel === "/u" ? 4 : 6;
+  return `$${n.toFixed(digits)}${unitLabel}`;
+};
+
+const alertBlink = keyframes`
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.45); }
+  50% { opacity: 0.55; box-shadow: 0 0 0 8px rgba(211, 47, 47, 0); }
+`;
+
+function asProductList(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.products)) return data.products;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.rows)) return data.rows;
+  return [];
+}
+
+/** Productos que pueden tener receta (fabricables / finales / intermedios). */
+function canHaveRecipe(p) {
+  if (!p) return false;
+  if (productIsRecipe(p)) return true;
+  if (p.type === "final" || p.type === "intermediate") return true;
+  // Vendible que no es solo empaque enlazado (legado)
+  if (productIsSellable(p) && !p.genericProductId) return true;
+  return false;
+}
+
 function componentTypeLabel(type) {
   if (type === "intermediate") return "Intermedio";
   if (type === "raw") return "Insumo";
+  if (type === "final") return "Final";
   return type || "—";
+}
+
+function statusLabel(status) {
+  if (status === "outdated") return "Desactualizado";
+  if (status === "up_to_date") return "Al día";
+  if (status === "no_purchase") return "Sin compra de empaque";
+  if (status === "no_link") return "Sin empaque enlazado";
+  return status || "—";
+}
+
+function yieldOfPack(qty, unitLabel) {
+  const n = Number(qty);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  const shown = Number.isInteger(n) ? String(n) : n.toFixed(2);
+  if (unitLabel === "/u") return `${shown} unidades`;
+  if (unitLabel === "/ml") return `${shown} ml`;
+  return `${shown} g`;
+}
+
+function purchaseDateLabel(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("es-EC", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function PriceAlertsList({ alerts, emptyHint }) {
+  if (!alerts?.length) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        {emptyHint || "No hay insumos con precio pendiente de actualizar."}
+      </Typography>
+    );
+  }
+  return (
+    <Stack spacing={1.5}>
+      {alerts.map((a) => {
+        const yieldText = yieldOfPack(a.qtyIntoGeneric, a.unitLabel);
+        const when = purchaseDateLabel(a.purchaseAt);
+        return (
+          <Paper key={a.genericId} variant="outlined" sx={{ p: 1.5, borderRadius: 1.5 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+              <Typography variant="subtitle2">{a.genericName}</Typography>
+              <Chip
+                size="small"
+                color={
+                  a.status === "outdated"
+                    ? "warning"
+                    : a.status === "up_to_date"
+                      ? "success"
+                      : "default"
+                }
+                label={statusLabel(a.status)}
+              />
+            </Stack>
+            {a.proposedCost != null && (
+              <Typography variant="body2" fontWeight={800} sx={{ mt: 0.75 }}>
+                Precio sugerido: {fmtCostUnit(a.proposedCost, a.unitLabel)}
+              </Typography>
+            )}
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+              {a.presentationName
+                ? `Referencia: ${a.presentationName}${
+                    Number(a.linkedCount) > 1 ? " · compra más reciente" : ""
+                  }`
+                : "Sin empaque enlazado"}
+            </Typography>
+            {a.presentationName && a.packUnitPrice != null && (
+              <Typography variant="caption" color="text.secondary" display="block">
+                Última compra: {fmtMoney(a.packUnitPrice, 2)}
+                {when ? ` el ${when}` : ""}
+                {yieldText ? ` · rinde ${yieldText}` : ""}
+              </Typography>
+            )}
+            <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap", gap: 0.5 }}>
+              <Chip
+                size="small"
+                label={`Actual: ${fmtCostUnit(a.currentCost, a.unitLabel)}`}
+                variant="outlined"
+              />
+              {a.proposedCost != null ? (
+                <Chip
+                  size="small"
+                  color={a.differs ? (a.delta > 0 ? "warning" : "success") : "default"}
+                  label={`En el insumo: ${fmtCostUnit(a.proposedCost, a.unitLabel)}`}
+                />
+              ) : (
+                <Chip size="small" variant="outlined" label="Sin precio de compra" />
+              )}
+              {a.differs && (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={
+                    a.delta > 0
+                      ? `+${fmtCostUnit(a.delta, a.unitLabel)}`
+                      : fmtCostUnit(a.delta, a.unitLabel)
+                  }
+                />
+              )}
+            </Stack>
+          </Paper>
+        );
+      })}
+    </Stack>
+  );
 }
 
 function RecipePage() {
@@ -62,6 +213,15 @@ function RecipePage() {
   const [costTreeData, setCostTreeData] = useState(null);
   const [loadingCost, setLoadingCost] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+
+  const [priceAlerts, setPriceAlerts] = useState([]);
+  const [priceComparisons, setPriceComparisons] = useState([]);
+  const [priceAlertModalOpen, setPriceAlertModalOpen] = useState(false);
+  const [priceAlertDetailOpen, setPriceAlertDetailOpen] = useState(false);
+  const [applyingPrices, setApplyingPrices] = useState(false);
+  const dismissedAlertsRef = useRef(new Set());
+  const lastOfferedProductRef = useRef("");
 
   const [uiParams, setUiParams] = useState({
     extrasPercent: 20,
@@ -78,8 +238,27 @@ function RecipePage() {
   const handleDialogUser = () => setOpenDialog(!openDialog);
 
   const fetchProducts = async () => {
-    const { data } = await getAllProductsAll();
-    setProducts(data.filter((p) => p.type === "final" || p.type === "intermediate"));
+    setLoadingProducts(true);
+    try {
+      const { data } = await getAllProductsAll();
+      const list = asProductList(data).filter(canHaveRecipe);
+      setProducts(list);
+      if (!list.length) {
+        toast?.({
+          message: "No hay productos para armar receta (finales / intermedios).",
+          variant: "warning",
+        });
+      }
+    } catch (e) {
+      console.error("RecipePage fetchProducts:", e);
+      setProducts([]);
+      toast?.({
+        message: e?.response?.data?.message || "No se pudieron cargar los productos",
+        variant: "error",
+      });
+    } finally {
+      setLoadingProducts(false);
+    }
   };
 
   const fetchRecipe = async (productId) => {
@@ -92,7 +271,7 @@ function RecipePage() {
     }
   };
 
-  const fetchCostingData = async (productId) => {
+  const fetchCostingData = async (productId, { offerModal = true } = {}) => {
     if (!productId) return;
     try {
       setLoadingCost(true);
@@ -104,10 +283,62 @@ function RecipePage() {
       const { data } = await getRecipeCosting(productId, params);
       setCostTreeData(data);
       setCostSummary(data.summary || null);
+      const alerts = Array.isArray(data.ingredientPriceAlerts)
+        ? data.ingredientPriceAlerts
+        : [];
+      const comparisons = Array.isArray(data.ingredientPriceComparisons)
+        ? data.ingredientPriceComparisons
+        : alerts;
+      setPriceAlerts(alerts);
+      setPriceComparisons(comparisons);
+      const dismissKey = String(productId);
+      if (
+        offerModal &&
+        alerts.length > 0 &&
+        !dismissedAlertsRef.current.has(dismissKey)
+      ) {
+        setPriceAlertModalOpen(true);
+      }
     } catch {
       toast({ message: "Error al calcular el costeo", variant: "error" });
+      setPriceAlerts([]);
+      setPriceComparisons([]);
     } finally {
       setLoadingCost(false);
+    }
+  };
+
+  const dismissPriceAlerts = () => {
+    if (selectedProduct) {
+      dismissedAlertsRef.current.add(String(selectedProduct));
+    }
+    setPriceAlertModalOpen(false);
+  };
+
+  const applyPriceUpdates = async (ids) => {
+    const genericIds = (ids || priceAlerts.map((a) => a.genericId)).filter(Boolean);
+    if (!genericIds.length) return;
+    setApplyingPrices(true);
+    try {
+      const { data } = await applyIngredientPriceAlerts(genericIds);
+      toast?.({
+        message: data?.message || "Precios de insumos actualizados",
+        variant: "success",
+      });
+      setPriceAlertModalOpen(false);
+      setPriceAlertDetailOpen(false);
+      if (selectedProduct) {
+        dismissedAlertsRef.current.delete(String(selectedProduct));
+        await fetchCostingData(selectedProduct, { offerModal: false });
+      }
+    } catch (e) {
+      toast?.({
+        message:
+          e?.response?.data?.message || "No se pudieron actualizar los precios",
+        variant: "error",
+      });
+    } finally {
+      setApplyingPrices(false);
     }
   };
 
@@ -117,7 +348,7 @@ function RecipePage() {
       reload: async () => {
         const { data } = await getRecipeByProduct(selectedProduct);
         setRecipe(data || []);
-        fetchCostingData(selectedProduct);
+        fetchCostingData(selectedProduct, { offerModal: false });
       },
       onClose: handleDialog,
     });
@@ -229,14 +460,25 @@ function RecipePage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedProduct) return;
-    setUiParams((p) => ({ ...p, producedQty: 0 }));
+    if (!selectedProduct) {
+      setRecipe([]);
+      setCostSummary(null);
+      setCostTreeData(null);
+      setPriceAlerts([]);
+      setPriceComparisons([]);
+      setPriceAlertModalOpen(false);
+      lastOfferedProductRef.current = "";
+      return;
+    }
+    fetchRecipe(selectedProduct);
   }, [selectedProduct]);
 
   useEffect(() => {
     if (!selectedProduct) return;
-    fetchRecipe(selectedProduct);
-    fetchCostingData(selectedProduct);
+    const key = String(selectedProduct);
+    const isNewProduct = lastOfferedProductRef.current !== key;
+    if (isNewProduct) lastOfferedProductRef.current = key;
+    fetchCostingData(selectedProduct, { offerModal: isNewProduct });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProduct, uiParams.extrasPercent, uiParams.laborPercent, uiParams.producedQty]);
 
@@ -256,7 +498,7 @@ function RecipePage() {
           onClose={() => {
             handleDialogUser();
             fetchRecipe(selectedProduct);
-            fetchCostingData(selectedProduct);
+            fetchCostingData(selectedProduct, { offerModal: false });
           }}
           isEditing={isEditing}
           datos={datos}
@@ -265,15 +507,153 @@ function RecipePage() {
         />
       </SimpleDialog>
 
+      <Dialog
+        open={priceAlertModalOpen}
+        onClose={dismissPriceAlerts}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <PriceChange color="warning" />
+          Actualizar precios de insumos
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            El precio por gramo sale de la última compra del empaque enlazado. Al
+            actualizar, ese valor se guarda en el costo y en el precio del insumo genérico.
+          </Typography>
+          <PriceAlertsList alerts={priceAlerts} />
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5, gap: 1, flexWrap: "wrap" }}>
+          <Button onClick={dismissPriceAlerts} disabled={applyingPrices}>
+            Ahora no
+          </Button>
+          <Button
+            onClick={() => {
+              setPriceAlertModalOpen(false);
+              setPriceAlertDetailOpen(true);
+            }}
+            disabled={applyingPrices}
+          >
+            Ver todos
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => applyPriceUpdates()}
+            disabled={applyingPrices || !priceAlerts.length}
+            startIcon={
+              applyingPrices ? <CircularProgress size={16} color="inherit" /> : null
+            }
+          >
+            Actualizar todos
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={priceAlertDetailOpen}
+        onClose={() => setPriceAlertDetailOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Precios de insumos vs última compra</DialogTitle>
+        <DialogContent dividers>
+          {priceAlerts.length > 0 && (
+            <Typography variant="body2" color="warning.main" sx={{ mb: 1.5 }}>
+              {priceAlerts.length} pendiente(s) de actualizar.
+            </Typography>
+          )}
+          <PriceAlertsList
+            alerts={priceComparisons}
+            emptyHint="Esta receta no tiene insumos genéricos enlazados a empaque, o aún no hay compras."
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5, gap: 1 }}>
+          <Button onClick={() => setPriceAlertDetailOpen(false)} disabled={applyingPrices}>
+            Cerrar
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => applyPriceUpdates()}
+            disabled={applyingPrices || !priceAlerts.length}
+            startIcon={
+              applyingPrices ? <CircularProgress size={16} color="inherit" /> : null
+            }
+          >
+            Actualizar pendientes
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Grid container spacing={2}>
         <Grid item xs={12} mt={2}>
-          <SearchableSelect
-            label="Producto (final o intermedio)"
-            items={products}
-            value={selectedProduct}
-            productMeta
-            onChange={(val) => setSelectedProduct(val)}
-          />
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <SearchableSelect
+                label="Producto (final o intermedio)"
+                items={products}
+                value={selectedProduct}
+                productMeta
+                loading={loadingProducts}
+                onChange={(val) => {
+                  setSelectedProduct(val);
+                  setUiParams((p) => ({ ...p, producedQty: 0 }));
+                  setPriceAlerts([]);
+                  setPriceComparisons([]);
+                  setPriceAlertModalOpen(false);
+                }}
+              />
+            </Box>
+            {selectedProduct && (
+              <Tooltip
+                title={
+                  priceAlerts.length > 0
+                    ? "Hay insumos con precio distinto a la última compra"
+                    : "Ver precios de insumos vs última compra"
+                }
+              >
+                <Badge
+                  badgeContent={priceAlerts.length || null}
+                  color="error"
+                  overlap="circular"
+                >
+                  <IconButton
+                    color={priceAlerts.length > 0 ? "warning" : "default"}
+                    onClick={() =>
+                      priceAlerts.length > 0
+                        ? setPriceAlertModalOpen(true)
+                        : setPriceAlertDetailOpen(true)
+                    }
+                    sx={{
+                      mt: 0.5,
+                      ...(priceAlerts.length > 0
+                        ? {
+                            animation: `${alertBlink} 1.2s ease-in-out infinite`,
+                            bgcolor: "warning.light",
+                            "&:hover": {
+                              bgcolor: "warning.main",
+                              color: "common.white",
+                            },
+                          }
+                        : {
+                            bgcolor: "action.hover",
+                          }),
+                    }}
+                    aria-label="Precios de insumos"
+                  >
+                    <NotificationsActive />
+                  </IconButton>
+                </Badge>
+              </Tooltip>
+            )}
+          </Stack>
+          {!loadingProducts && !products.length ? (
+            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: "block" }}>
+              Sin productos cargados. Revisá la conexión o que existan finales / intermedios.
+            </Typography>
+          ) : null}
           {selectedMeta && (
             <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap", gap: 0.5 }}>
               <Chip size="small" label={selectedMeta.type === "intermediate" ? "Intermedio" : "Final"} />
@@ -286,6 +666,22 @@ function RecipePage() {
                 size="small"
                 variant="outlined"
                 label={`Distribuidor: ${fmtMoney(Number(selectedMeta.distributorPrice || 0))}`}
+              />
+              <Chip
+                size="small"
+                color={priceAlerts.length > 0 ? "warning" : "default"}
+                variant={priceAlerts.length > 0 ? "filled" : "outlined"}
+                icon={<PriceChange />}
+                label={
+                  priceAlerts.length > 0
+                    ? `${priceAlerts.length} precio(s) por actualizar`
+                    : "Revisar precios insumos"
+                }
+                onClick={() =>
+                  priceAlerts.length > 0
+                    ? setPriceAlertModalOpen(true)
+                    : setPriceAlertDetailOpen(true)
+                }
               />
             </Stack>
           )}
@@ -498,6 +894,16 @@ function RecipePage() {
                     </Typography>
                   </Box>
                 )}
+
+                {costSummary.advertencias?.length ? (
+                  <Stack spacing={0.5} sx={{ mt: 1 }}>
+                    {costSummary.advertencias.map((msg) => (
+                      <Typography key={msg} variant="body2" color="warning.main">
+                        {msg}
+                      </Typography>
+                    ))}
+                  </Stack>
+                ) : null}
 
                 {costSummary.notas && (
                   <>

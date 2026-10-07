@@ -28,7 +28,7 @@ export function orderDateToIsoYYYYMMDD(dateStr) {
   return isValid(d) ? d.toISOString().slice(0, 10) : null;
 }
 
-/** Clave estable por fila de gasto (inclusiones en presupuesto). */
+/** Clave estable por fila de egreso (inclusiones en presupuesto). */
 export function expenseBudgetRowKey(e, index) {
   if (e != null && e.id != null && e.id !== "") return `id:${e.id}`;
   const d =
@@ -326,7 +326,7 @@ export function buildPeriodFinance({
 }
 
 /**
- * Ventas por producto + gastos en un rango, **todos los pedidos** (no filtra por cliente).
+ * Ventas por producto + egresos en un rango, **todos los pedidos** (no filtra por cliente).
  * Fechas de pedido: mismo criterio que cobranzas (`orderDateToIsoYYYYMMDD`).
  */
 export function buildGlobalPeriodFinance({ orders, allExpenses, periodStart, periodEnd }) {

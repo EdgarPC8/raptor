@@ -60,7 +60,7 @@ export const getOrdersForMonthRequest = async (visibleMonth) => {
     headers: { Authorization: jwt() },
   });
 
-/** Agregar una línea (producto) a un pedido ya creado — solo Admin/Programador en backend. */
+/** Agregar una línea (producto) a un pedido ya creado — solo Admin/Propietario en backend. */
 export const addOrderItemToOrderRequest = async (orderId, data) =>
   await axios.post(`/orders/${orderId}/items`, data, {
     headers: { Authorization: jwt() },
@@ -91,7 +91,7 @@ export const unmarkOrderAsPaidRequest = async (orderId) =>
     headers: { Authorization: jwt() },
   });
 
-/** Solo Programador — dashboard estados de pedido (fechas + stock, solo Logs). */
+/** Solo Propietario — dashboard estados de pedido (fechas + stock, solo Logs). */
 export const programmerDashboardOrderItemCorrectionRequest = async (itemId, data) =>
   await axios.put(`/orders/order-items/${itemId}`, {
     ...data,
@@ -401,5 +401,37 @@ export const updateSupplierOrderPaymentRequest = async (paymentId, data) =>
 
 export const deleteSupplierOrderPaymentRequest = async (paymentId) =>
   await axios.delete(`/orders/supplier-payables/payments/${paymentId}`, {
+    headers: { Authorization: jwt() },
+  });
+
+
+export const pushOrderToPeerRequest = async (orderId) =>
+  axios.post(`/orders/${orderId}/push-to-peer`, {}, { headers: { Authorization: jwt() } });
+
+export const updateCustomerPeerLinkRequest = async (id, data) =>
+  axios.put(`/orders/customers/${id}/peer-link`, data, { headers: { Authorization: jwt() } });
+
+export const getPeerAcceptOrderRequest = async (orderId) =>
+  axios.get(`/orders/supplier-orders/${orderId}/peer-accept`, {
+    headers: { Authorization: jwt() },
+  });
+
+export const acceptPeerSupplierOrderRequest = async (orderId, data) =>
+  axios.post(`/orders/supplier-orders/${orderId}/peer-accept`, data, {
+    headers: { Authorization: jwt() },
+  });
+
+export const pushSupplierOrderToPeerRequest = async (orderId) =>
+  axios.post(`/orders/supplier-orders/${orderId}/push-to-peer`, {}, {
+    headers: { Authorization: jwt() },
+  });
+
+export const getPeerAcceptCustomerOrderRequest = async (orderId) =>
+  axios.get(`/orders/${orderId}/peer-accept`, {
+    headers: { Authorization: jwt() },
+  });
+
+export const acceptPeerCustomerOrderRequest = async (orderId, data) =>
+  axios.post(`/orders/${orderId}/peer-accept`, data, {
     headers: { Authorization: jwt() },
   });

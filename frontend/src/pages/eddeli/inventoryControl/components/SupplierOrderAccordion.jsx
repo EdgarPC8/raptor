@@ -31,12 +31,15 @@ import EditIcon from "@mui/icons-material/Edit";
 import UndoIcon from "@mui/icons-material/Undo";
 import CloseIcon from "@mui/icons-material/Close";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import LinkIcon from "@mui/icons-material/Link";
+import SendIcon from "@mui/icons-material/Send";
 import {
   deleteSupplierOrderRequest,
   markSupplierOrderReceivedRequest,
   paySupplierOrderRequest,
   unmarkSupplierOrderPaidRequest,
   updateSupplierOrderRequest,
+  pushSupplierOrderToPeerRequest,
 } from "../../../../api/ordersRequest";
 import SimpleDialog from "../../../../components/Dialogs/SimpleDialog";
 import { useAuth } from "../../../../context/AuthContext";
@@ -46,6 +49,7 @@ import DocumentAttachmentIcon from "./DocumentAttachmentIcon";
 import DocumentUploadButton from "./DocumentUploadButton";
 import ProductForm from "./ProductForm.jsx";
 import SupplierOrderShoppingListDialog from "./SupplierOrderShoppingListDialog.jsx";
+import PeerSupplierOrderAcceptDialog from "./PeerSupplierOrderAcceptDialog.jsx";
 import {
   getProductUnitLabel,
   formatOrderLineTotal,
@@ -155,9 +159,9 @@ export default function SupplierOrderAccordion({
   const { user } = useAuth();
   const { activeApp } = useAppSettings();
   const multiStockEnabled = activeApp?.multiStockEnabled !== false;
-  const isProgramador = user?.loginRol === "Programador";
+  const isPropietario = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const canFinanceCorrections =
-    isProgramador ||
+    isPropietario ||
     (canManage && activeApp?.financeAllowAdminCorrections !== false);
   const [openDelete, setOpenDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -178,15 +182,29 @@ export default function SupplierOrderAccordion({
   const [inventoryStores, setInventoryStores] = useState([]);
   const [storesLoading, setStoresLoading] = useState(false);
   const [shoppingListOpen, setShoppingListOpen] = useState(false);
+  const [peerAcceptOpen, setPeerAcceptOpen] = useState(false);
+
+  const needsPeerAccept = order.peerAcceptStatus === "pending_accept";
+  const peerNeedsLink = needsPeerAccept
+    && (order.ERP_supplier_order_items || []).some((it) => !it.productId);
+  const peerRemoteApp =
+    order.ERP_supplier?.remoteApp || order.supplier?.remoteApp || null;
 
   const total = supplierTotal(order);
   const paid = supplierPaid(order);
   const remaining = supplierRemaining(order);
   const fullyPaid = remaining <= 0.009;
+  const canPushToPeer =
+    Boolean(peerRemoteApp) &&
+    !needsPeerAccept &&
+    !order.receivedAt &&
+    !fullyPaid;
   const payPct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
-  /** Programador puede abrir el modal de edición aunque ya esté recibido, si aún hay saldo. */
+  /** Propietario puede abrir el modal de edición aunque ya esté recibido, si aún hay saldo. */
   const canOpenEditModal =
-    Boolean(onEdit) && (!order.receivedAt || (isProgramador && !fullyPaid));
+    Boolean(onEdit) &&
+    !needsPeerAccept &&
+    (!order.receivedAt || (isPropietario && !fullyPaid));
 
   const severity = supplierSeverity(order);
   const base = severityColor(severity, theme.palette);
@@ -425,7 +443,7 @@ export default function SupplierOrderAccordion({
         onClickAccept={confirmDelete}
       >
         ¿Eliminar el pedido #{order.id} a {order.ERP_supplier?.name || "proveedor"}?
-        También se eliminarán gastos y abonos vinculados en Finanzas.
+        También se eliminarán egresos y abonos vinculados en Finanzas.
       </SimpleDialog>
 
       <Dialog
@@ -612,6 +630,19 @@ export default function SupplierOrderAccordion({
                   " · Pagado"
                 )}
               </Typography>
+              {needsPeerAccept ? (
+                <Chip
+                  size="small"
+                  color="warning"
+                  icon={<LinkIcon />}
+                  label={peerNeedsLink ? "Pendiente aceptar / enlazar" : "Pendiente aceptar"}
+                  sx={{ mt: 0.5, height: 22, fontSize: "0.7rem", fontWeight: 700 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPeerAcceptOpen(true);
+                  }}
+                />
+              ) : null}
               {!fullyPaid && total > 0 ? (
                 <LinearProgress
                   variant="determinate"
@@ -640,12 +671,65 @@ export default function SupplierOrderAccordion({
                   iconsOnly
                 />
               )}
-              {canManage && !order.receivedAt && (
+              {canManage && needsPeerAccept && (
+                <Tooltip title={peerNeedsLink ? "Aceptar pedido y enlazar productos" : "Aceptar pedido enlazado"}>
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPeerAcceptOpen(true);
+                      }}
+                      onFocus={(e) => e.stopPropagation()}
+                      aria-label="Aceptar pedido enlazado"
+                    >
+                      <LinkIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )}
+              {canManage && canPushToPeer && (
+                <Tooltip
+                  title={
+                    order.remotePeerAcceptStatus === "accepted"
+                      ? `Ya aceptado en ${peerRemoteApp} (#${order.remoteSyncCustomerOrderId || "—"})`
+                      : order.remotePeerAcceptStatus === "pending_accept"
+                        ? `Enviado a ${peerRemoteApp}, pendiente de aceptación (#${order.remoteSyncCustomerOrderId || "—"})`
+                        : String(order.remoteSyncStatus || "").startsWith("synced")
+                          ? `Consultar estado / reenviar a ${peerRemoteApp} (#${order.remoteSyncCustomerOrderId || "—"})`
+                          : `Enviar a ${peerRemoteApp} como pedido de cliente`
+                  }
+                >
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setBusy(true);
+                        void toast?.({
+                          promise: pushSupplierOrderToPeerRequest(order.id),
+                          successMessage: `Pedido enviado a ${peerRemoteApp} como pedido de cliente`,
+                          onSuccess: () => onReload?.(),
+                        }).finally(() => setBusy(false));
+                      }}
+                      onFocus={(e) => e.stopPropagation()}
+                      aria-label="Enviar al sistema enlazado"
+                    >
+                      <SendIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )}
+              {canManage && !order.receivedAt && !needsPeerAccept && (
                 <Tooltip title="Marcar pedido como recibido">
                   <span>
                     <IconButton
                       size="small"
-                      color="warning"
+                      color="primary"
                       disabled={busy}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -659,13 +743,13 @@ export default function SupplierOrderAccordion({
                   </span>
                 </Tooltip>
               )}
-              {canManage && !fullyPaid && (
+              {canManage && !fullyPaid && !needsPeerAccept && (
                 <>
                   <Tooltip title="Abonar a proveedor">
                     <span>
                       <IconButton
                         size="small"
-                        color="error"
+                        color="primary"
                         disabled={busy}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -682,7 +766,7 @@ export default function SupplierOrderAccordion({
                     <span>
                       <IconButton
                         size="small"
-                        color="error"
+                        color="primary"
                         disabled={busy || remaining <= 0}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -697,12 +781,12 @@ export default function SupplierOrderAccordion({
                   </Tooltip>
                 </>
               )}
-              {canManage && isProgramador && (
+              {canManage && isPropietario && !needsPeerAccept && (
                 <Tooltip title="Editar fechas de entrega y pago">
                   <span>
                     <IconButton
                       size="small"
-                      color="secondary"
+                      color="primary"
                       disabled={busy}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -717,7 +801,7 @@ export default function SupplierOrderAccordion({
                 </Tooltip>
               )}
               {canFinanceCorrections && (order.paidAt || paid > 0.009) && (
-                <Tooltip title="Anular pago (elimina gasto en Finanzas)">
+                <Tooltip title="Anular pago (elimina egreso en Finanzas)">
                   <span>
                     <IconButton
                       size="small"
@@ -807,7 +891,7 @@ export default function SupplierOrderAccordion({
             const lineTotal = lineBase * (1 + rate / 100);
             return (
               <Typography key={item.id} variant="body2" sx={{ mb: 0.5 }}>
-                • {item.ERP_inventory_product?.name || "Producto"} — {item.quantity} {unit} ×{" "}
+                • {item.ERP_inventory_product?.name || item.remoteName || "Otro producto (sin enlazar)"} — {item.quantity} {unit} ×{" "}
                 {formatUnitPrice(item.unitPrice)}
                 {Number(item.discount) > 0 ? ` − desc. ${formatProductPrice(item.discount)}` : ""}
                 {rate > 0 ? ` + IVA ${rate}%` : ""} = {formatProductPrice(lineTotal)}
@@ -922,7 +1006,7 @@ export default function SupplierOrderAccordion({
         items={(order.ERP_supplier_order_items || []).map((item) => ({
           lineId: item.id,
           productId: item.productId,
-          name: item.ERP_inventory_product?.name || "Producto",
+          name: item.ERP_inventory_product?.name || item.remoteName || "Producto",
           quantity: item.quantity,
           unitLabel: getProductUnitLabel(item.ERP_inventory_product),
           ERP_inventory_product: item.ERP_inventory_product,
@@ -937,6 +1021,14 @@ export default function SupplierOrderAccordion({
         }
         notes={order.notes || ""}
         orderId={order.id}
+      />
+
+      <PeerSupplierOrderAcceptDialog
+        open={peerAcceptOpen}
+        orderId={order.id}
+        onClose={() => setPeerAcceptOpen(false)}
+        onAccepted={() => onReload?.()}
+        toast={toast}
       />
     </>
   );

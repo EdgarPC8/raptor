@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Box,
   Button,
@@ -13,15 +13,32 @@ import {
 } from "@mui/material";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import AddIcon from "@mui/icons-material/Add";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import PrintIcon from "@mui/icons-material/Print";
+import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
+import SendIcon from "@mui/icons-material/Send";
+import LinkIcon from "@mui/icons-material/Link";
 import TablePro from "../../../components/Tables/TablePro.jsx";
+import TableColumnVisibilityControl from "../../../components/Tables/TableColumnVisibilityControl.jsx";
+import SimpleDialog from "../../../components/Dialogs/SimpleDialog.jsx";
 import TourHelpButton from "../../../components/TourHelpButton.jsx";
+import { useTableColumnVisibility } from "../../../hooks/useTableColumnVisibility.js";
+import OrderForm, {
+  CUSTOMER_ORDER_DIALOG_CONTENT_SX,
+  CUSTOMER_ORDER_DIALOG_PAPER_SX,
+} from "./components/OrderForm.jsx";
+import CustomerOrderPayDialog from "./components/CustomerOrderPayDialog.jsx";
 import PrintFormatDialog from "../../../components/saleReceipt/PrintFormatDialog.jsx";
 import InvoiceHubDetailDialog from "./components/InvoiceHubDetailDialog.jsx";
-import { getPosSalesRequest } from "../../../api/ordersRequest.js";
+import PeerSupplierOrderAcceptDialog from "./components/PeerSupplierOrderAcceptDialog.jsx";
+import {
+  getPosSalesRequest,
+  pushOrderToPeerRequest,
+} from "../../../api/ordersRequest.js";
 import { useAuth } from "../../../context/AuthContext.jsx";
+import { usePeerOrderRealtime } from "../../../hooks/usePeerOrderRealtime.js";
 import { APP_ROUTES } from "../../../config/appRoutes.js";
 import { usePageTour } from "../../../hooks/usePageTour.js";
 import { VENTAS_HUB_TOUR_ID, getVentasHubTourSteps } from "../../../tours/ventasHubTour.js";
@@ -30,7 +47,12 @@ import {
   normalizeSaleReceipt,
   paymentMethodLabel,
 } from "../../../utils/saleReceiptUtils.js";
-import { getSaleHubStatus, InvoiceHubStatusIcon } from "./components/invoiceHubStatus.jsx";
+import {
+  canAbonarHubRow,
+  getSaleHubStatus,
+  InvoiceHubStatusIcon,
+} from "./components/invoiceHubStatus.jsx";
+import { formatDateTime } from "../../../helpers/functions.js";
 
 const money = (n) => Number(n || 0).toFixed(2);
 
@@ -108,6 +130,7 @@ function paymentBuckets(method, total) {
 export default function SalesHubPage() {
   const { toast } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
@@ -115,38 +138,58 @@ export default function SalesHubPage() {
     dateTo: todayIso(),
   });
   const [detailRow, setDetailRow] = useState(null);
+  const [payOrder, setPayOrder] = useState(null);
   const [printOpen, setPrintOpen] = useState(false);
   const [printReceipt, setPrintReceipt] = useState(null);
+  const [saleOpen, setSaleOpen] = useState(false);
+  const [peerAcceptCustomerOrderId, setPeerAcceptCustomerOrderId] = useState(null);
+
+  const loadSales = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await getPosSalesRequest({ limit: 5000 });
+      setSales(data || []);
+    } catch (e) {
+      void toast?.({
+        message:
+          e?.response?.data?.message || "No se pudo cargar el reporte de ventas.",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const { data } = await getPosSalesRequest({ limit: 500 });
-        if (!cancelled) setSales(data || []);
-      } catch (e) {
-        if (!cancelled) {
-          void toast?.({
-            message:
-              e?.response?.data?.message || "No se pudo cargar el reporte de ventas.",
-            variant: "error",
-          });
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [toast]);
+    void loadSales();
+  }, [loadSales]);
+
+  useEffect(() => {
+    const id = Number(searchParams.get("peerAcceptCustomerOrderId"));
+    if (Number.isFinite(id) && id > 0) {
+      setPeerAcceptCustomerOrderId(id);
+      const next = new URLSearchParams(searchParams);
+      next.delete("peerAcceptCustomerOrderId");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  usePeerOrderRealtime({
+    onCustomerOrder: useCallback(
+      ({ orderId }) => {
+        void loadSales();
+        if (orderId) setPeerAcceptCustomerOrderId(orderId);
+      },
+      [loadSales],
+    ),
+  });
 
   /** Todas las ventas mapeadas (sin filtro de fecha): base del historial del cliente. */
   const allRows = useMemo(() => {
     return sales
       .map((s) => {
         const dateIso = saleDateIso(s);
+        const dateRaw = s?.sri?.authorizedAt || s?.date || s?.paidAt || "";
         const total = Number(s.total || 0);
         const subtotal = Number(s.subtotal || 0);
         const iva = Number(s.iva || 0);
@@ -157,7 +200,7 @@ export default function SalesHubPage() {
         return {
           ...s,
           dateIso,
-          emissionDate: dateIso || "—",
+          emissionDate: dateRaw ? formatDateTime(dateRaw) : "—",
           estabPtoEmi: sri.estabPtoEmi || "—",
           numero: sri.sequentialLabel || String(s.id || "—"),
           sellerLabel: s.sellerName || "—",
@@ -185,6 +228,18 @@ export default function SalesHubPage() {
           otherLabel: money(pay.other),
           retentionLabel: money(retention),
           hubStatus: getSaleHubStatus(s),
+          remoteApp: s.customer?.remoteApp || null,
+          remoteSyncStatus: s.remoteSyncStatus || null,
+          remoteSyncSupplierOrderId: s.remoteSyncSupplierOrderId || null,
+          remotePeerAcceptStatus: s.remotePeerAcceptStatus || null,
+          paidAmount: s.paidAmount,
+          remainingAmount: s.remainingAmount,
+          isPosSale: Boolean(s.isPosSale),
+          peerAcceptStatus: s.peerAcceptStatus || null,
+          status: s.status || null,
+          allDelivered: Array.isArray(s.items) && s.items.length > 0
+            ? s.items.every((it) => it.deliveredAt)
+            : false,
         };
       })
       .sort((a, b) => String(b.dateIso).localeCompare(String(a.dateIso)));
@@ -248,6 +303,120 @@ export default function SalesHubPage() {
     }
   };
 
+  // Columnas Ventas → app_settings.tableColumnVisibility (BD)
+  const columns = useMemo(
+    () => [
+      { id: "emissionDate", label: "Fecha", minWidth: 148 },
+      { id: "estabPtoEmi", label: "Estab", minWidth: 72 },
+      { id: "numero", label: "Número", minWidth: 84 },
+      { id: "sellerLabel", label: "Vendedor", ...TEXT_COL(110) },
+      { id: "customerLabel", label: "Cliente", ...TEXT_COL(120) },
+      { id: "subtotalLabel", label: "Subtotal", ...MONEY_COL },
+      { id: "discountLabel", label: "Desc.", ...MONEY_COL },
+      { id: "ivaLabel", label: "IVA", ...MONEY_COL },
+      { id: "totalLabel", label: "Total", ...MONEY_COL },
+      { id: "cashLabel", label: "Efectivo", ...MONEY_COL },
+      { id: "checkBankLabel", label: "Chq/Bco", ...MONEY_COL },
+      { id: "cardLabel", label: "Tarjeta", ...MONEY_COL },
+      { id: "otherLabel", label: "Otros", ...MONEY_COL },
+      { id: "retentionLabel", label: "Ret.", ...MONEY_COL },
+      {
+        id: "actions",
+        label: "Acciones",
+        stopRowClick: true,
+        minWidth: 160,
+        cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+        headerSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
+        getSearchValue: (row) => row.hubStatus?.label || "",
+        render: (row) => (
+          <Stack
+            direction="row"
+            spacing={0.25}
+            alignItems="center"
+            justifyContent="flex-end"
+            data-tour="ventas-hub-row-actions"
+          >
+            <InvoiceHubStatusIcon status={row.hubStatus} />
+            {row.peerAcceptStatus === "pending_accept" ? (
+              <Tooltip title="Aceptar y enlazar productos">
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => setPeerAcceptCustomerOrderId(row.id)}
+                  aria-label="Aceptar pedido enlazado"
+                >
+                  <LinkIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+            {row.remoteApp &&
+            row.peerAcceptStatus !== "pending_accept" &&
+            Number(row.remainingAmount || 0) > 0.009 &&
+            !row.allDelivered ? (
+              <Tooltip
+                title={
+                  row.remotePeerAcceptStatus === "accepted"
+                    ? `Ya aceptado en ${row.remoteApp} (#${row.remoteSyncSupplierOrderId || "—"})`
+                    : row.remotePeerAcceptStatus === "pending_accept"
+                      ? `Enviado a ${row.remoteApp}, pendiente de aceptación (#${row.remoteSyncSupplierOrderId || "—"})`
+                      : String(row.remoteSyncStatus || "").startsWith("synced")
+                        ? `Consultar estado / reenviar a ${row.remoteApp} (#${row.remoteSyncSupplierOrderId || "—"})`
+                        : `Enviar a ${row.remoteApp} como pedido a proveedor`
+                }
+              >
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => {
+                    void toast?.({
+                      promise: pushOrderToPeerRequest(row.id),
+                      successMessage: "Pedido enviado al sistema enlazado",
+                      onSuccess: () => void loadSales(),
+                    });
+                  }}
+                  aria-label="Enviar al sistema enlazado"
+                >
+                  <SendIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+            {row.peerAcceptStatus !== "pending_accept" && canAbonarHubRow(row.hubStatus) ? (
+              <Tooltip title="Abonar">
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => setPayOrder(row)}
+                  aria-label="Abonar"
+                >
+                  <AttachMoneyIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+            <Tooltip title="Ver detalle">
+              <IconButton size="small" color="primary" onClick={() => setDetailRow(row)}>
+                <VisibilityIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Imprimir">
+              <IconButton size="small" color="primary" onClick={() => openPrint(row)}>
+                <PrintIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        ),
+      },
+      SPACER_COL,
+    ],
+    [],
+  );
+
+  const {
+    visibleColumns,
+    hiddenIds,
+    requiredIds,
+    toggleColumn,
+  } = useTableColumnVisibility("ventas", columns);
+
   return (
     <Box sx={{ p: { xs: 1.5, md: 3 } }}>
       <Stack
@@ -266,7 +435,7 @@ export default function SalesHubPage() {
             <TourHelpButton onClick={startTour} title="Ver tutorial de ventas" />
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            Facturación / ventas de caja por día (estilo facturación diaria).
+            Ventas de caja y pedidos a cliente. El estado rojo es sin entrega y sin cobro.
           </Typography>
         </Box>
         <Stack
@@ -284,6 +453,14 @@ export default function SalesHubPage() {
             sx={{ whiteSpace: "nowrap" }}
           >
             Ver pedidos
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setSaleOpen(true)}
+            sx={{ whiteSpace: "nowrap" }}
+          >
+            Nueva venta
           </Button>
           <Button
             variant="contained"
@@ -351,53 +528,15 @@ export default function SalesHubPage() {
         rows={rows}
         dense
         tableMaxHeight="calc(100vh - 300px)"
-        columns={[
-          { id: "emissionDate", label: "Fecha", minWidth: 88 },
-          { id: "estabPtoEmi", label: "Estab", minWidth: 72 },
-          { id: "numero", label: "Número", minWidth: 84 },
-          { id: "sellerLabel", label: "Vendedor", ...TEXT_COL(110) },
-          { id: "customerLabel", label: "Cliente", ...TEXT_COL(120) },
-          { id: "subtotalLabel", label: "Subtotal", ...MONEY_COL },
-          { id: "discountLabel", label: "Desc.", ...MONEY_COL },
-          { id: "ivaLabel", label: "IVA", ...MONEY_COL },
-          { id: "totalLabel", label: "Total", ...MONEY_COL },
-          { id: "cashLabel", label: "Efectivo", ...MONEY_COL },
-          { id: "checkBankLabel", label: "Chq/Bco", ...MONEY_COL },
-          { id: "cardLabel", label: "Tarjeta", ...MONEY_COL },
-          { id: "otherLabel", label: "Otros", ...MONEY_COL },
-          { id: "retentionLabel", label: "Ret.", ...MONEY_COL },
-          {
-            id: "actions",
-            label: "Acciones",
-            stopRowClick: true,
-            minWidth: 108,
-            cellSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
-            headerSx: { width: "1px", px: 0.25, whiteSpace: "nowrap" },
-            getSearchValue: (row) => row.hubStatus?.label || "",
-            render: (row) => (
-              <Stack
-                direction="row"
-                spacing={0.25}
-                alignItems="center"
-                justifyContent="flex-end"
-                data-tour="ventas-hub-row-actions"
-              >
-                <InvoiceHubStatusIcon status={row.hubStatus} />
-                <Tooltip title="Ver detalle">
-                  <IconButton size="small" color="primary" onClick={() => setDetailRow(row)}>
-                    <VisibilityIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Imprimir">
-                  <IconButton size="small" color="primary" onClick={() => openPrint(row)}>
-                    <PrintIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Stack>
-            ),
-          },
-          SPACER_COL,
-        ]}
+        columns={visibleColumns}
+        toolbarExtra={
+          <TableColumnVisibilityControl
+            tableKey="ventas"
+            hiddenIds={hiddenIds}
+            requiredIds={requiredIds}
+            onToggle={toggleColumn}
+          />
+        }
         showSearch
         showPagination
         showIndex={false}
@@ -435,11 +574,45 @@ export default function SalesHubPage() {
         }}
       />
 
+      <PeerSupplierOrderAcceptDialog
+        open={Boolean(peerAcceptCustomerOrderId)}
+        orderId={peerAcceptCustomerOrderId}
+        kind="customer"
+        onClose={() => setPeerAcceptCustomerOrderId(null)}
+        onAccepted={() => void loadSales()}
+        toast={toast}
+      />
+      <CustomerOrderPayDialog
+        open={Boolean(payOrder)}
+        order={payOrder}
+        onClose={() => setPayOrder(null)}
+        toast={toast}
+        onPaid={() => void loadSales()}
+      />
+
       <PrintFormatDialog
         open={printOpen}
         onClose={() => setPrintOpen(false)}
         receipt={printReceipt}
       />
+
+      <SimpleDialog
+        open={saleOpen}
+        onClose={() => setSaleOpen(false)}
+        tittle="Venta al cliente"
+        maxWidth="lg"
+        fullWidth
+        paperSx={CUSTOMER_ORDER_DIALOG_PAPER_SX}
+        contentSx={CUSTOMER_ORDER_DIALOG_CONTENT_SX}
+      >
+        <OrderForm
+          onClose={() => setSaleOpen(false)}
+          reload={() => {}}
+          isEditing={false}
+          datos={null}
+          active={saleOpen}
+        />
+      </SimpleDialog>
     </Box>
   );
 }

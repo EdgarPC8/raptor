@@ -35,6 +35,7 @@ import PaymentsIcon from '@mui/icons-material/Payments';
 import MoneyOffIcon from '@mui/icons-material/MoneyOff';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import { format, parseISO, startOfWeek, endOfWeek } from 'date-fns';
+import { showEgreso } from '../../../../../utils/financeWords';
 import { es } from 'date-fns/locale';
 
 const TABS = {
@@ -547,7 +548,7 @@ export default function CalendarDayDetailDialog({
             {isCashflowView && mirrorSummary && (
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1, justifyContent: 'center' }}>
                 <Chip size="small" label={`Ingresos: ${moneyFmt(dayIncomeTotal)}`} sx={{ fontWeight: 700 }} />
-                <Chip size="small" label={`Gastos: ${moneyFmt(dayExpenseTotal)}`} sx={{ fontWeight: 700 }} />
+                <Chip size="small" label={`Egresos: ${moneyFmt(dayExpenseTotal)}`} sx={{ fontWeight: 700 }} />
                 <Chip size="small" color={dayNetBalance >= 0 ? 'success' : 'error'} label={`Balance: ${moneyFmt(dayNetBalance)}`} sx={{ fontWeight: 700 }} />
               </Stack>
             )}
@@ -571,7 +572,7 @@ export default function CalendarDayDetailDialog({
               />
               <Chip
                 icon={<MoneyOffIcon />}
-                label={`Gastos: ${moneyFmt(dayExpenseTotal)}`}
+                label={`Egresos: ${moneyFmt(dayExpenseTotal)}`}
                 size="small"
                 sx={{ bgcolor: alpha(colors.expense, 0.15), color: colors.expense, fontWeight: 700 }}
               />
@@ -646,7 +647,7 @@ export default function CalendarDayDetailDialog({
           {!hideOperationalMetrics && (
             <Chip
               icon={<MoneyOffIcon />}
-              label={`Gastos: ${moneyFmt(detail.totals?.expensesAmount ?? 0)}`}
+              label={`Egresos: ${moneyFmt(detail.totals?.expensesAmount ?? 0)}`}
               size="small"
               sx={{ bgcolor: alpha(colors.expense, 0.15), color: colors.expense, fontWeight: 700 }}
             />
@@ -664,7 +665,7 @@ export default function CalendarDayDetailDialog({
                   <TableCell align="right" sx={{ fontWeight: 700 }}>Caja ($)</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>Cobros</TableCell>
                   {isCashflowView && <TableCell align="right" sx={{ fontWeight: 700 }}>Ingresos</TableCell>}
-                  {!isIncomeView && <TableCell align="right" sx={{ fontWeight: 700 }}>Gastos</TableCell>}
+                  {!isIncomeView && <TableCell align="right" sx={{ fontWeight: 700 }}>Egresos</TableCell>}
                   {isCashflowView && <TableCell align="right" sx={{ fontWeight: 700 }}>Balance</TableCell>}
                 </TableRow>
               </TableHead>
@@ -701,7 +702,7 @@ export default function CalendarDayDetailDialog({
                   <TableCell align="right" sx={{ fontWeight: 700 }}>Caja ($)</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>Cobros</TableCell>
                   {isCashflowView && <TableCell align="right" sx={{ fontWeight: 700 }}>Ingresos</TableCell>}
-                  {!isIncomeView && <TableCell align="right" sx={{ fontWeight: 700 }}>Gastos</TableCell>}
+                  {!isIncomeView && <TableCell align="right" sx={{ fontWeight: 700 }}>Egresos</TableCell>}
                   {isCashflowView && <TableCell align="right" sx={{ fontWeight: 700 }}>Balance</TableCell>}
                 </TableRow>
               </TableHead>
@@ -770,7 +771,7 @@ export default function CalendarDayDetailDialog({
               value={TABS.expenses}
               icon={<MoneyOffIcon fontSize="small" />}
               iconPosition="start"
-              label={`Gastos (${detail.expenses?.length ?? 0})`}
+              label={`Egresos (${detail.expenses?.length ?? 0})`}
             />
           )}
         </Tabs>
@@ -921,9 +922,9 @@ export default function CalendarDayDetailDialog({
         {tab === TABS.expenses && (
           <>
             {!detail.expenses?.length ? (
-              <EmptyTab message="No hay gastos en esta fecha." />
+              <EmptyTab message="No hay egresos en esta fecha." />
             ) : filteredExpenses.length === 0 ? (
-              <EmptyTab message="Ningún gasto coincide con el filtro." />
+              <EmptyTab message="Ningún egreso coincide con el filtro." />
             ) : (
               <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                 <Table size="small">
@@ -941,7 +942,7 @@ export default function CalendarDayDetailDialog({
                     {filteredExpenses.map((e) => (
                       <TableRow key={e.id} hover>
                         <TableCell>{e.concept || '—'}</TableCell>
-                        <TableCell>{e.category || '—'}</TableCell>
+                          <TableCell>{showEgreso(e.category) || '—'}</TableCell>
                         <TableCell>{e.productName || '—'}</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 700, color: colors.expense }}>
                           {moneyFmt(e.amount)}

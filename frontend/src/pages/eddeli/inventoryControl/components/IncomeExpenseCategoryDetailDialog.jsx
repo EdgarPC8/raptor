@@ -35,6 +35,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import { money } from "../collections/helpers.js";
+import { showEgreso } from "../../../../utils/financeWords";
 import { formatDateTime } from "../../../../helpers/functions.js";
 
 const TABS = { all: 0, income: 1, expense: 2 };
@@ -44,7 +45,7 @@ const round2 = (n) => Number(Number(n ?? 0).toFixed(2));
 function groupLinesByCategory(lines) {
   const map = new Map();
   for (const row of lines) {
-    const cat = row.category || "Sin categoría";
+    const cat = showEgreso(row.category || "Sin categoría");
     if (!map.has(cat)) map.set(cat, { category: cat, lines: [], total: 0 });
     const g = map.get(cat);
     g.lines.push(row);
@@ -127,7 +128,7 @@ function CategoryAccordion({ group, moneyFmt, color, showProduct }) {
             <TableBody>
               {group.lines.map((row) => (
                 <TableRow key={row.id} hover>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>{formatDateTime(row.date)}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{formatDateTime(row.date, { showSeconds: true })}</TableCell>
                   <TableCell>{row.concept || "—"}</TableCell>
                   {showProduct && <TableCell>{row.productName || "—"}</TableCell>}
                   <TableCell>{row.counterpartyName || "—"}</TableCell>
@@ -172,7 +173,7 @@ export default function IncomeExpenseCategoryDetailDialog({ open, onClose, data,
   const meta = data?.meta?.totals ?? {};
 
   const totalIncome = round2(meta.income ?? platforms.find((p) => p.label === "Ingresos")?.value ?? 0);
-  const totalExpense = round2(meta.expense ?? platforms.find((p) => p.label === "Gastos")?.value ?? 0);
+  const totalExpense = round2(meta.expense ?? platforms.find((p) => p.label === "Egresos")?.value ?? 0);
   const balance = round2(totalIncome - totalExpense);
 
   const incomeCats = useMemo(
@@ -180,7 +181,7 @@ export default function IncomeExpenseCategoryDetailDialog({ open, onClose, data,
     [groups]
   );
   const expenseCats = useMemo(
-    () => (groups.Gastos ?? []).map((r) => ({ label: r.label, value: round2(r.value) })).sort((a, b) => b.value - a.value),
+    () => (groups.Gastos ?? []).map((r) => ({ label: showEgreso(r.label), value: round2(r.value) })).sort((a, b) => b.value - a.value),
     [groups]
   );
 
@@ -193,7 +194,7 @@ export default function IncomeExpenseCategoryDetailDialog({ open, onClose, data,
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ pr: 6, pb: 1 }}>
-        Ingresos y gastos por categoría
+        Ingresos y egresos por categoría
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
           Desglose con barras y detalle de cada movimiento por categoría.
         </Typography>
@@ -218,7 +219,7 @@ export default function IncomeExpenseCategoryDetailDialog({ open, onClose, data,
           <>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
               <Chip icon={<TrendingUpIcon />} size="small" label={`Ingresos: ${money(totalIncome)}`} color="success" variant="outlined" />
-              <Chip icon={<TrendingDownIcon />} size="small" label={`Gastos: ${money(totalExpense)}`} color="error" variant="outlined" />
+              <Chip icon={<TrendingDownIcon />} size="small" label={`Egresos: ${money(totalExpense)}`} color="error" variant="outlined" />
               <Chip icon={<AccountBalanceIcon />} size="small" label={`Balance: ${money(balance)}`} color={balance >= 0 ? "primary" : "warning"} />
             </Stack>
 
@@ -231,7 +232,7 @@ export default function IncomeExpenseCategoryDetailDialog({ open, onClose, data,
             >
                 <Tab label="Vista general" />
                 <Tab label={`Ingresos (${data.incomeLines?.length ?? 0})`} />
-                <Tab label={`Gastos (${data.expenseLines?.length ?? 0})`} />
+                <Tab label={`Egresos (${data.expenseLines?.length ?? 0})`} />
               </Tabs>
 
             {tab !== TABS.all && (
@@ -265,7 +266,7 @@ export default function IncomeExpenseCategoryDetailDialog({ open, onClose, data,
                   ))
                 )}
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: expenseColor, mb: 1, mt: 2 }}>
-                  Gastos por categoría
+                  Egresos por categoría
                 </Typography>
                 {expenseCats.length === 0 ? (
                   <Typography variant="body2" color="text.secondary">Sin datos</Typography>
@@ -275,7 +276,7 @@ export default function IncomeExpenseCategoryDetailDialog({ open, onClose, data,
                   ))
                 )}
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
-                  Usa las pestañas Ingresos o Gastos para ver el detalle de cada movimiento.
+                  Usa las pestañas Ingresos o Egresos para ver el detalle de cada movimiento.
                 </Typography>
               </Box>
             )}
@@ -297,7 +298,7 @@ export default function IncomeExpenseCategoryDetailDialog({ open, onClose, data,
             {tab === TABS.expense && (
               <>
                 {!expenseGroups.length ? (
-                  <EmptyState message="No hay gastos registrados." />
+                  <EmptyState message="No hay egresos registrados." />
                 ) : filteredExpenseGroups.length === 0 ? (
                   <EmptyState message="Ninguna categoría coincide con el filtro." />
                 ) : (

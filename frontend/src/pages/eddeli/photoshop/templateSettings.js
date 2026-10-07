@@ -101,24 +101,57 @@ export function normalizeTemplateSettings(raw = {}, ctx = {}) {
     requiresProduct = layers.some(layerHasBind);
   }
 
-  return { templateKind, requiresProduct, backgroundMode };
+  const folders = Array.isArray(raw.folders)
+    ? raw.folders
+        .filter((f) => f && f.id)
+        .map((f) => ({
+          id: String(f.id),
+          name: String(f.name || f.id),
+          parentId: f.parentId ? String(f.parentId) : null,
+          ...(f.collapsed ? { collapsed: true } : {}),
+        }))
+    : undefined;
+
+  return {
+    templateKind,
+    requiresProduct,
+    backgroundMode,
+    ...(folders ? { folders } : {}),
+  };
+}
+
+export function parseSettingsJson(raw) {
+  if (!raw) return {};
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof raw === "object" ? raw : {};
 }
 
 export function settingsFromRow(row = {}) {
-  const settingsJson = row.settingsJson || row.template?.settingsJson || {};
+  const settingsJson = parseSettingsJson(
+    row.settingsJson || row.template?.settingsJson || row.meta || {}
+  );
   const layers = row.layers || row.resolved?.layers || [];
-  return normalizeTemplateSettings(
+  const normalized = normalizeTemplateSettings(
     {
       ...settingsJson,
       templateKind: row.templateKind ?? settingsJson.templateKind ?? row.meta?.templateKind,
       requiresProduct: row.requiresProduct ?? settingsJson.requiresProduct ?? row.meta?.requiresProduct,
       backgroundMode: row.backgroundMode ?? settingsJson.backgroundMode ?? row.meta?.backgroundMode,
+      folders: settingsJson.folders ?? row.meta?.folders ?? row.folders,
     },
     {
       layers,
       backgroundSrc: row.backgroundSrc ?? row.resolved?.backgroundSrc,
     }
   );
+  return normalized;
 }
 
 export function templateRequiresProduct(docOrSettings) {
@@ -132,7 +165,14 @@ export function templateRequiresProduct(docOrSettings) {
 }
 
 export function settingsToMeta(settings = {}) {
-  return normalizeTemplateSettings(settings);
+  const normalized = normalizeTemplateSettings(settings);
+  const out = {
+    templateKind: normalized.templateKind,
+    requiresProduct: normalized.requiresProduct,
+    backgroundMode: normalized.backgroundMode,
+  };
+  if (Array.isArray(normalized.folders)) out.folders = normalized.folders;
+  return out;
 }
 
 export const TEXT_BIND_PRESETS = [

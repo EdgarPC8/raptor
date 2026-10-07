@@ -100,7 +100,7 @@ export async function renderDocToContext(ctx, doc, docData, options = {}) {
       ctx.restore();
     }
 
-    if (layer.type === "image") {
+    if (layer.type === "image" || layer.type === "svg") {
       const src = layer.props?.src;
       if (!src) continue;
       try {
@@ -112,9 +112,9 @@ export async function renderDocToContext(ctx, doc, docData, options = {}) {
           y,
           w,
           h,
-          layer.props?.fit || "cover",
+          layer.props?.fit || "contain",
           layer.props?.borderRadius || 0,
-          layer.props?.cropNorm
+          layer.type === "svg" ? null : layer.props?.cropNorm
         );
       } catch {
         /* ignore */
@@ -206,4 +206,22 @@ export async function sampleColorAtDocPoint(doc, docData, docX, docY) {
     return `#${rr}${gg}${bb}`.toUpperCase();
   }
   return `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
+}
+
+/** Renderiza el doc a un canvas y devuelve { canvas, dataUrl }. */
+export async function renderDocToCanvas(doc, docData, options = {}) {
+  const W = doc?.canvas?.width || 0;
+  const H = doc?.canvas?.height || 0;
+  if (!W || !H) throw new Error("Documento sin canvas");
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  await renderDocToContext(ctx, doc, docData || doc?.data || {}, {
+    background: options.background ?? "#ffffff",
+  });
+  const mime = options.mime || "image/png";
+  const quality = options.quality ?? 1;
+  const dataUrl = canvas.toDataURL(mime, quality);
+  return { canvas, dataUrl, width: W, height: H };
 }

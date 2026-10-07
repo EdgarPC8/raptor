@@ -1,13 +1,18 @@
 /**
- * Acceso a secciones/módulos en mantenimiento según entorno (producción vs desarrollo).
- * Fuente de verdad preferida: suscripción del gestor (status en BD).
- * Fallback: catálogo local appModulesCatalog.js.
+ * Acceso a secciones/módulos en mantenimiento / próximamente / oculto.
+ *
+ * Con suscripción del gestor: los estados vienen de `subscription.modules`
+ * (Raptor Solutions controla active / maintenance / planned / hidden).
+ * Sin módulos del gestor: fallback al catálogo local (appModulesCatalog.js).
  */
 import { API_MODE } from "./deployEnv.js";
 import {
   APP_MODULE_GROUPS,
+  MODULE_STATUS_META,
+  normalizeModuleStatus,
   resolveModuleStatus,
   resolveGroupModuleStatus,
+  listCatalogModuleGroupsWithStatus,
 } from "./appModulesCatalog.js";
 import {
   canonicalizeAppPath,
@@ -22,13 +27,17 @@ export function isAppInProduction() {
   return !import.meta.env.DEV;
 }
 
-/** Programador puede abrir secciones en mantenimiento aunque esté en producción. */
+/** Propietario puede abrir secciones en mantenimiento aunque esté en producción. */
 export function canBypassSectionMaintenance(loginRol) {
-  return loginRol === "Programador";
+  return loginRol === "Propietario" || loginRol === "Programador";
 }
 
 function normalizePath(path) {
   return canonicalizeAppPath(path);
+}
+
+function hasGestorModules(modules) {
+  return Array.isArray(modules) && modules.length > 0;
 }
 
 /** Alias legacy que deben bloquearse con el módulo en mantenimiento. */
@@ -76,12 +85,13 @@ export function listMaintenanceSectionsFromSubscription(modules = []) {
     status === "maintenance" || status === "development";
 
   for (const mod of modules) {
+    const moduleMaint = isMaint(mod.status);
     for (const section of mod.sections || []) {
-      if (!isMaint(section.status)) continue;
+      if (!isMaint(section.status) && !moduleMaint) continue;
+      if (section.status === "hidden" || section.status === "planned") continue;
       push(section.key, section.name, mod.name, "");
     }
     const aliasKey = mod.key || "";
-    const moduleMaint = isMaint(mod.status);
     if (moduleMaint && MAINTENANCE_PATH_ALIASES[aliasKey]) {
       for (const alias of MAINTENANCE_PATH_ALIASES[aliasKey]) {
         push(alias.path, alias.name, mod.name, "");
@@ -92,8 +102,7 @@ export function listMaintenanceSectionsFromSubscription(modules = []) {
 }
 
 /**
- * Rutas (y meta) en mantenimiento: solo secciones con status maintenance.
- * El status del módulo no bloquea todas las secciones (control granular por sección).
+ * Rutas (y meta) en mantenimiento: catálogo local.
  */
 export function listMaintenanceSections() {
   const out = [];
@@ -137,15 +146,9 @@ function buildMaintenanceIndex(list) {
   return { list, paths };
 }
 
-function findSectionByPath(pathname, subscriptionModules, list, paths) {
+function findSectionByPath(pathname, list, paths) {
   const p = normalizePath(pathname);
-  const granular =
-    Array.isArray(subscriptionModules) && subscriptionModules.length > 0;
-  // Con entitlement del gestor: match exacto por sección (sin propagar a subrutas).
-  // Paths del índice ya están canónicos (legacy → español).
-  const match = granular
-    ? paths.find((mp) => p === mp)
-    : paths.find((mp) => p === mp || p.startsWith(`${mp}/`));
+  const match = paths.find((mp) => p === mp || p.startsWith(`${mp}/`));
   if (!match) return null;
   return (
     list.find((s) => s.path === match) || {
@@ -167,7 +170,7 @@ function getLocalMaintenanceIndex() {
 }
 
 function getMaintenanceIndex(subscriptionModules) {
-  if (Array.isArray(subscriptionModules) && subscriptionModules.length > 0) {
+  if (hasGestorModules(subscriptionModules)) {
     return buildMaintenanceIndex(
       listMaintenanceSectionsFromSubscription(subscriptionModules),
     );
@@ -175,22 +178,19 @@ function getMaintenanceIndex(subscriptionModules) {
   return getLocalMaintenanceIndex();
 }
 
-export function findMaintenanceSectionForPath(
-  pathname,
-  subscriptionModules,
-) {
+export function findMaintenanceSectionForPath(pathname, subscriptionModules) {
   const { list, paths } = getMaintenanceIndex(subscriptionModules);
-  return findSectionByPath(pathname, subscriptionModules, list, paths);
+  return findSectionByPath(pathname, list, paths);
 }
 
 export function isPathInMaintenance(pathname, subscriptionModules) {
-  return Boolean(
-    findMaintenanceSectionForPath(pathname, subscriptionModules),
-  );
+  return Boolean(findMaintenanceSectionForPath(pathname, subscriptionModules));
 }
 
-/** En producción, bloquear la ruta salvo Programador.
- * Si hay módulos del entitlement (gestor), ese status manda también en local.
+/**
+ * Bloquear ruta en mantenimiento.
+ * Con módulos del gestor: aplica siempre (el control plane manda).
+ * Sin gestor: solo en producción (dev libre con catálogo local).
  */
 export function shouldBlockMaintenancePath(
   pathname,
@@ -198,11 +198,13 @@ export function shouldBlockMaintenancePath(
   subscriptionModules,
 ) {
   if (canBypassSectionMaintenance(loginRol)) return false;
-  if (Array.isArray(subscriptionModules) && subscriptionModules.length > 0) {
-    return isPathInMaintenance(pathname, subscriptionModules);
+  if (
+    !hasGestorModules(subscriptionModules) &&
+    !isAppInProduction()
+  ) {
+    return false;
   }
-  if (!isAppInProduction()) return false;
-  return isPathInMaintenance(pathname);
+  return isPathInMaintenance(pathname, subscriptionModules);
 }
 
 /**
@@ -215,11 +217,13 @@ export function shouldHideMaintenanceMenuLink() {
 
 /** Para marcar ítems del menú con aviso visual (badge Mant.). */
 export function isMenuLinkInMaintenance(link, subscriptionModules) {
-  if (Array.isArray(subscriptionModules) && subscriptionModules.length > 0) {
-    return isPathInMaintenance(link, subscriptionModules);
+  if (
+    !hasGestorModules(subscriptionModules) &&
+    !isAppInProduction()
+  ) {
+    return false;
   }
-  if (!isAppInProduction()) return false;
-  return isPathInMaintenance(link);
+  return isPathInMaintenance(link, subscriptionModules);
 }
 
 /** Secciones / módulos «Próximamente» (planned). */
@@ -279,43 +283,48 @@ export function listPlannedSections() {
 }
 
 function getPlannedIndex(subscriptionModules) {
-  const list =
-    Array.isArray(subscriptionModules) && subscriptionModules.length > 0
-      ? listPlannedSectionsFromSubscription(subscriptionModules)
-      : listPlannedSections();
-  const paths = list.map((s) => s.path).sort((a, b) => b.length - a.length);
-  return { list, paths };
+  if (hasGestorModules(subscriptionModules)) {
+    const list = listPlannedSectionsFromSubscription(subscriptionModules);
+    return {
+      list,
+      paths: list.map((s) => s.path).sort((a, b) => b.length - a.length),
+    };
+  }
+  const list = listPlannedSections();
+  return {
+    list,
+    paths: list.map((s) => s.path).sort((a, b) => b.length - a.length),
+  };
 }
 
 export function findPlannedSectionForPath(pathname, subscriptionModules) {
   const { list, paths } = getPlannedIndex(subscriptionModules);
-  return findSectionByPath(pathname, subscriptionModules, list, paths);
+  return findSectionByPath(pathname, list, paths);
 }
 
 export function isPathPlanned(pathname, subscriptionModules) {
   return Boolean(findPlannedSectionForPath(pathname, subscriptionModules));
 }
 
-/** Programador puede abrir secciones próximamente. */
-export function shouldBlockPlannedPath(
-  pathname,
-  loginRol,
-  subscriptionModules,
-) {
-  if (canBypassSectionMaintenance(loginRol)) return false;
-  if (Array.isArray(subscriptionModules) && subscriptionModules.length > 0) {
-    return isPathPlanned(pathname, subscriptionModules);
+/** «Próximamente» aplica a todos los roles (sin bypass de Propietario). */
+export function shouldBlockPlannedPath(pathname, _loginRol, subscriptionModules) {
+  if (
+    !hasGestorModules(subscriptionModules) &&
+    !isAppInProduction()
+  ) {
+    return false;
   }
-  if (!isAppInProduction()) return false;
-  return isPathPlanned(pathname);
+  return isPathPlanned(pathname, subscriptionModules);
 }
 
 export function isMenuLinkPlanned(link, subscriptionModules) {
-  if (Array.isArray(subscriptionModules) && subscriptionModules.length > 0) {
-    return isPathPlanned(link, subscriptionModules);
+  if (
+    !hasGestorModules(subscriptionModules) &&
+    !isAppInProduction()
+  ) {
+    return false;
   }
-  if (!isAppInProduction()) return false;
-  return isPathPlanned(link);
+  return isPathPlanned(link, subscriptionModules);
 }
 
 /** Secciones / módulos ocultos (hidden): no se muestran en el menú. */
@@ -380,17 +389,23 @@ export function listHiddenSections() {
 }
 
 function getHiddenIndex(subscriptionModules) {
-  const list =
-    Array.isArray(subscriptionModules) && subscriptionModules.length > 0
-      ? listHiddenSectionsFromSubscription(subscriptionModules)
-      : listHiddenSections();
-  const paths = list.map((s) => s.path).sort((a, b) => b.length - a.length);
-  return { list, paths };
+  if (hasGestorModules(subscriptionModules)) {
+    const list = listHiddenSectionsFromSubscription(subscriptionModules);
+    return {
+      list,
+      paths: list.map((s) => s.path).sort((a, b) => b.length - a.length),
+    };
+  }
+  const list = listHiddenSections();
+  return {
+    list,
+    paths: list.map((s) => s.path).sort((a, b) => b.length - a.length),
+  };
 }
 
 export function findHiddenSectionForPath(pathname, subscriptionModules) {
   const { list, paths } = getHiddenIndex(subscriptionModules);
-  return findSectionByPath(pathname, subscriptionModules, list, paths);
+  return findSectionByPath(pathname, list, paths);
 }
 
 export function isPathHidden(pathname, subscriptionModules) {
@@ -398,15 +413,17 @@ export function isPathHidden(pathname, subscriptionModules) {
 }
 
 /**
- * Oculto: nadie lo ve en menú ni entra por URL (tampoco Programador),
+ * Oculto: nadie lo ve en menú ni entra por URL (tampoco Propietario),
  * a diferencia de mantenimiento/próximamente.
  */
 export function shouldBlockHiddenPath(pathname, subscriptionModules) {
-  if (Array.isArray(subscriptionModules) && subscriptionModules.length > 0) {
-    return isPathHidden(pathname, subscriptionModules);
+  if (
+    !hasGestorModules(subscriptionModules) &&
+    !isAppInProduction()
+  ) {
+    return false;
   }
-  if (!isAppInProduction()) return false;
-  return isPathHidden(pathname);
+  return isPathHidden(pathname, subscriptionModules);
 }
 
 /** Ocultar del menú lateral. */
@@ -415,16 +432,17 @@ export function shouldHideHiddenMenuLink() {
 }
 
 export function isMenuLinkHidden(link, subscriptionModules) {
-  if (Array.isArray(subscriptionModules) && subscriptionModules.length > 0) {
-    return isPathHidden(link, subscriptionModules);
+  if (
+    !hasGestorModules(subscriptionModules) &&
+    !isAppInProduction()
+  ) {
+    return false;
   }
-  if (!isAppInProduction()) return false;
-  return isPathHidden(link);
+  return isPathHidden(link, subscriptionModules);
 }
 
 /**
  * ¿Mostrar UI embebida de la sección (panel dashboard, etc.)?
- * Respeta planned / maintenance / hidden del gestor (y bypass de Programador).
  */
 export function isSectionUiEnabled(pathname, loginRol, subscriptionModules) {
   if (shouldBlockHiddenPath(pathname, subscriptionModules)) return false;
@@ -435,6 +453,59 @@ export function isSectionUiEnabled(pathname, loginRol, subscriptionModules) {
     return false;
   }
   return true;
+}
+
+/**
+ * Combina catálogo local (estructura) con estados del gestor (subscription.modules).
+ * Para /sistema/modulos.
+ */
+export function listModulesWithGestorStatus(subscriptionModules) {
+  const base = listCatalogModuleGroupsWithStatus();
+  if (!hasGestorModules(subscriptionModules)) return base;
+
+  const byKey = new Map(
+    subscriptionModules.map((m) => [String(m.key || "").trim(), m]),
+  );
+
+  return base.map((mod) => {
+    const g = byKey.get(String(mod.id || "").trim());
+    if (!g) return mod;
+
+    const secByPath = new Map(
+      (g.sections || []).map((s) => [normalizePath(s.key), s]),
+    );
+
+    const sectionItems = (mod.sectionItems || []).map((s) => {
+      const hit = secByPath.get(normalizePath(s.path));
+      if (!hit?.status) return s;
+      const status = normalizeModuleStatus(hit.status);
+      return { ...s, status };
+    });
+
+    const status = normalizeModuleStatus(g.status) || mod.status;
+    return {
+      ...mod,
+      status,
+      statusMeta: MODULE_STATUS_META[status] || MODULE_STATUS_META.active,
+      sectionItems,
+      plannedSectionCount: sectionItems.filter((s) => s.status === "planned")
+        .length,
+      maintenanceSectionCount: sectionItems.filter(
+        (s) => s.status === "maintenance",
+      ).length,
+      hiddenSectionCount: sectionItems.filter((s) => s.status === "hidden")
+        .length,
+      sections: sectionItems.map((s) =>
+        s.status === "planned"
+          ? `${s.name} (próx.)`
+          : s.status === "maintenance"
+            ? `${s.name} (mant.)`
+            : s.status === "hidden"
+              ? `${s.name} (oculto)`
+              : s.name,
+      ),
+    };
+  });
 }
 
 /** Reexport para consumidores que ya usan appPathsMatch. */

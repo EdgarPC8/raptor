@@ -73,7 +73,7 @@ function sumDayTotals(days) {
   );
 }
 
-/** Agrega calendario desde pedidos, POS, ingresos y gastos del seed demo. */
+/** Agrega calendario desde pedidos, POS, ingresos y egresos del seed demo. */
 function buildCalendarAggregates(ctx) {
   const days = {};
 
@@ -274,7 +274,7 @@ function aggregateFinanceByDay(incomes = [], expenses = []) {
   return { incomeByDay, expenseByDay };
 }
 
-/** Serie diaria demo: varios días con gasto > ingreso (vela roja). */
+/** Serie diaria demo: varios días con egreso > ingreso (vela roja). */
 function ensureDemoDailySeries(incomeByDay, expenseByDay, days = 40) {
   const today = new Date();
   today.setHours(12, 0, 0, 0);

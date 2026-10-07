@@ -22,7 +22,7 @@ import {
   makeSnapshot,
   shouldRecordHistory,
 } from "./editorHistory.js";
-import { editorReducer, initialState } from "./editorReducer";
+import { editorReducer, initialState, getSelectedLayerIds } from "./editorReducer";
 import { resolveTemplate, resolveLayer } from "./bind/resolveTemplate";
 import { toRelativeImagePath } from "./editorActions";
 import { drawImageWithCrop } from "./imageCrop.js";
@@ -34,13 +34,14 @@ import {
   canLayerTakeColor,
   layerColorPropPatch,
 } from "./editorColors.js";
-import { sampleColorAtDocPoint } from "./docCanvasRender.js";
+import { sampleColorAtDocPoint, renderDocToCanvas } from "./docCanvasRender.js";
 import {
   normalizeTemplateSettings,
   settingsFromRow,
   templateRequiresProduct,
   settingsToMeta,
   getCanvasSizeByFormat,
+  parseSettingsJson,
 } from "./templateSettings";
 
 // ✅ Fallback local template
@@ -145,21 +146,29 @@ const normalizeDoc = (doc) => {
   if (!doc || typeof doc !== "object") return { ...BASE_TEMPLATE, id: null };
 
   const { backgroundSrc: _drop, ...docRest } = doc;
+  const folders = Array.isArray(doc.folders)
+    ? doc.folders
+    : Array.isArray(doc.meta?.folders)
+      ? doc.meta.folders
+      : [];
+
   return {
     id: doc.id ?? null,
     canvas: doc.canvas || { width: 1920, height: 1080 },
     groups: Array.isArray(doc.groups) ? doc.groups : [],
     layers: Array.isArray(doc.layers) ? doc.layers : [],
+    folders,
     data: doc.data || {},
-    meta: doc.meta || { name: doc.name || "Template" },
+    meta: { ...(doc.meta || { name: doc.name || "Template" }), folders },
     ...docRest,
+    folders,
   };
 };
 
 // ✅ soporta row DB o doc ya resuelto
 const mapDbTemplateToDoc = (row) => {
   if (row?.canvas?.width && Array.isArray(row?.layers)) {
-    return normalizeDoc({
+  return normalizeDoc({
       ...row,
       id:
         row?.id ??
@@ -167,12 +176,18 @@ const mapDbTemplateToDoc = (row) => {
         row?.template?.id ??
         row?.resolved?.templateId ??
         null,
+      folders:
+        row.folders ||
+        row.meta?.folders ||
+        parseSettingsJson(row.settingsJson).folders ||
+        [],
     });
   }
 
   const groups = Array.isArray(row?.groups)
     ? row.groups.map((g) => ({
         id: g.key || g.id,
+        name: g.name || undefined,
         x: g.x || 0,
         y: g.y || 0,
         locked: !!g.locked,
@@ -195,6 +210,10 @@ const mapDbTemplateToDoc = (row) => {
         locked: !!l.locked,
         props: l.props && !Array.isArray(l.props) ? l.props : {},
         bind: l.bind || undefined,
+        folderId:
+          l.folderId ||
+          (l.props && !Array.isArray(l.props) ? l.props.folderId : null) ||
+          null,
       }))
     : [];
 
@@ -210,14 +229,21 @@ const mapDbTemplateToDoc = (row) => {
     canvas = getCanvasSizeByFormat(String(row.format));
   }
 
+  const settingsObj = parseSettingsJson(row?.settingsJson || row?.meta || {});
+
   return normalizeDoc({
     id: row?.id ?? null,
     canvas,
     groups,
     layers,
+    folders:
+      row?.folders ||
+      row?.meta?.folders ||
+      settingsObj.folders ||
+      [],
     meta: {
       name: row?.name || "Template",
-      ...normalizeTemplateSettings(row?.settingsJson || row?.meta || {}, {
+      ...normalizeTemplateSettings(settingsObj, {
         layers,
         backgroundSrc: row?.backgroundSrc,
       }),
@@ -273,7 +299,7 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
   const stageRef = useRef(null);
   /** Escala lógica → pantalla (píxeles doc / píxeles CSS). Ajustada por CanvasViewport. */
   const [viewScale, setViewScale] = useState(3);
-  const [activeTool, setActiveTool] = useState("move");
+  const [activeTool, setActiveTool] = useState("select");
   const [foregroundColor, setForegroundColorState] = useState(DEFAULT_FOREGROUND);
   const [backgroundColor, setBackgroundColorState] = useState(DEFAULT_BACKGROUND);
   const [activeColorSlot, setActiveColorSlot] = useState("foreground");
@@ -281,6 +307,10 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
   const layers = state.doc?.layers || [];
   const groups = state.doc?.groups || [];
   const selectedId = state.selected?.kind === "layer" ? state.selected.id : null;
+  const selectedIds = useMemo(
+    () => getSelectedLayerIds(state.selected),
+    [state.selected]
+  );
 
   const applyColorToLayer = useCallback(
     (layerId, color) => {
@@ -392,20 +422,34 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
       if (k.startsWith("__meta")) delete docClean[k];
     });
     docClean.layers = (doc.layers || []).map((layer) => {
-      const out = { ...layer, props: { ...(layer.props || {}) }, bind: layer.bind ? { ...layer.bind } : undefined };
-      if (layer.type === "image") {
+      const out = {
+        ...layer,
+        props: { ...(layer.props || {}) },
+        bind: layer.bind ? { ...layer.bind } : undefined,
+      };
+      const fid = layer.folderId ?? layer.props?.folderId ?? null;
+      if (fid) out.props.folderId = fid;
+      else delete out.props.folderId;
+      if (layer.type === "image" || layer.type === "svg") {
         if (out.props.src != null) out.props.src = toRelativeImagePath(out.props.src);
         if (out.bind) {
-          if (out.bind.fallbackSrc != null) out.bind.fallbackSrc = toRelativeImagePath(out.bind.fallbackSrc);
-          if (out.bind.srcPrefix != null && out.bind.srcPrefix !== "") out.bind.srcPrefix = "";
+          if (out.bind.fallbackSrc != null)
+            out.bind.fallbackSrc = toRelativeImagePath(out.bind.fallbackSrc);
+          if (out.bind.srcPrefix != null && out.bind.srcPrefix !== "")
+            out.bind.srcPrefix = "";
         }
       }
       return out;
     });
     docClean.meta = {
       ...(doc.meta || {}),
-      ...settingsToMeta(doc.meta || {}),
+      ...settingsToMeta({
+        ...(doc.meta || {}),
+        folders: doc.folders || doc.meta?.folders,
+      }),
+      folders: doc.folders || doc.meta?.folders || [],
     };
+    docClean.folders = doc.folders || doc.meta?.folders || [];
     return docClean;
   };
 
@@ -622,178 +666,49 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
     return { id: createdId, doc: normalizeDoc(parsed) };
   };
 
-  // ✅ EXPORT AS IMAGE CORREGIDO: usa resolveTemplate para background y layers
+  // ✅ EXPORT: PNG/JPG vía render unificado (incluye SVG)
   const exportAsImage = async (type = "png") => {
     const data = state.doc;
     if (!data?.canvas) return;
 
-    const W = data.canvas.width;
-    const H = data.canvas.height;
-
-    // ✅ Esperar fuentes (Inter, Poppins, etc.) para que el canvas dibuje igual que el editor
-    if (typeof document?.fonts?.ready === "object") {
-      await document.fonts.ready;
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d");
-
     try {
-      const resolvedDoc = resolveTemplate(data, data.data); // ✅ layers resueltos (fondo = capa imagen si quieres)
-
-      // Fondo base (sin imagen fija; las capas tipo imagen cubren el espacio que definas)
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, W, H);
-
-      const gmap = new Map((resolvedDoc.groups || []).map((g) => [g.id, g]));
-
-      const visibleLayers = [...(resolvedDoc.layers || [])]
-        .filter((l) => l.visible !== false)
-        .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
-
-      for (const layer of visibleLayers) {
-        const g = gmap.get(layer.groupId) || { x: 0, y: 0 };
-        const x = (g.x || 0) + (layer.x || 0);
-        const y = (g.y || 0) + (layer.y || 0);
-        const w = layer.w || 0;
-        const h = layer.h || 0;
-
-        if (layer.type === "shape") {
-          const fill = layer.props?.fill || "rgba(0,0,0,0.35)";
-          const r = layer.props?.borderRadius || 0;
-          ctx.save();
-          ctx.fillStyle = fill;
-          if (r > 0) {
-            roundRectPath(ctx, x, y, w, h, r);
-            ctx.fill();
-          } else {
-            ctx.fillRect(x, y, w, h);
-          }
-          ctx.restore();
-        }
-
-        if (layer.type === "image") {
-          const src = layer.props?.src;
-          if (!src) continue;
-          try {
-            const im = await loadImage(src);
-            drawImageWithCrop(
-              ctx,
-              im,
-              x,
-              y,
-              w,
-              h,
-              layer.props?.fit || "cover",
-              layer.props?.borderRadius || 0,
-              layer.props?.cropNorm
-            );
-          } catch (err) {
-            console.warn("Image load failed:", src, err);
-          }
-        }
-
-        if (layer.type === "text") {
-          const rawText = String(layer.props?.text ?? "");
-          const fontSize = Number(layer.props?.fontSize || 32);
-          const fontWeight = layer.props?.fontWeight || 700;
-          const fontStyle = layer.props?.fontStyle || "normal";
-          const fontFamily = layer.props?.fontFamily || "Inter, system-ui, Arial";
-          const color = layer.props?.color || "#fff";
-          const align = layer.props?.align || "left";
-          const verticalAlign = layer.props?.verticalAlign || "top"; // ✅ igual que LayerRenderer
-          const stroke = layer.props?.stroke;
-          const strokeWidth = Number(layer.props?.strokeWidth || 0);
-          const shadowBlur = Number(layer.props?.shadowBlur || 0);
-          const shadowOffsetX = Number(layer.props?.shadowOffsetX || 0);
-          const shadowOffsetY = Number(layer.props?.shadowOffsetY || 0);
-          const shadowColor = layer.props?.shadowColor || "transparent";
-          const lineHeight = Number(layer.props?.lineHeight || 1.1);
-          const wrap = layer.props?.wrap !== false; // ✅ igual que LayerRenderer (pre-wrap)
-
-          ctx.save();
-          ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
-          ctx.textBaseline = "middle";
-          ctx.textAlign = align;
-
-          let tx = x;
-          if (align === "center") tx = x + w / 2;
-          if (align === "right") tx = x + w;
-
-          // ✅ Word wrap: dividir líneas para que quepan en w (como el div del editor)
-          const wrapLine = (str) => {
-            if (!wrap || w <= 0) return str.split("\n");
-            const lines = [];
-            for (const para of str.split("\n")) {
-              const words = para.split(/\s+/);
-              let current = "";
-              for (const word of words) {
-                const test = current ? `${current} ${word}` : word;
-                const m = ctx.measureText(test);
-                if (m.width <= w) {
-                  current = test;
-                } else {
-                  if (current) lines.push(current);
-                  if (ctx.measureText(word).width <= w) {
-                    current = word;
-                  } else {
-                    for (const c of word) {
-                      const t = current + c;
-                      if (ctx.measureText(t).width > w && current) {
-                        lines.push(current);
-                        current = c;
-                      } else current = t;
-                    }
-                  }
-                }
-              }
-              if (current) lines.push(current);
-            }
-            return lines.length ? lines : [str];
-          };
-          const lines = wrapLine(rawText);
-
-          const totalHeight = (lines.length - 1) * fontSize * lineHeight + fontSize;
-          let ty = verticalAlign === "top"
-            ? y + fontSize / 2
-            : verticalAlign === "bottom"
-              ? y + h - totalHeight + fontSize / 2
-              : y + h / 2 - totalHeight / 2 + fontSize / 2;
-
-          if (shadowBlur > 0) {
-            ctx.shadowBlur = shadowBlur;
-            ctx.shadowOffsetX = shadowOffsetX;
-            ctx.shadowOffsetY = shadowOffsetY;
-            ctx.shadowColor = shadowColor;
-          }
-
-          if (strokeWidth > 0 && stroke) {
-            ctx.strokeStyle = stroke;
-            ctx.lineWidth = strokeWidth;
-            ctx.lineJoin = "round";
-            ctx.lineCap = "round";
-          }
-
-          lines.forEach((line, i) => {
-            const lineTy = i === 0 ? ty : ty + i * fontSize * lineHeight;
-            if (strokeWidth > 0 && stroke) ctx.strokeText(line, tx, lineTy);
-            ctx.fillStyle = color;
-            ctx.fillText(line, tx, lineTy);
-          });
-
-          ctx.restore();
-        }
-      }
-
       const mime = type === "jpg" ? "image/jpeg" : "image/png";
       const ext = type === "jpg" ? "jpg" : "png";
-      const url = canvas.toDataURL(mime, type === "jpg" ? 0.92 : 1);
-
-      downloadDataUrl(url, `banner_${Date.now()}.${ext}`);
+      const { dataUrl } = await renderDocToCanvas(data, data.data || {}, {
+        background: "#ffffff",
+        mime,
+        quality: type === "jpg" ? 0.92 : 1,
+      });
+      downloadDataUrl(dataUrl, `banner_${Date.now()}.${ext}`);
     } catch (err) {
       console.error("exportAsImage failed", err);
+    }
+  };
+
+  /** Exporta PDF con jsPDF (página del tamaño del lienzo + imagen del diseño). */
+  const exportAsPdf = async () => {
+    const data = state.doc;
+    if (!data?.canvas) return;
+
+    try {
+      const { jsPDF } = await import("jspdf");
+      const { dataUrl, width: W, height: H } = await renderDocToCanvas(
+        data,
+        data.data || {},
+        { background: "#ffffff", mime: "image/png" }
+      );
+      const landscape = W >= H;
+      const pdf = new jsPDF({
+        orientation: landscape ? "landscape" : "portrait",
+        unit: "px",
+        format: [W, H],
+        hotfixes: ["px_scaling"],
+      });
+      pdf.addImage(dataUrl, "PNG", 0, 0, W, H);
+      pdf.save(`diseno_${Date.now()}.pdf`);
+    } catch (err) {
+      console.error("exportAsPdf failed", err);
+      throw err;
     }
   };
 
@@ -825,10 +740,12 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
       swapColors,
       pickColor,
       pickColorFromCanvas,
+      applyColorToLayer,
 
       layers,
       groups,
       selectedId,
+      selectedIds,
 
       setLayerMeta,
       updateLayerProps,
@@ -860,7 +777,7 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
       templateSettings: settingsFromRow(state.doc || {}),
       requiresProduct: templateRequiresProduct(state.doc || {}),
     }),
-    [state, layers, groups, selectedId, viewScale, activeTool, addBackgroundLayer, foregroundColor, backgroundColor, activeColorSlot, setForegroundColor, setBackgroundColor, pickColor, pickColorFromCanvas, swapColors, autoSaveTemplateDoc, undo, redo, canUndo, canRedo]
+    [state, layers, groups, selectedId, selectedIds, viewScale, activeTool, addBackgroundLayer, foregroundColor, backgroundColor, activeColorSlot, setForegroundColor, setBackgroundColor, pickColor, pickColorFromCanvas, applyColorToLayer, swapColors, autoSaveTemplateDoc, undo, redo, canUndo, canRedo]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

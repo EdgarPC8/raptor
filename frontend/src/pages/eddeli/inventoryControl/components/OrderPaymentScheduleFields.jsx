@@ -24,9 +24,11 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import CreditScoreIcon from "@mui/icons-material/CreditScore";
 import {
   buildEqualInstallments,
+  normalizeMaxInstallments,
   sumInstallmentAmounts,
   toDateOnly,
 } from "../../../../utils/orderPaymentSchedule.js";
+import { useAppSettings } from "../../../../context/AppSettingsContext.jsx";
 
 const money2 = (n) => Number(Number(n || 0).toFixed(2));
 const dateInputValue = (v) => toDateOnly(v) || "";
@@ -59,6 +61,8 @@ export default function OrderPaymentScheduleFields({
   partyKind = "customer",
 }) {
   const [open, setOpen] = useState(false);
+  const { settings } = useAppSettings();
+  const maxCuotas = normalizeMaxInstallments(settings?.maxInstallments);
   const total = money2(orderTotal);
   const sum = sumInstallmentAmounts(installments);
   const diff = money2(total - sum);
@@ -73,16 +77,20 @@ export default function OrderPaymentScheduleFields({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [Boolean(installments?.length)]);
 
-  const canGenerate = Boolean(deliveryDate && paymentDueDate && total > 0);
+  const canGenerate =
+    Boolean(deliveryDate && paymentDueDate && total > 0) &&
+    (!splitPayments || (Number(installmentCount) || 2) <= maxCuotas);
 
   const handleGenerate = () => {
     if (!canGenerate) return;
     const n = splitPayments ? Number(installmentCount) || 2 : 1;
+    if (splitPayments && n > maxCuotas) return;
     const rows = buildEqualInstallments({
       startDate: deliveryDate,
       endDate: paymentDueDate,
       count: n,
       total,
+      maxCount: maxCuotas,
     });
     onInstallmentsChange(rows);
   };
@@ -102,6 +110,7 @@ export default function OrderPaymentScheduleFields({
   };
 
   const addRow = () => {
+    if ((installments?.length || 0) >= maxCuotas) return;
     onInstallmentsChange([
       ...(installments || []),
       {
@@ -217,7 +226,8 @@ export default function OrderPaymentScheduleFields({
                   size="small"
                   type="number"
                   label="Nº de pagos"
-                  inputProps={{ min: 2, max: 36 }}
+                  inputProps={{ min: 2, max: maxCuotas }}
+                  helperText={`Máximo ${maxCuotas}`}
                   value={installmentCount}
                   onChange={(e) => onInstallmentCountChange(Number(e.target.value) || 2)}
                 />

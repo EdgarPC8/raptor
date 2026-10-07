@@ -47,6 +47,8 @@ const TablePro = ({
   dataTour = undefined,
   /** data-tour en el buscador. */
   dataTourSearch = undefined,
+  /** Extra a la derecha del título (ej. selector de columnas). */
+  toolbarExtra = null,
 }) => {
   const theme = useTheme();
   const accent = theme.palette.primary.main;
@@ -125,10 +127,17 @@ const TablePro = ({
       {...(dataTour ? { "data-tour": dataTour } : {})}
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
-        {title && (
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-            {title}
-          </Typography>
+        {(title || toolbarExtra) && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 28 }}>
+            {title ? (
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2, flex: 1 }}>
+                {title}
+              </Typography>
+            ) : (
+              <Box sx={{ flex: 1 }} />
+            )}
+            {toolbarExtra}
+          </Box>
         )}
         {showSearch && (
           <TextField
@@ -361,6 +370,10 @@ const TablePro = ({
             rowsPerPage={rowsPerPage}
             onRowsPerPageChange={handleChangeRowsPerPage}
             rowsPerPageOptions={rowsPerPageOptions}
+            labelRowsPerPage="Filas por página"
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} de ${count !== -1 ? count : `más de ${to}`}`
+            }
             disabled={loading}
           />
         )}

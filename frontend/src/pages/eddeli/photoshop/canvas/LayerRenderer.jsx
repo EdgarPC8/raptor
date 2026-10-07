@@ -1,19 +1,36 @@
 import React from "react";
 import { Box } from "@mui/material";
-import { SCALE } from "../editorActions";
+import { SCALE, isMediaLayerType } from "../editorActions";
 import { resolveLayer } from "../bind/resolveTemplate";
 import { editorImageUrl } from "../editorImageUpload.js";
 import { hasCrop } from "../imageCrop.js";
-import { getEditorCursor, isSelectionTool } from "../editorCursors.js";
-import { useImageCropCtx } from "../useImageCrop.jsx";
+import { getEditorCursor } from "../editorCursors.js";
+import { getSelectedLayerIds } from "../editorReducer";
 import TransformBox from "./TransformBox";
-import CropOverlay from "./CropOverlay";
 
-function CroppedImagePreview({ src, fit, cropNorm, borderRadius }) {
+function CroppedImagePreview({ src, fit, cropNorm, borderRadius, isSvg }) {
   const url = editorImageUrl(src);
-  const cn = cropNorm;
 
-  if (!cn || !hasCrop(cn)) {
+  if (!url) {
+    return (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "grid",
+          placeItems: "center",
+          background: "rgba(0,0,0,0.06)",
+          color: "#666",
+          fontSize: 11,
+          borderRadius,
+        }}
+      >
+        {isSvg ? "SVG vacío" : "Sin imagen"}
+      </div>
+    );
+  }
+
+  if (!cropNorm || !hasCrop(cropNorm) || isSvg) {
     return (
       <img
         src={url}
@@ -32,8 +49,8 @@ function CroppedImagePreview({ src, fit, cropNorm, borderRadius }) {
     );
   }
 
-  const iw = 100 / cn.w;
-  const ih = 100 / cn.h;
+  const iw = 100 / cropNorm.w;
+  const ih = 100 / cropNorm.h;
 
   return (
     <div
@@ -52,8 +69,8 @@ function CroppedImagePreview({ src, fit, cropNorm, borderRadius }) {
           width: `${iw}%`,
           height: `${ih}%`,
           maxWidth: "none",
-          marginLeft: `${(-cn.x / cn.w) * 100}%`,
-          marginTop: `${(-cn.y / cn.h) * 100}%`,
+          marginLeft: `${(-cropNorm.x / cropNorm.w) * 100}%`,
+          marginTop: `${(-cropNorm.y / cropNorm.h) * 100}%`,
           display: "block",
           userSelect: "none",
           pointerEvents: "none",
@@ -63,16 +80,16 @@ function CroppedImagePreview({ src, fit, cropNorm, borderRadius }) {
   );
 }
 
-function LayerContent({ layer, scale, previewCropNorm }) {
-  if (layer.type === "image") {
+function LayerContent({ layer, scale }) {
+  if (isMediaLayerType(layer.type)) {
     const src = layer.props?.src || "";
-    const cropNorm = previewCropNorm || layer.props?.cropNorm;
     return (
       <CroppedImagePreview
         src={src}
         fit={layer.props?.fit || "contain"}
-        cropNorm={cropNorm}
+        cropNorm={layer.type === "svg" ? null : layer.props?.cropNorm}
         borderRadius={layer.props?.borderRadius || 0}
+        isSvg={layer.type === "svg"}
       />
     );
   }
@@ -92,16 +109,12 @@ function LayerContent({ layer, scale, previewCropNorm }) {
   }
 
   if (layer.type === "text") {
-
-
     const align = layer.props?.align || "left";
     const verticalAlign = layer.props?.verticalAlign || "top";
     const wrap = layer.props?.wrap !== false;
     const clampLines = Number(layer.props?.maxLines || 0);
-    
     const lineHeight = Number(layer.props?.lineHeight || 1.1);
 
-    // Mapeo de alineación vertical a alignItems
     const alignItemsMap = {
       top: "flex-start",
       center: "center",
@@ -119,12 +132,10 @@ function LayerContent({ layer, scale, previewCropNorm }) {
           fontWeight: layer.props?.fontWeight || 700,
           letterSpacing: `${Number(layer.props?.letterSpacing || 0) / scale}px`,
           lineHeight,
-
           WebkitTextStroke:
             Number(layer.props?.strokeWidth || 0) > 0 && layer.props?.stroke
               ? `${Number(layer.props?.strokeWidth || 0) / scale}px ${layer.props?.stroke}`
               : "0px transparent",
-
           textShadow:
             Number(layer.props?.shadowBlur || 0) > 0
               ? `${Number(layer.props?.shadowOffsetX || 0) / scale}px ${
@@ -133,22 +144,18 @@ function LayerContent({ layer, scale, previewCropNorm }) {
                   layer.props?.shadowColor || "transparent"
                 }`
               : "none",
-
           display: "flex",
           alignItems: alignItemsMap[verticalAlign] || "flex-start",
           justifyContent:
             align === "center" ? "center" : align === "right" ? "flex-end" : "flex-start",
           textAlign: align,
-
           whiteSpace: wrap ? "pre-wrap" : "nowrap",
           overflowWrap: "anywhere",
           wordBreak: "break-word",
           overflow: "hidden",
-
           ...(clampLines > 0
             ? { display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: clampLines }
             : {}),
-
           pointerEvents: "none",
           userSelect: "none",
         }}
@@ -168,25 +175,22 @@ export default function LayerRenderer({
   selectedBorder,
   readOnly = false,
   viewScale,
-  onLayerMouseDown,
-  onResizeStart,
-  onGroupMouseDown,
-  activeTool = "move",
-  cropDraft = null,
-  onCropChange,
-  onSelectionPointerDown,
+  onLayerSelect,
+  onPaintBucket,
+  activeTool = "select",
 }) {
   const scale = viewScale || SCALE;
-  const { beginMarqueeFromEvent } = useImageCropCtx();
   const groups = doc?.groups || [];
   const layers = doc?.layers || [];
+  const selectedIdSet = new Set(getSelectedLayerIds(selected));
+  const primaryId =
+    selected?.kind === "layer" ? selected.id : null;
 
   return (
     <>
       {groups.map((group) => (
         <Box
           key={group.id}
-          onMouseDown={readOnly ? undefined : (e) => onGroupMouseDown(group.id, e)}
           sx={{
             position: "absolute",
             left: (group.x || 0) / scale,
@@ -197,29 +201,19 @@ export default function LayerRenderer({
             .filter((l) => l.groupId === group.id && l.visible !== false)
             .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
             .map((rawLayer) => {
-              // ✅ AQUÍ: resolver con doc + docData
               const layer = resolveLayer(doc, docData, rawLayer);
-
-              const isSelected = !readOnly && selected?.kind === "layer" && selected.id === layer.id;
-              const isCropTarget =
-                !readOnly &&
-                isSelectionTool(activeTool) &&
-                cropDraft?.layerId === layer.id &&
-                layer.type === "image";
-              const previewCropNorm =
-                isCropTarget ? cropDraft.cropNorm : layer.props?.cropNorm;
+              const isSelected = !readOnly && selectedIdSet.has(layer.id);
+              const isPrimary = isSelected && layer.id === primaryId;
 
               const layerCursor = readOnly
                 ? "default"
-                : isSelectionTool(activeTool) && layer.type === "image"
-                  ? "crosshair"
-                  : isCropTarget
-                    ? "crosshair"
-                    : layer.locked
-                      ? "not-allowed"
-                      : activeTool === "move"
-                        ? "grab"
-                        : getEditorCursor(activeTool);
+                : layer.locked
+                  ? "not-allowed"
+                  : activeTool === "eyedropper"
+                    ? getEditorCursor("eyedropper")
+                    : activeTool === "paint-bucket"
+                      ? getEditorCursor("paint-bucket")
+                      : "pointer";
 
               return (
                 <Box
@@ -228,20 +222,13 @@ export default function LayerRenderer({
                     readOnly
                       ? undefined
                       : (e) => {
-                          if (
-                            (activeTool === "select-rect" || activeTool === "select-ellipse") &&
-                            layer.type === "image" &&
-                            !layer.locked
-                          ) {
-                            e.stopPropagation();
-                            beginMarqueeFromEvent(layer, activeTool, e, scale);
+                          if (activeTool === "eyedropper") return;
+                          e.stopPropagation();
+                          if (activeTool === "paint-bucket") {
+                            onPaintBucket?.(layer.id);
                             return;
                           }
-                          if (activeTool === "crop" && layer.type === "image" && !layer.locked) {
-                            onSelectionPointerDown?.(layer, e);
-                            return;
-                          }
-                          if (!isCropTarget) onLayerMouseDown(layer.id, e);
+                          onLayerSelect?.(layer.id, e);
                         }
                   }
                   sx={{
@@ -252,37 +239,15 @@ export default function LayerRenderer({
                     height: (layer.h || 0) / scale,
                     zIndex: layer.zIndex,
                     cursor: layerCursor,
-                    outline:
-                      isSelected && !isCropTarget && activeTool !== "move"
-                        ? selectedBorder
-                        : "none",
+                    outline: isSelected ? selectedBorder : "none",
                     outlineOffset: 2,
                     opacity: layer.visible === false ? 0.4 : 1,
                   }}
                 >
-                  <LayerContent
-                    layer={layer}
-                    scale={scale}
-                    previewCropNorm={previewCropNorm}
-                  />
+                  <LayerContent layer={layer} scale={scale} />
 
-                  {isCropTarget && (
-                    <CropOverlay
-                      layer={layer}
-                      cropNorm={cropDraft.cropNorm}
-                      onChange={onCropChange}
-                      scale={scale}
-                      selectionShape={cropDraft.selectionShape || "rect"}
-                      onMarqueePointerDown={(e) => onSelectionPointerDown?.(layer, e)}
-                    />
-                  )}
-
-                  {isSelected && !layer.locked && !isCropTarget && activeTool === "move" && (
-                    <TransformBox
-                      layer={layer}
-                      viewScale={scale}
-                      onResizeStart={onResizeStart}
-                    />
+                  {isPrimary && !layer.locked && activeTool !== "paint-bucket" && (
+                    <TransformBox layer={layer} viewScale={scale} />
                   )}
                 </Box>
               );

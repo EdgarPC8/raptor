@@ -1,5 +1,5 @@
 /**
- * CRUD de notificaciones programadas y envío manual (Admin/Programador).
+ * CRUD de notificaciones programadas y envío manual (Admin/Propietario).
  */
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -45,7 +45,7 @@ import TablePro from "../components/Tables/TablePro.jsx";
 /** Backend activo — CRUD en /notification-programs */
 const BACKEND_ENABLED = true;
 
-const ALLOWED = new Set(["Programador", "Administrador"]);
+const ALLOWED = new Set(["Propietario", "Administrador", "Programador"]);
 
 const initialForm = {
   code: "",

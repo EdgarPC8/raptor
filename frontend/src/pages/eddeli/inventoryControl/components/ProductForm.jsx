@@ -20,6 +20,8 @@ import {
   IconButton,
   Tooltip,
   InputAdornment,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import Cropper from "react-easy-crop";
 import { useForm } from "react-hook-form";
@@ -38,13 +40,17 @@ import {
   getUnits,
 } from "../../../../api/inventoryControlRequest.js";
 import { pathImg, buildImageUrl } from "../../../../api/axios";
+import {
+  resolveProductFlags,
+  typeFromFlags,
+} from "../../../../utils/productRoleFlags.js";
 import { useBarcodeScanner } from "../../../../hooks/useBarcodeScanner.js";
 import { normalizeProductBarcode, normalizePackageTiers } from "../../../../utils/productLookup.js";
 
 import { mediaStoragePath } from "../../../../utils/mediaPaths.js";
 import {
   toStorageMoney,
-  MONEY_INPUT_MAX_DECIMALS,
+  toMoneyInputValue,
 } from "../../../../utils/moneyFormat.js";
 import TourHelpButton from "../../../../components/TourHelpButton.jsx";
 import { usePageTour } from "../../../../hooks/usePageTour.js";
@@ -68,6 +74,9 @@ const PRODUCT_FORM_DEFAULTS = {
   name: "",
   desc: "",
   type: "final",
+  isSellable: true,
+  isRaw: false,
+  isRecipe: false,
   unitId: "",
   categoryId: "",
   barcode: "",
@@ -81,9 +90,49 @@ const PRODUCT_FORM_DEFAULTS = {
   taxRate: "",
 };
 
+/** Roles = tipos clásicos; se puede marcar más de uno (ej. Huevo = Final + Insumo). */
+const PRODUCT_ROLE_OPTIONS = [
+  {
+    id: "final",
+    label: "Final",
+    hint: "Se vende en caja / pedidos",
+  },
+  {
+    id: "insumo",
+    label: "Insumo",
+    hint: "Se usa en recetas (materia prima)",
+  },
+  {
+    id: "intermedio",
+    label: "Intermedio",
+    hint: "Se fabrica / tiene receta",
+  },
+];
+
+function rolesFromFlags({ isSellable, isRaw, isRecipe }) {
+  const roles = [];
+  if (isSellable) roles.push("final");
+  if (isRaw) roles.push("insumo");
+  if (isRecipe) roles.push("intermedio");
+  return roles.length ? roles : ["final"];
+}
+
+function flagsFromRoles(roles) {
+  const set = new Set(Array.isArray(roles) ? roles : []);
+  let isSellable = set.has("final");
+  let isRaw = set.has("insumo");
+  let isRecipe = set.has("intermedio");
+  if (!isSellable && !isRaw && !isRecipe) {
+    isSellable = true;
+  }
+  return { isSellable, isRaw, isRecipe };
+}
+
 function toNumOrZero(value) {
   if (value === "" || value == null) return 0;
-  const n = Number(value);
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const s = String(value).trim().replace(/\s/g, "").replace(",", ".");
+  const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -442,12 +491,16 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
 
     setValue("name", datos.name || "");
     setValue("desc", datos.desc || "");
-    setValue("type", datos.type || (isEditing ? "raw" : "final"));
+    const flags = resolveProductFlags(datos);
+    setValue("isSellable", flags.isSellable);
+    setValue("isRaw", flags.isRaw);
+    setValue("isRecipe", flags.isRecipe);
+    setValue("type", typeFromFlags(flags));
     setValue("unitId", datos.unitId || "");
     setValue("categoryId", datos.categoryId || "");
-    setValue("price", datos.price || 0);
-    setValue("supplierPrice", datos.supplierPrice || 0);
-    setValue("distributorPrice", datos.distributorPrice || 0);
+    setValue("price", toMoneyInputValue(datos.price));
+    setValue("supplierPrice", toMoneyInputValue(datos.supplierPrice));
+    setValue("distributorPrice", toMoneyInputValue(datos.distributorPrice));
     setValue("minStock", datos.minStock || 0);
     setValue("stock", datos.stock || 0);
     setValue("netWeight", datos.netWeight || 0);
@@ -495,9 +548,11 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
       if (datos.type) setValue("type", datos.type);
       if (datos.barcode) setValue("barcode", normalizeProductBarcode(datos.barcode));
       if (datos.supplierPrice != null && datos.supplierPrice !== "") {
-        setValue("supplierPrice", datos.supplierPrice);
+        setValue("supplierPrice", toMoneyInputValue(datos.supplierPrice));
       }
-      if (datos.price != null && datos.price !== "") setValue("price", datos.price);
+      if (datos.price != null && datos.price !== "") {
+        setValue("price", toMoneyInputValue(datos.price));
+      }
       if (datos.taxRate != null && datos.taxRate !== "") setValue("taxRate", datos.taxRate);
       if (datos.unitId) setValue("unitId", datos.unitId);
       if (datos.categoryId) setValue("categoryId", datos.categoryId);
@@ -525,8 +580,18 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
       return;
     }
 
-    const productType = data.type || "final";
-    const unitId = data.unitId || pickDefaultUnitId(units, productType);
+    const isRaw = Boolean(data.isRaw);
+    const isRecipe = Boolean(data.isRecipe);
+    let isSellable = Boolean(data.isSellable);
+    if (!isRaw && !isRecipe && !isSellable) {
+      toastAuth({
+        message: "Marcá al menos un rol: se vende, es insumo o se fabrica.",
+        variant: "warning",
+      });
+      return;
+    }
+    const productType = typeFromFlags({ isRaw, isRecipe, isSellable });
+    const unitId = data.unitId || pickDefaultUnitId(units, isRaw ? "raw" : "final");
     if (!unitId) {
       toastAuth({
         message: "No hay unidades configuradas en el sistema.",
@@ -534,7 +599,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
       });
       return;
     }
-    if (productType === "raw") {
+    if (isRaw) {
       const unit = units.find((u) => String(u.id) === String(unitId));
       if (!isGenericStorageUnit(unit)) {
         toastAuth({
@@ -555,7 +620,10 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
     if (barcode) fd.append("barcode", barcode);
     else if (isEditing) fd.append("barcode", "");
     if (data.desc?.trim()) fd.append("desc", data.desc.trim());
-    fd.append("type", data.type || "final");
+    fd.append("type", productType);
+    fd.append("isSellable", String(isSellable));
+    fd.append("isRaw", String(isRaw));
+    fd.append("isRecipe", String(isRecipe));
     fd.append("unitId", String(unitId));
     if (data.categoryId) fd.append("categoryId", String(data.categoryId));
 
@@ -730,36 +798,74 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
           />
         </Grid>
 
-        <Grid item xs={4} sm={3} data-tour="producto-form-type">
+        <Grid item xs={12} sm={6} data-tour="producto-form-type">
           <TextField
-            label="Tipo"
+            label="Tipo de producto"
             select
             size="small"
             fullWidth
             variant="standard"
             margin="none"
             sx={denseFieldSx}
-            value={watch("type") ?? "final"}
-            {...register("type", {
-              onChange: (e) => {
-                const nextType = e.target.value;
-                if (nextType === "raw") {
-                  const current = units.find((u) => String(u.id) === String(watch("unitId")));
-                  if (!isGenericStorageUnit(current)) {
-                    setValue("unitId", pickDefaultUnitId(units, "raw"), { shouldDirty: true });
-                  }
-                }
-              },
+            value={rolesFromFlags({
+              isSellable: Boolean(watch("isSellable")),
+              isRaw: Boolean(watch("isRaw")),
+              isRecipe: Boolean(watch("isRecipe")),
             })}
+            SelectProps={{
+              multiple: true,
+              renderValue: (selected) =>
+                (Array.isArray(selected) ? selected : [])
+                  .map((id) => PRODUCT_ROLE_OPTIONS.find((o) => o.id === id)?.label || id)
+                  .join(", "),
+            }}
+            onChange={(e) => {
+              const value = e.target.value;
+              const roles = typeof value === "string" ? value.split(",") : value;
+              const nextFlags = flagsFromRoles(roles);
+              setValue("isSellable", nextFlags.isSellable, { shouldDirty: true });
+              setValue("isRaw", nextFlags.isRaw, { shouldDirty: true });
+              setValue("isRecipe", nextFlags.isRecipe, { shouldDirty: true });
+              setValue("type", typeFromFlags(nextFlags), { shouldDirty: true });
+              if (nextFlags.isRaw) {
+                const current = units.find((u) => String(u.id) === String(watch("unitId")));
+                if (!isGenericStorageUnit(current)) {
+                  setValue("unitId", pickDefaultUnitId(units, "raw"), { shouldDirty: true });
+                }
+              }
+            }}
+            helperText="Podés marcar más de uno. Ej. Huevo = Final + Insumo."
+            FormHelperTextProps={{ sx: { m: 0, fontSize: "0.65rem" } }}
           >
-            <MenuItem value="raw">Insumo (materia prima)</MenuItem>
-            <MenuItem value="intermediate">Intermedio</MenuItem>
-            <MenuItem value="final">Final (venta / empaque)</MenuItem>
+            {PRODUCT_ROLE_OPTIONS.map((opt) => {
+              const selected = rolesFromFlags({
+                isSellable: Boolean(watch("isSellable")),
+                isRaw: Boolean(watch("isRaw")),
+                isRecipe: Boolean(watch("isRecipe")),
+              });
+              return (
+                <MenuItem key={opt.id} value={opt.id}>
+                  <Checkbox size="small" checked={selected.includes(opt.id)} />
+                  <Box sx={{ ml: 0.5 }}>
+                    <Typography variant="body2" fontWeight={600}>
+                      {opt.label}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {opt.hint}
+                    </Typography>
+                  </Box>
+                </MenuItem>
+              );
+            })}
           </TextField>
+          <input type="hidden" {...register("type")} />
+          <input type="hidden" {...register("isSellable")} />
+          <input type="hidden" {...register("isRaw")} />
+          <input type="hidden" {...register("isRecipe")} />
         </Grid>
         <Grid item xs={4} sm={3} data-tour="producto-form-unit">
           <TextField
-            label={watch("type") === "raw" ? "Unidad del insumo" : "Unidad"}
+            label={watch("isRaw") ? "Unidad del insumo" : "Unidad"}
             select
             size="small"
             fullWidth
@@ -769,14 +875,14 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
             value={watch("unitId") || ""}
             {...register("unitId")}
             helperText={
-              watch("type") === "raw"
+              watch("isRaw")
                 ? "Peso: g · Volumen: ml/L"
                 : undefined
             }
             FormHelperTextProps={{ sx: { m: 0, fontSize: "0.65rem" } }}
           >
             {(Array.isArray(units) ? units : [])
-              .filter((u) => (watch("type") === "raw" ? isGenericStorageUnit(u) : true))
+              .filter((u) => (watch("isRaw") ? isGenericStorageUnit(u) : true))
               .map((u) => (
                 <MenuItem key={u.id} value={u.id}>
                   {u.abbreviation || u.name}
@@ -828,10 +934,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
             variant="standard"
             margin="none"
             sx={denseFieldSx}
-            inputProps={{
-              step: Number(`1e-${MONEY_INPUT_MAX_DECIMALS}`),
-              min: 0,
-            }}
+            inputProps={{ step: "any", min: 0, inputMode: "decimal" }}
             placeholder="0"
             {...register("supplierPrice")}
             InputProps={{ startAdornment: moneyAdornment }}
@@ -846,10 +949,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
             variant="standard"
             margin="none"
             sx={denseFieldSx}
-            inputProps={{
-              step: Number(`1e-${MONEY_INPUT_MAX_DECIMALS}`),
-              min: 0,
-            }}
+            inputProps={{ step: "any", min: 0, inputMode: "decimal" }}
             placeholder="0"
             {...register("distributorPrice")}
             InputProps={{ startAdornment: moneyAdornment }}
@@ -864,10 +964,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
             variant="standard"
             margin="none"
             sx={denseFieldSx}
-            inputProps={{
-              step: Number(`1e-${MONEY_INPUT_MAX_DECIMALS}`),
-              min: 0,
-            }}
+            inputProps={{ step: "any", min: 0, inputMode: "decimal" }}
             placeholder="0"
             {...register("price")}
             InputProps={{ startAdornment: moneyAdornment }}
@@ -945,7 +1042,7 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
         </Grid>
         <Grid item xs={6} sm={3} data-tour="producto-form-std-weight">
           <TextField
-            label="Peso prom. g"
+            label="Gramos que contiene"
             type="number"
             size="small"
             fullWidth
@@ -953,7 +1050,12 @@ function ProductForm({ isEditing = false, datos = {}, onClose, reload, onOpenSto
             margin="none"
             sx={denseFieldSx}
             inputProps={{ step: "any", min: 0 }}
-            placeholder="0"
+            placeholder="45000"
+            helperText={
+              Number(watch("standardWeightGrams")) > 0
+                ? `${Number(watch("stock") || 0)} × ${Number(watch("standardWeightGrams"))} g = ${(Number(watch("stock") || 0) * Number(watch("standardWeightGrams"))).toLocaleString("es-EC")} g`
+                : "Contenido de una unidad, en gramos. Ej. un quintal = 45000."
+            }
             {...register("standardWeightGrams")}
           />
         </Grid>

@@ -1,17 +1,18 @@
 /**
  * Selector múltiple de roles (desde GET /rol).
- * El rol de mantenimiento interno no se ofrece al administrador.
+ * Roles internos (Propietario/Programador) solo para Propietario y Programador.
  */
 import { useEffect, useMemo, useState } from "react";
 import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
 import { getRolRequest } from "../../api/accountRequest.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 
-const INTERNAL_ROLE = "Programador";
+const INTERNAL_ROLES = new Set(["Propietario", "Programador"]);
 
 export default function SelectDataRoles({ value = [], onChange }) {
   const { user } = useAuth();
-  const canSeeInternalRole = user?.loginRol === INTERNAL_ROLE;
+  const canSeeInternalRoles =
+    user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const [roles, setRoles] = useState([]);
 
   useEffect(() => {
@@ -22,10 +23,10 @@ export default function SelectDataRoles({ value = [], onChange }) {
 
   const visibleRoles = useMemo(
     () =>
-      canSeeInternalRole
+      canSeeInternalRoles
         ? roles
-        : roles.filter((r) => r.name !== INTERNAL_ROLE),
-    [canSeeInternalRole, roles],
+        : roles.filter((r) => !INTERNAL_ROLES.has(r.name)),
+    [canSeeInternalRoles, roles],
   );
 
   return (
@@ -40,7 +41,7 @@ export default function SelectDataRoles({ value = [], onChange }) {
         renderValue={(selected) =>
           selected
             .map((id) => roles.find((r) => r.id === id)?.name || id)
-            .filter((name) => canSeeInternalRole || name !== INTERNAL_ROLE)
+            .filter((name) => canSeeInternalRoles || !INTERNAL_ROLES.has(name))
             .join(", ")
         }
       >
