@@ -7,3 +7,6 @@ dist-raptor
 !.env.*.example
 .env.local
 .env.*.local
+
+# builds bloqueados por permisos root (no commitear)
+dist.root-locked.*
