@@ -1,9 +1,9 @@
 /**
  * Paleta de marca del sistema (claro / oscuro / neón).
- * Default = colores actuales de Raptor en getTheme.js.
+ * Default = colores actuales de la marca en getTheme.js.
  * Caché local para arranque sin pedir a la API cada vez.
  */
-import { APP_ID } from "../config/appInfo.js";
+import { APP_ID, BRAND_NAME } from "../config/appInfo.js";
 
 export const THEME_PALETTE_VERSION = 1;
 
@@ -12,7 +12,7 @@ export const THEME_PALETTE_CACHE_KEY = `${APP_ID}-theme-palette`;
 /** Colores actuales del sistema (fallback en código). */
 export const DEFAULT_THEME_PALETTE = Object.freeze({
   v: THEME_PALETTE_VERSION,
-  name: "Raptor",
+  name: BRAND_NAME,
   light: Object.freeze({
     primary: "#1A7A9A",
     primaryLight: "#3D9BB8",
@@ -188,7 +188,7 @@ export function normalizeThemePalette(raw) {
     return deepCloneDefault();
   }
   const name =
-    String(src.name || DEFAULT_THEME_PALETTE.name).trim().slice(0, 80) || "Raptor";
+    String(src.name || DEFAULT_THEME_PALETTE.name).trim().slice(0, 80) || BRAND_NAME;
   return {
     v: THEME_PALETTE_VERSION,
     name,
@@ -326,7 +326,7 @@ export function suggestSeedColors(seedHex) {
     { label: "Triádico", hex: shiftHex(base, { h: 120 }) },
     { label: "Más cálido", hex: shiftHex(base, { h: 15, s: 0.08 }) },
     { label: "Más frío", hex: shiftHex(base, { h: -18, s: 0.06 }) },
-    { label: "Raptor", hex: DEFAULT_THEME_PALETTE.light.primary },
+    { label: BRAND_NAME, hex: DEFAULT_THEME_PALETTE.light.primary },
   ];
 }
 

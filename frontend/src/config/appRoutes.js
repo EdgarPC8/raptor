@@ -104,6 +104,7 @@ export const APP_ROUTES = {
     logs: "/desarrollador/logs",
     backups: "/desarrollador/backups",
     commands: "/desarrollador/comandos",
+    tests: "/desarrollador/pruebas",
   },
   public: {
     catalog: "/publico/catalogo",
@@ -210,6 +211,7 @@ export const LEGACY_ROUTE_REDIRECTS = [
   ["/logs", APP_ROUTES.developer.logs],
   ["/backups", APP_ROUTES.developer.backups],
   ["/comandos", APP_ROUTES.developer.commands],
+  ["/pruebas", APP_ROUTES.developer.tests],
   // Diseño promocional
   ["/editor", APP_ROUTES.promoDesign.editor],
   ["/editorDefault", APP_ROUTES.promoDesign.preview],

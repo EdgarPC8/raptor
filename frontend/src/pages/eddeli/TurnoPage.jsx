@@ -44,11 +44,13 @@ import {
   closeShift,
   createShiftMovement,
   getActiveShift,
+  getPendingDifferenceShifts,
   getShifts,
   openShift,
   setActiveCashRegister,
 } from "../../api/shiftRequest.js";
 import ShiftProgrammerEditDialog from "./ShiftProgrammerEditDialog.jsx";
+import CashDifferenceResolveDialog from "./CashDifferenceResolveDialog.jsx";
 import ProgrammerMovementDateField, {
   movementDateForApi,
 } from "./inventoryControl/components/ProgrammerMovementDateField.jsx";
@@ -240,8 +242,9 @@ export default function TurnoPage() {
   const multiStockEnabled = Boolean(activeApp?.multiStockEnabled);
   const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const isAdmin = user?.loginRol === "Administrador" || isProgrammer;
-  /** Admin y Propietario abren/cierran con arqueo por monedas/billetes. */
-  const canCashArqueo = isAdmin;
+  /** Arqueo por monedas/billetes al abrir/cerrar (caja: admin, propietario, empleado). */
+  const canCashArqueo =
+    isAdmin || user?.loginRol === "Empleado";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeShift, setActiveShift] = useState(null);
@@ -269,6 +272,9 @@ export default function TurnoPage() {
   const [newRegisterName, setNewRegisterName] = useState("");
   const [newRegisterEmission, setNewRegisterEmission] = useState("");
   const [registerSaving, setRegisterSaving] = useState(false);
+  const [diffDialogOpen, setDiffDialogOpen] = useState(false);
+  const [diffJustClosed, setDiffJustClosed] = useState(null);
+  const [pendingDiffCount, setPendingDiffCount] = useState(0);
   const tourDemoGenRef = useRef(0);
   const activeShiftRef = useRef(null);
   const openDraftRestoredRef = useRef(false);
@@ -372,18 +378,21 @@ export default function TurnoPage() {
     [canCashArqueo, closeCounts, closeCashTotal],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async ({ quiet = false } = {}) => {
+    // quiet: no spinner (evita desmontar el modal de diferencia y que “se reabra”).
+    if (!quiet) setLoading(true);
     try {
       const storesQuery = { isActive: true, kind: "propia" };
-      const [activeRes, histRes, storesRes, sriRes] = await Promise.all([
+      const [activeRes, histRes, storesRes, sriRes, pendingRes] = await Promise.all([
         getActiveShift(),
         getShifts({ limit: 12 }),
         getStoresRequest(storesQuery).catch(() => ({ data: [] })),
         fetchSriBillingSettings().catch(() => null),
+        getPendingDifferenceShifts({ limit: 50 }).catch(() => ({ data: [] })),
       ]);
       setActiveShift(activeRes.data || null);
       setHistory(Array.isArray(histRes.data) ? histRes.data : []);
+      setPendingDiffCount(Array.isArray(pendingRes.data) ? pendingRes.data.length : 0);
       const rawStores = Array.isArray(storesRes.data) ? storesRes.data : [];
       // Solo sucursales propias. Sin multistock → un local; con multistock → varias propias.
       const usable = rawStores.filter((s) => {
@@ -400,7 +409,7 @@ export default function TurnoPage() {
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, [toast, multiStockEnabled]);
 
@@ -649,17 +658,21 @@ export default function TurnoPage() {
       });
       return;
     }
-    if (!stores.length) {
+    if (!stores.length && multiStockEnabled) {
       void toast?.({
-        message: multiStockEnabled
-          ? "No hay sucursales propias activas. Ve a Locales, crea o edita un local como «Sucursal propia» y actívalo."
-          : "No hay un local activo. Ve a Locales y crea o activa tu local.",
+        message:
+          "No hay sucursales propias activas. Ve a Locales, crea o edita un local como «Sucursal propia» y actívalo.",
         variant: "warning",
       });
       return;
     }
-    // Un solo local (Tienda/Store): abrir directo. Multistock: modal solo si hay varias propias.
-    if (!multiStockEnabled || stores.length === 1) {
+    // Un solo local (Tienda/Store): abrir directo (el backend usa el local principal).
+    // Multistock: modal solo si hay varias propias.
+    if (!multiStockEnabled) {
+      await doOpenShift(stores[0]?.id != null ? String(stores[0].id) : undefined);
+      return;
+    }
+    if (stores.length === 1) {
       await doOpenShift(String(stores[0].id));
       return;
     }
@@ -667,41 +680,77 @@ export default function TurnoPage() {
     setStoreModalOpen(true);
   };
 
-  const handleCloseShift = async () => {
+  const buildClosePayload = (differenceAction) => ({
+    notes: closeNotes || undefined,
+    ...(differenceAction ? { differenceAction } : {}),
+    ...(canCashArqueo
+      ? {
+          cashCounts: closeCounts,
+          ...(isProgrammer
+            ? { closedAt: datetimeLocalForApi(closeAt) || undefined }
+            : {}),
+        }
+      : { cashTotal: closeTotal }),
+  });
+
+  /** Cierre real en API. Con diferencia debe ir differenceAction omit|register. */
+  const performCloseShift = async (differenceAction) => {
     if (!activeShift?.id) return;
+    setSaving(true);
     try {
-      setSaving(true);
-      const { data } = await closeShift(activeShift.id, {
-        notes: closeNotes || undefined,
-        ...(canCashArqueo
-          ? {
-              cashCounts: closeCounts,
-              ...(isProgrammer
-                ? { closedAt: datetimeLocalForApi(closeAt) || undefined }
-                : {}),
-            }
-          : { cashTotal: closeTotal }),
-      });
+      const { data } = await closeShift(
+        activeShift.id,
+        buildClosePayload(differenceAction),
+      );
       const diff = Number(data?.summary?.cashDifference ?? 0);
       void toast?.({
         message:
-          diff === 0
+          data?.message ||
+          (diff === 0
             ? "Turno cerrado. Cuadre perfecto en efectivo."
-            : `Turno cerrado. Diferencia en efectivo: ${formatMoney(diff)}`,
-        variant: diff === 0 ? "success" : "warning",
+            : `Turno cerrado. Diferencia: ${formatMoney(diff)}`),
+        variant: "success",
       });
       setCloseCounts(emptyCashCounts());
       setCloseCashTotal("");
       setCloseAt("");
       setCloseNotes("");
-      await load();
+      setDiffDialogOpen(false);
+      setDiffJustClosed(null);
+      await load({ quiet: true });
     } catch (e) {
       void toast?.({
         message: e?.response?.data?.message || "No se pudo cerrar el turno.",
         variant: "error",
       });
+      throw e;
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** Si hay sobrante/faltante → modal primero (turno sigue abierto). Si cuadra → cierra. */
+  const handleCloseShift = async () => {
+    if (!activeShift?.id) return;
+    const expected = Number(activeShift.expectedCashTotal ?? 0);
+    const counted = closeTotal;
+    const diff = to2(counted - expected);
+    if (Math.abs(diff) > 0.001) {
+      setDiffJustClosed({
+        id: activeShift.id,
+        cashDifference: diff,
+        expectedCashTotal: expected,
+        closingCashTotal: counted,
+        store: activeShift.store,
+        pendingClose: true,
+      });
+      setDiffDialogOpen(true);
+      return;
+    }
+    try {
+      await performCloseShift();
+    } catch {
+      /* toast en performCloseShift */
     }
   };
 
@@ -854,35 +903,23 @@ export default function TurnoPage() {
                 : "Al abrir te pediremos en qué local abrir el turno."}
             </Typography>
           )}
-          {stores.length === 0 && (
+          {stores.length === 0 && multiStockEnabled && (
             <Typography variant="caption" color="warning.main" display="block" sx={{ mb: 1 }}>
-              {multiStockEnabled ? (
-                <>
-                  No hay sucursales propias activas. Ve a{" "}
-                  <Button
-                    component={RouterLink}
-                    to={APP_ROUTES.channel.stores}
-                    size="small"
-                    sx={{ p: 0, minWidth: 0, verticalAlign: "baseline", textTransform: "none" }}
-                  >
-                    Locales
-                  </Button>
-                  , tipo «Sucursal propia» y Activo.
-                </>
-              ) : (
-                <>
-                  No hay un local activo. Ve a{" "}
-                  <Button
-                    component={RouterLink}
-                    to={APP_ROUTES.channel.stores}
-                    size="small"
-                    sx={{ p: 0, minWidth: 0, verticalAlign: "baseline", textTransform: "none" }}
-                  >
-                    Locales
-                  </Button>{" "}
-                  y crea o activa tu local.
-                </>
-              )}
+              No hay sucursales propias activas. Ve a{" "}
+              <Button
+                component={RouterLink}
+                to={APP_ROUTES.channel.stores}
+                size="small"
+                sx={{ p: 0, minWidth: 0, verticalAlign: "baseline", textTransform: "none" }}
+              >
+                Locales
+              </Button>
+              , tipo «Sucursal propia» y Activo.
+            </Typography>
+          )}
+          {stores.length === 0 && !multiStockEnabled && (
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              Se abrirá en el local principal configurado.
             </Typography>
           )}
 
@@ -1276,11 +1313,32 @@ export default function TurnoPage() {
       )}
 
       <Paper variant="panel" sx={{ p: 1, borderRadius: 1.5 }} data-tour="turno-history">
-        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.5 }}>
-          <HistoryIcon sx={{ fontSize: 18 }} color="action" />
-          <Typography variant="subtitle2" fontWeight={700}>
-            {isAdmin ? "Historial de turnos" : "Mis turnos"}
-          </Typography>
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          spacing={0.5}
+          sx={{ mb: 0.5 }}
+          flexWrap="wrap"
+          useFlexGap
+        >
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <HistoryIcon sx={{ fontSize: 18 }} color="action" />
+            <Typography variant="subtitle2" fontWeight={700}>
+              {isAdmin ? "Historial de turnos" : "Mis turnos"}
+            </Typography>
+          </Stack>
+          <Button
+            size="small"
+            variant={pendingDiffCount > 0 ? "contained" : "outlined"}
+            color="warning"
+            onClick={() => {
+              setDiffJustClosed(null);
+              setDiffDialogOpen(true);
+            }}
+          >
+            Diferencias{pendingDiffCount > 0 ? ` (${pendingDiffCount})` : ""}
+          </Button>
         </Stack>
         <TableContainer sx={{ maxHeight: 160 }}>
           <Table size="small" stickyHeader sx={{ "& .MuiTableCell-root": { py: 0.4, px: 1, fontSize: "0.75rem" } }}>
@@ -1343,7 +1401,40 @@ export default function TurnoPage() {
                       fontWeight: 700,
                     }}
                   >
-                    {row.cashDifference != null ? formatMoney(row.cashDifference) : "—"}
+                    <Stack alignItems="flex-end" spacing={0.25}>
+                      <span>
+                        {row.cashDifference != null ? formatMoney(row.cashDifference) : "—"}
+                      </span>
+                      {row.differenceResolution &&
+                        row.differenceResolution !== "pending" &&
+                        Number(row.cashDifference) !== 0 && (
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={
+                              row.differenceResolution === "omitted"
+                                ? "Omitida"
+                                : row.differenceResolution === "income"
+                                  ? "Ingreso"
+                                  : row.differenceResolution === "expense"
+                                    ? "Egreso"
+                                    : row.differenceResolution
+                            }
+                            sx={{ height: 18, fontSize: "0.6rem" }}
+                          />
+                        )}
+                      {(!row.differenceResolution ||
+                        row.differenceResolution === "pending") &&
+                        Number(row.cashDifference) !== 0 &&
+                        row.status === "closed" && (
+                          <Chip
+                            size="small"
+                            color="warning"
+                            label="Pendiente"
+                            sx={{ height: 18, fontSize: "0.6rem" }}
+                          />
+                        )}
+                    </Stack>
                   </TableCell>
                   {isProgrammer && (
                     <TableCell align="center" onClick={(e) => e.stopPropagation()}>
@@ -1384,6 +1475,20 @@ export default function TurnoPage() {
         onClose={() => setEditShiftId(null)}
         onSaved={() => void load()}
         toast={toast}
+      />
+
+      <CashDifferenceResolveDialog
+        open={diffDialogOpen}
+        justClosed={diffJustClosed}
+        toast={toast}
+        onClose={() => {
+          setDiffDialogOpen(false);
+          setDiffJustClosed(null);
+        }}
+        onResolved={() => void load({ quiet: true })}
+        onConfirmClose={async (action) => {
+          await performCloseShift(action);
+        }}
       />
 
       <OpenShiftStoreDialog

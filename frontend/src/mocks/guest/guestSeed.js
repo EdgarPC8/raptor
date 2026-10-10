@@ -6,6 +6,8 @@
  * Imágenes demo: public/demo/productos/ → primaryImageUrl en modo invitado.
  */
 
+import { BRAND_NAME } from "../../config/raptorBrand.js";
+
 const today = new Date();
 today.setHours(12, 0, 0, 0);
 
@@ -841,14 +843,14 @@ export const suppliers = [
 export const stores = [
   {
     id: 1,
-    name: "Panadería Raptor — Centro",
+    name: `Panadería ${BRAND_NAME} — Centro`,
     address: "Av. 9 de Octubre 1205 y Boyacá",
     phone: "042110000",
     isActive: true,
   },
   {
     id: 2,
-    name: "Panadería Raptor — Urdesa",
+    name: `Panadería ${BRAND_NAME} — Urdesa`,
     address: "Víctor Emilio Estrada 456",
     phone: "042110001",
     isActive: true,
@@ -1126,7 +1128,7 @@ export const activeShift = {
   establishmentCode: "001",
   emissionPointCode: "001",
   orderCount: 11,
-  user: { id: 0, firstName: "Invitado", firstLastName: "Raptor", username: "invitado" },
+  user: { id: 0, firstName: "Invitado", firstLastName: BRAND_NAME, username: "invitado" },
   sales: {
     salesCash: 135.5,
     salesTransfer: 28,
@@ -1252,7 +1254,7 @@ function buildShiftDailyReport() {
     outflows: (activeShift.cashMovements?.items || []).map((m) => ({
       id: m.id,
       createdAt: m.createdAt,
-      operatorName: "Invitado Raptor",
+      operatorName: `Invitado ${BRAND_NAME}`,
       category: m.category,
       concept: m.concept,
       amount: m.amount,
@@ -1264,7 +1266,7 @@ function buildShiftDailyReport() {
         id: activeShift.id,
         status: activeShift.status,
         openedAt: activeShift.openedAt,
-        operatorName: "Invitado Raptor",
+        operatorName: `Invitado ${BRAND_NAME}`,
         salesTotal: activeShift.salesTotal,
         openingCashTotal: activeShift.openingCashTotal,
       },
@@ -1307,7 +1309,7 @@ export const notifications = [
 ];
 
 export const users = [
-  { id: 0, firstName: "Invitado", secondName: "", firstLastName: "Raptor", secondLastName: "", username: "invitado" },
+  { id: 0, firstName: "Invitado", secondName: "", firstLastName: BRAND_NAME, secondLastName: "", username: "invitado" },
   { id: 1, firstName: "María", secondName: "Elena", firstLastName: "Vásquez", secondLastName: "Pérez", username: "mvasquez" },
   { id: 2, firstName: "Carlos", secondName: "Alberto", firstLastName: "Mendoza", secondLastName: "Ruiz", username: "cmendoza" },
 ];
@@ -1406,7 +1408,7 @@ export const sriSettings = { readyForInvoicing: false, environment: "pruebas", e
 export const profile = {
   id: 0,
   firstName: "Invitado",
-  firstLastName: "Raptor",
+  firstLastName: BRAND_NAME,
   username: "invitado",
   email: "invitado@demo.ec",
 };

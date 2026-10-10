@@ -13,6 +13,7 @@
  */
 
 import { APP_ROUTES } from "./appRoutes.js";
+import { BRAND_NAME } from "./raptorBrand.js";
 
 export const APP_ROLES_LEGEND = [
   {
@@ -522,15 +523,15 @@ export const APP_MODULE_GROUPS = [
   {
     id: "produccion",
     label: "Producción",
-    summary: "Insumos, recetas, fabricación y (próx.) proveedores con cuenta.",
+    summary: "Enlaces de productos, recetas, fabricación y (próx.) proveedores con cuenta.",
     sections: [
       {
-        name: "Insumos y marcas",
+        name: "Enlaces productos",
         path: APP_ROUTES.production.ingredients,
         roles: ["Propietario", "Programador", "Administrador"],
-        description: "Materias primas, presentaciones y marcas de compra.",
+        description: "Enlaces entre empaques/presentaciones y productos que se reponen al abrirlos.",
         functions: [
-          { name: "Panel de insumos genéricos", description: "Lista con stock total y presentaciones." },
+          { name: "Panel de enlaces de productos", description: "Lista con stock total y presentaciones." },
           { name: "Crear presentación", description: "Formato de compra con stock y precio ref." },
           { name: "Enlazar producto", description: "Vincular materia prima existente a insumo genérico." },
           { name: "Bootstrap frecuentes", description: "Crear presentaciones típicas (azúcar, harina, aceite)." },
@@ -1032,7 +1033,7 @@ export const APP_MODULE_GROUPS = [
         name: "Donaciones",
         path: APP_ROUTES.system.donations,
         roles: ["Propietario", "Programador", "Administrador", "Empleado"],
-        description: "Información de apoyo al proyecto Raptor. También en el menú del avatar.",
+        description: `Información de apoyo al proyecto ${BRAND_NAME}. También en el menú del avatar.`,
         functions: [
           { name: "Información de apoyo", description: "Datos para contribuir al desarrollo del proyecto." },
         ],
@@ -1121,6 +1122,18 @@ export const APP_MODULE_GROUPS = [
           { name: "Progreso visual", description: "Diálogo con pasos y barra por operación." },
         ],
       },
+      {
+        name: "Pruebas",
+        path: APP_ROUTES.developer.tests,
+        roles: ["Programador"],
+        description: "Laboratorio de efectos de UI (solo Programador).",
+        functions: [
+          {
+            name: "Bolita explosiva",
+            description: "Simulación: bolita que se revienta al click (base del futuro icono flotante).",
+          },
+        ],
+      },
     ],
   },
 ];
@@ -1152,7 +1165,7 @@ export const APP_ACCOUNT_SECTIONS = [
     name: "Donaciones",
     path: APP_ROUTES.system.donations,
     roles: ["Propietario", "Programador", "Administrador", "Empleado"],
-    description: "Información de apoyo al proyecto Raptor.",
+    description: `Información de apoyo al proyecto ${BRAND_NAME}.`,
     functions: [
       { name: "Información de apoyo", description: "Datos para contribuir al desarrollo del proyecto." },
     ],

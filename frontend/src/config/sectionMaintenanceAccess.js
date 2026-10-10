@@ -27,9 +27,9 @@ export function isAppInProduction() {
   return !import.meta.env.DEV;
 }
 
-/** Propietario puede abrir secciones en mantenimiento aunque esté en producción. */
+/** Solo Programador ignora estados del gestor (mantenimiento / próximamente). */
 export function canBypassSectionMaintenance(loginRol) {
-  return loginRol === "Propietario" || loginRol === "Programador";
+  return loginRol === "Programador";
 }
 
 function normalizePath(path) {
@@ -306,8 +306,9 @@ export function isPathPlanned(pathname, subscriptionModules) {
   return Boolean(findPlannedSectionForPath(pathname, subscriptionModules));
 }
 
-/** «Próximamente» aplica a todos los roles (sin bypass de Propietario). */
-export function shouldBlockPlannedPath(pathname, _loginRol, subscriptionModules) {
+/** «Próximamente»: bloquea a todos salvo Programador. */
+export function shouldBlockPlannedPath(pathname, loginRol, subscriptionModules) {
+  if (canBypassSectionMaintenance(loginRol)) return false;
   if (
     !hasGestorModules(subscriptionModules) &&
     !isAppInProduction()
@@ -413,10 +414,10 @@ export function isPathHidden(pathname, subscriptionModules) {
 }
 
 /**
- * Oculto: nadie lo ve en menú ni entra por URL (tampoco Propietario),
- * a diferencia de mantenimiento/próximamente.
+ * Oculto: no entra nadie por URL salvo Programador.
  */
-export function shouldBlockHiddenPath(pathname, subscriptionModules) {
+export function shouldBlockHiddenPath(pathname, subscriptionModules, loginRol) {
+  if (canBypassSectionMaintenance(loginRol)) return false;
   if (
     !hasGestorModules(subscriptionModules) &&
     !isAppInProduction()
@@ -431,7 +432,8 @@ export function shouldHideHiddenMenuLink() {
   return true;
 }
 
-export function isMenuLinkHidden(link, subscriptionModules) {
+export function isMenuLinkHidden(link, subscriptionModules, loginRol) {
+  if (canBypassSectionMaintenance(loginRol)) return false;
   if (
     !hasGestorModules(subscriptionModules) &&
     !isAppInProduction()
@@ -445,7 +447,9 @@ export function isMenuLinkHidden(link, subscriptionModules) {
  * ¿Mostrar UI embebida de la sección (panel dashboard, etc.)?
  */
 export function isSectionUiEnabled(pathname, loginRol, subscriptionModules) {
-  if (shouldBlockHiddenPath(pathname, subscriptionModules)) return false;
+  if (shouldBlockHiddenPath(pathname, subscriptionModules, loginRol)) {
+    return false;
+  }
   if (shouldBlockMaintenancePath(pathname, loginRol, subscriptionModules)) {
     return false;
   }

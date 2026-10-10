@@ -20,11 +20,12 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
 import { getPostLoginPath } from "../utils/postLoginPath.js";
 import { SHELL_ONLY } from "../config/deployEnv.js";
-import { raptorLogoUrl } from "../config/raptorBrand.js";
+import { BRAND_NAME, raptorLogoUrl } from "../config/raptorBrand.js";
 import {
   useSubscriptions,
   hasActiveSubscription,
 } from "../hooks/useSubscriptions.js";
+import FestiveRainBackdrop from "../components/FestiveRainBackdrop.jsx";
 
 export default function Login() {
   const { activeApp } = useAppSettings();
@@ -94,7 +95,7 @@ export default function Login() {
         <Box
           component="img"
           src={raptorLogoUrl(onDark)}
-          alt={activeApp.alias || "Raptor"}
+          alt={activeApp.alias || BRAND_NAME}
           sx={{
             width: { xs: Math.min(width, 220), sm: width },
             maxWidth: "100%",
@@ -144,7 +145,7 @@ export default function Login() {
           userSelect: "none",
           mb: onDark ? 0 : 1,
         }}
-        aria-label={activeApp.alias || "Raptor"}
+        aria-label={activeApp.alias || BRAND_NAME}
       >
         {(activeApp.alias || "R").charAt(0)}
       </Box>
@@ -173,6 +174,7 @@ export default function Login() {
           overflow: "hidden",
         }}
       >
+        <FestiveRainBackdrop variant="login" showRings={false} opacityScale={0.85} />
         <Box
           sx={{
             position: "absolute",
@@ -182,6 +184,7 @@ export default function Login() {
             bgcolor: alpha("#fff", 0.06),
             top: -100,
             right: -100,
+            zIndex: 1,
           }}
         />
         <Box
@@ -193,11 +196,13 @@ export default function Login() {
             bgcolor: alpha(theme.palette.secondary.main, 0.15),
             bottom: -80,
             left: -60,
+            zIndex: 1,
           }}
         />
         <Box
           sx={{
             position: "relative",
+            zIndex: 2,
             p: { xs: 2, md: 3 },
             borderRadius: activeApp.brandWordmark ? 3 : "50%",
             bgcolor: alpha("#fff", 0.1),
@@ -210,15 +215,40 @@ export default function Login() {
         </Box>
         {!activeApp.brandWordmark ? (
           <>
-            <Typography variant="h4" fontWeight={800} color="#fff" textAlign="center" gutterBottom>
+            <Typography
+              variant="h4"
+              fontWeight={800}
+              color="#fff"
+              textAlign="center"
+              gutterBottom
+              sx={{ position: "relative", zIndex: 2 }}
+            >
               {activeApp.name}
             </Typography>
-            <Typography variant="body1" sx={{ color: alpha("#fff", 0.9), textAlign: "center", maxWidth: 320 }}>
+            <Typography
+              variant="body1"
+              sx={{
+                color: alpha("#fff", 0.9),
+                textAlign: "center",
+                maxWidth: 320,
+                position: "relative",
+                zIndex: 2,
+              }}
+            >
               {activeApp.description}
             </Typography>
           </>
         ) : (
-          <Typography variant="body1" sx={{ color: alpha("#fff", 0.9), textAlign: "center", maxWidth: 360 }}>
+          <Typography
+            variant="body1"
+            sx={{
+              color: alpha("#fff", 0.9),
+              textAlign: "center",
+              maxWidth: 360,
+              position: "relative",
+              zIndex: 2,
+            }}
+          >
             {activeApp.description}
           </Typography>
         )}
@@ -246,13 +276,27 @@ export default function Login() {
             borderColor: "divider",
           }}
         >
-          <Box sx={{ display: { md: "none" }, textAlign: "center", mb: 3 }}>
-            <BrandMark width={200} onDark={false} />
-            {!activeApp.brandWordmark ? (
-              <Typography variant="h6" fontWeight={800} color="primary">
-                {activeApp.alias}
-              </Typography>
-            ) : null}
+          <Box
+            sx={{
+              display: { md: "none" },
+              textAlign: "center",
+              mb: 3,
+              position: "relative",
+              overflow: "hidden",
+              borderRadius: 3,
+              minHeight: 160,
+              py: 2,
+            }}
+          >
+            <FestiveRainBackdrop variant="login" showRings={false} opacityScale={0.55} />
+            <Box sx={{ position: "relative", zIndex: 2 }}>
+              <BrandMark width={200} onDark={false} />
+              {!activeApp.brandWordmark ? (
+                <Typography variant="h6" fontWeight={800} color="primary">
+                  {activeApp.alias}
+                </Typography>
+              ) : null}
+            </Box>
           </Box>
 
           <Typography variant="h5" fontWeight={700} gutterBottom>

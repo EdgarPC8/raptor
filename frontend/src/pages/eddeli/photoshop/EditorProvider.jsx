@@ -157,10 +157,10 @@ const normalizeDoc = (doc) => {
     canvas: doc.canvas || { width: 1920, height: 1080 },
     groups: Array.isArray(doc.groups) ? doc.groups : [],
     layers: Array.isArray(doc.layers) ? doc.layers : [],
-    folders,
     data: doc.data || {},
     meta: { ...(doc.meta || { name: doc.name || "Template" }), folders },
     ...docRest,
+    // folders al final: gana sobre docRest y queda un solo valor canónico
     folders,
   };
 };

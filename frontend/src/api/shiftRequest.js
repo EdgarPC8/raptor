@@ -29,6 +29,22 @@ export const closeShift = (id, payload) => {
   return axios.post(`/shifts/${id}/close`, payload, auth());
 };
 
+export const getPendingDifferenceShifts = (params = {}) => {
+  if (isGuestDataMode()) return guestOk([]);
+  const qs = new URLSearchParams(params).toString();
+  return axios.get(`/shifts/difference-pending${qs ? `?${qs}` : ""}`, auth());
+};
+
+export const resolveShiftDifference = (id, action) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.post(`/shifts/${id}/resolve-difference`, { action }, auth());
+};
+
+export const resolveShiftDifferencesBulk = (shiftIds, action) => {
+  if (isGuestDataMode()) return guestDenied();
+  return axios.post("/shifts/resolve-differences", { shiftIds, action }, auth());
+};
+
 export const setActiveCashRegister = (shiftId, cashRegisterId) => {
   if (isGuestDataMode()) return guestDenied();
   return axios.patch(

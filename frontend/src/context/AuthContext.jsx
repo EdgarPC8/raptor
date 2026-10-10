@@ -2,6 +2,7 @@
  * Sesión global: login, perfil, rol activo, modo invitado y toasts unificados.
  */
 import { createContext, useContext, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { useAppSettings } from "./AppSettingsContext.jsx";
 import { loginRequest, getSessionRequest } from "../api/userRequest.js";
@@ -10,12 +11,14 @@ import { changeRole as changeRoleRequest } from "../api/authRequest.js";
 import { buildImageUrl, clearToken, getToken, setToken } from "../api/axios.js";
 import { getApiErrorMessage, getApiSuccessMessage } from "../utils/apiMessages.js";
 import { SHELL_ONLY } from "../config/deployEnv.js";
+import { APP_ROUTES } from "../config/appRoutes.js";
 import { toastAnchorOf } from "../utils/toastPosition.js";
 import {
   GUEST_USER,
   readGuestSession,
   writeGuestSession,
 } from "../config/guestMode.js";
+import { BRAND_NAME } from "../config/raptorBrand.js";
 
 const AuthContext = createContext(null);
 
@@ -39,6 +42,7 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [profileImageUser, setProfileImageUser] = useState(null);
+  const navigate = useNavigate();
   const { enqueueSnackbar: enqueueRaw } = useSnackbar();
   const { activeApp } = useAppSettings();
   const toastAnchor = toastAnchorOf(activeApp?.toastPosition);
@@ -99,7 +103,7 @@ export function AuthProvider({ children }) {
     if (SHELL_ONLY) {
       setErrors({
         message:
-          "En Raptor no hay backend. Usá «Entrar como invitado» para explorar la app.",
+          `En ${BRAND_NAME} no hay backend. Usá «Entrar como invitado» para explorar la app.`,
         status: "info",
       });
       return { error: true };
@@ -174,8 +178,8 @@ export function AuthProvider({ children }) {
       if (successText) {
         enqueueSnackbar(successText, { variant: "success" });
       }
-      // Recargar para que menú, rutas y datos del rol nuevo no queden del rol anterior.
-      window.location.assign("/");
+      // Navegación SPA (sin reload): el Outlet se remonta por rolId y el menú reacciona al user.
+      navigate(APP_ROUTES.dashboard, { replace: true });
       return;
     } catch (error) {
       enqueueSnackbar(getApiErrorMessage(error), { variant: "error" });

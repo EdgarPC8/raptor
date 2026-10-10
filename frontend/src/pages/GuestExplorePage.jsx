@@ -27,6 +27,7 @@ import {
   resolveModuleStatus,
   resolveGroupModuleStatus,
 } from "../config/appModulesCatalog.js";
+import { BRAND_NAME } from "../config/raptorBrand.js";
 
 export default function GuestExplorePage() {
   const theme = useTheme();
@@ -174,7 +175,7 @@ export default function GuestExplorePage() {
           {section.name}
         </Typography>
         <Typography color="text.secondary">
-          {section.description || group.summary || "Sección del sistema Raptor."}
+          {section.description || group.summary || `Sección del sistema ${BRAND_NAME}.`}
         </Typography>
 
         <Paper
@@ -207,7 +208,7 @@ export default function GuestExplorePage() {
               : status === "planned"
                 ? "Aún no hay pantallas útiles aquí. Está previsto a futuro; usá el menú para recorrer lo que ya está activo en demo."
                 : statusMeta?.description ||
-                  "Ficha del módulo para conocer qué hará esta sección en Raptor."}
+                  `Ficha del módulo para conocer qué hará esta sección en ${BRAND_NAME}.`}
           </Typography>
         </Paper>
 

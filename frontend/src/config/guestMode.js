@@ -1,10 +1,12 @@
 /** Modo invitado (npm run raptor): explorar UI sin backend. */
+import { BRAND_NAME } from "./raptorBrand.js";
+
 export const GUEST_STORAGE_KEY = "raptor_guest_session_v1";
 
 export const GUEST_USER = {
   firstName: "Invitado",
   secondName: "",
-  firstLastName: "Raptor",
+  firstLastName: BRAND_NAME,
   secondLastName: "",
   ci: "",
   birthday: null,

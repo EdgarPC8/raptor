@@ -8,7 +8,7 @@ import {
 import { buildImageUrl, socket } from "../api/axios.js";
 import { SHELL_ONLY } from "../config/deployEnv.js";
 import { normalizeToastPosition, readStoredToastPosition } from "../utils/toastPosition.js";
-import { RAPTOR_LOGO_URL } from "../config/raptorBrand.js";
+import { BRAND_NAME, RAPTOR_LOGO_URL } from "../config/raptorBrand.js";
 import {
   normalizeMoneyDisplayDecimals,
   normalizeMoneyRoundingMode,
@@ -62,7 +62,7 @@ function toActiveApp(settings, { offline = false } = {}) {
     alias: resolved.alias,
     version: resolved.version,
     description: resolved.description,
-    author: resolved.author || "Raptor",
+    author: resolved.author || BRAND_NAME,
     phone: resolved.phone || "",
     socials: resolved.socials || APP_SETTINGS_FALLBACK.socials,
     logoPath: unconfigured ? "brand/raptor-logo.svg" : logoPath,

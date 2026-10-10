@@ -125,7 +125,7 @@ export default function ProtectedRoute({ requiredRol }) {
     );
   }
 
-  if (shouldBlockHiddenPath(location.pathname, subModules)) {
+  if (shouldBlockHiddenPath(location.pathname, subModules, user.loginRol)) {
     return (
       <Navigate
         to="/no-subscription"
@@ -147,10 +147,14 @@ export default function ProtectedRoute({ requiredRol }) {
 
   // Exacto o prefijo (rutas anidadas: /editor/123, /publicidad/campanas/:id, ?query).
   // Incluye alias legacy del gestor (/inventory/lotes → /inventario/lotes).
+  // Programador: los estados del gestor no filtran el acceso.
+  const programmerBypass = user.loginRol === "Programador";
   const hasAccess = subscription.subscription?.modules?.find((m) => {
-    if (m.status === "hidden") return false;
+    if (!programmerBypass && m.status === "hidden") return false;
     return m.sections.some(
-      (s) => s.status !== "hidden" && appPathsMatch(path, s.key),
+      (s) =>
+        (programmerBypass || s.status !== "hidden") &&
+        appPathsMatch(path, s.key),
     );
   });
 

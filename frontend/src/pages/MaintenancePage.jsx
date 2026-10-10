@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Typography, Stack } from "@mui/material";
-import BuildCircleIcon from "@mui/icons-material/BuildCircle";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
 import {
   SUBSCRIPTIONS_ENABLED,
@@ -9,6 +8,9 @@ import {
 } from "../hooks/useSubscriptions.js";
 import { APP_ROUTES } from "../config/appRoutes.js";
 import UpdatingSystemIcon from "../components/UpdatingSystemIcon.jsx";
+import MaintenanceHammerAnvilIcon from "../components/MaintenanceHammerAnvilIcon.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
+import { canBypassSectionMaintenance } from "../config/sectionMaintenanceAccess.js";
 
 function OverlayShell({ icon, title, lead, foot, glow }) {
   return (
@@ -22,10 +24,13 @@ function OverlayShell({ icon, title, lead, foot, glow }) {
         px: { xs: 2.5, sm: 4 },
         py: 4,
         bgcolor: "background.default",
-        backgroundImage: (t) =>
-          `radial-gradient(ellipse 80% 60% at 50% 0%, ${
-            glow === "info" ? t.palette.info.main : t.palette.warning.main
-          }22, transparent 60%)`,
+        // Glow suave solo para «actualizando»; mantenimiento queda limpio (sin halo).
+        ...(glow === "info"
+          ? {
+              backgroundImage: (t) =>
+                `radial-gradient(ellipse 70% 50% at 50% 0%, ${t.palette.info.main}18, transparent 55%)`,
+            }
+          : null),
       }}
     >
       <Stack
@@ -78,14 +83,7 @@ export function MaintenanceMessage() {
   return (
     <OverlayShell
       glow="warning"
-      icon={
-        <BuildCircleIcon
-          sx={{
-            fontSize: { xs: 96, sm: 128 },
-            color: "warning.main",
-          }}
-        />
-      }
+      icon={<MaintenanceHammerAnvilIcon size={220} />}
       title="Sistema en mantenimiento"
       lead={`${brand} no está disponible por ahora. Estamos trabajando para mejorar el sistema.`}
       foot="Volvé a intentarlo más tarde. Tu suscripción sigue activa; solo el acceso está pausado hasta que se reactive."
@@ -114,8 +112,11 @@ export function UpdatingMessage() {
  */
 export default function MaintenancePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { subscription, isLoading } = useSubscriptions();
-  const blocked = Boolean(subscription?.maintenance || subscription?.updating);
+  const bypass = canBypassSectionMaintenance(user?.loginRol);
+  const blocked =
+    !bypass && Boolean(subscription?.maintenance || subscription?.updating);
 
   useEffect(() => {
     if (!SUBSCRIPTIONS_ENABLED) {

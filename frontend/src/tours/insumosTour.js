@@ -1,4 +1,4 @@
-/** Tour de Insumos y presentaciones (tabla principal). */
+/** Tour de Enlaces productos (tabla principal). */
 export const INSUMOS_TOUR_ID = "insumos-presentaciones";
 
 export function getInsumosTourSteps() {
@@ -6,7 +6,7 @@ export function getInsumosTourSteps() {
     {
       element: "[data-tour='insumos-header']",
       popover: {
-        title: "Insumos y presentaciones",
+        title: "Enlaces productos",
         description:
           "Aquí unís un empaque (caja, paca, saco) con el producto que se repone al abrirlo. Sin este enlace, en Caja no se podrá sugerir abrir el empaque cuando falte stock.",
         side: "bottom",

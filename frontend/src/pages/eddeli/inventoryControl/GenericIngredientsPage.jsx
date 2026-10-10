@@ -535,14 +535,14 @@ export default function GenericIngredientsPage() {
         <Stack direction="row" spacing={1} alignItems="center">
           <ScienceIcon color="primary" />
           <Typography variant="h5" sx={{ fontWeight: 800 }}>
-            Insumos y presentaciones
+            Enlaces productos
           </Typography>
-          <TourHelpButton onClick={startTour} title="Ver tutorial de insumos y presentaciones" />
+          <TourHelpButton onClick={startTour} title="Ver tutorial de enlaces de productos" />
         </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 860 }}>
-          <strong>Insumo genérico</strong>: peso en <strong>g</strong> (Harina) o volumen en{" "}
-          <strong>ml/L</strong> (Aceite). <strong>Empaque final</strong> (Quintal, Funda 900ml): al
-          enlazar indicas cuánto suma al insumo — ej. 1 funda → <strong>+900 ml</strong> de Aceite.
+          <strong>Producto base</strong>: peso en <strong>g</strong> (Harina) o volumen en{" "}
+          <strong>ml/L</strong> (Aceite). <strong>Empaque</strong> (Quintal, Funda 900ml): al
+          enlazar indicas cuánto suma al producto — ej. 1 funda → <strong>+900 ml</strong> de Aceite.
         </Typography>
       </Stack>
 

@@ -1,20 +1,15 @@
 /**
- * Modal cuando se abre una sección en mantenimiento (controlado desde el gestor).
+ * Pantalla cuando se abre una sección en mantenimiento (controlado desde el gestor).
  */
 import { useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Typography,
   Stack,
-  Alert,
 } from "@mui/material";
-import BuildCircleIcon from "@mui/icons-material/BuildCircle";
 import HomeIcon from "@mui/icons-material/Home";
+import MaintenanceHammerAnvilIcon from "../components/MaintenanceHammerAnvilIcon.jsx";
 
 export default function SectionMaintenanceBlocked({ section }) {
   const navigate = useNavigate();
@@ -26,56 +21,55 @@ export default function SectionMaintenanceBlocked({ section }) {
   return (
     <Box
       sx={{
-        minHeight: "60vh",
-        display: "grid",
-        placeItems: "center",
-        px: 2,
+        minHeight: "70vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        px: { xs: 2.5, sm: 4 },
+        py: 4,
       }}
     >
-      <Dialog open onClose={goHome} maxWidth="sm" fullWidth>
-        <DialogTitle
+      <Stack
+        spacing={2.5}
+        alignItems="center"
+        textAlign="center"
+        sx={{ maxWidth: 520, width: "100%", overflow: "visible" }}
+      >
+        <MaintenanceHammerAnvilIcon size={200} />
+        <Typography
+          component="h1"
           sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1.25,
-            fontWeight: 800,
+            fontWeight: 900,
+            fontSize: { xs: "1.65rem", sm: "2rem" },
+            letterSpacing: "-0.02em",
+            lineHeight: 1.2,
           }}
         >
-          <BuildCircleIcon color="error" sx={{ fontSize: 32 }} />
-          Sección en mantenimiento
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.5} sx={{ pt: 0.5 }}>
-            <Alert severity="warning" icon={<BuildCircleIcon />}>
-              Esta sección está en mantenimiento. Probá de nuevo más tarde.
-            </Alert>
-            <Typography variant="body1">
-              <strong>{title}</strong>
-              {moduleLabel ? ` (${moduleLabel})` : ""} no está disponible por
-              ahora.
-            </Typography>
-            {section?.description ? (
-              <Typography variant="body2" color="text.secondary">
-                {section.description}
-              </Typography>
-            ) : null}
-            <Typography variant="body2" color="text.secondary">
-              Tu suscripción sigue activa; solo esta sección está temporalmente
-              fuera de servicio.
-            </Typography>
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            variant="contained"
-            startIcon={<HomeIcon />}
-            onClick={goHome}
-            sx={{ fontWeight: 700 }}
-          >
-            Volver al inicio
-          </Button>
-        </DialogActions>
-      </Dialog>
+          En mantenimiento
+        </Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: "1.1rem", color: "text.secondary" }}>
+          <strong style={{ color: "inherit" }}>{title}</strong>
+          {moduleLabel ? ` · ${moduleLabel}` : ""}
+        </Typography>
+        {section?.description ? (
+          <Typography variant="body2" color="text.secondary">
+            {section.description}
+          </Typography>
+        ) : null}
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+          Estamos trabajando en esta sección. Probá de nuevo más tarde. Tu
+          suscripción sigue activa; solo esta parte está temporalmente fuera de
+          servicio.
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<HomeIcon />}
+          onClick={goHome}
+          sx={{ fontWeight: 700, mt: 1 }}
+        >
+          Volver al inicio
+        </Button>
+      </Stack>
     </Box>
   );
 }

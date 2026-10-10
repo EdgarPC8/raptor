@@ -61,6 +61,7 @@ import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import ScienceIcon from "@mui/icons-material/Science";
+import LinkIcon from "@mui/icons-material/Link";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
@@ -88,6 +89,7 @@ import NewspaperIcon from "@mui/icons-material/Newspaper";
 
 import { useAuth } from "../context/AuthContext.jsx";
 import { useSubscriptions } from "../hooks/useSubscriptions.js";
+import NavbarEdgeDecor from "./NavbarEdgeDecor.jsx";
 import ThemeSwitcher from "./ThemeSwitcher.jsx";
 import NotificationList from "./NotificationList.jsx";
 import CambiarRol from "./CambiarRol.jsx";
@@ -290,9 +292,9 @@ const MENU_GROUPS = [
     label: "Producción",
     items: [
       {
-        name: "Insumos y marcas",
+        name: "Enlaces productos",
         link: APP_ROUTES.production.ingredients,
-        icon: <ScienceIcon />,
+        icon: <LinkIcon />,
         roles: ["Propietario", "Programador", "Administrador"],
       },
       {
@@ -475,6 +477,12 @@ const MENU_GROUPS = [
         icon: <TerminalIcon />,
         roles: ["Programador"],
       },
+      {
+        name: "Pruebas",
+        link: APP_ROUTES.developer.tests,
+        icon: <ScienceIcon />,
+        roles: ["Programador"],
+      },
     ],
   },
 ];
@@ -615,7 +623,7 @@ export default function NavBar() {
   };
 
   const renderMenuItem = (item, nested = false) => {
-    if (isMenuLinkHidden(item.link, subModules)) return null;
+    if (isMenuLinkHidden(item.link, subModules, user?.loginRol)) return null;
     const inMaintenance = isMenuLinkInMaintenance(item.link, subModules);
     const isPlanned = isMenuLinkPlanned(item.link, subModules);
     const statusLabel = inMaintenance
@@ -1003,6 +1011,7 @@ export default function NavBar() {
         position="fixed"
         sx={{
           zIndex: theme.zIndex.drawer + 1,
+          overflow: "visible",
           // En móvil el drawer es temporal (overlay): la barra va a ancho completo.
           ...(showDrawer &&
             !compactNav && {
@@ -1384,6 +1393,7 @@ export default function NavBar() {
             </>
           )}
         </Toolbar>
+        {user ? <NavbarEdgeDecor /> : null}
       </AppBar>
 
       {showDrawer && (
@@ -1460,7 +1470,8 @@ export default function NavBar() {
             </Box>
           }
         >
-          <Outlet />
+          {/* Remonta la página al cambiar de rol (sin reload de toda la app). */}
+          <Outlet key={user?.rolId ?? user?.loginRol ?? "anon"} />
         </Suspense>
         {showUserActions && <RecurringMonthPrompt role={user?.loginRol} toast={toast} />}
       </Box>

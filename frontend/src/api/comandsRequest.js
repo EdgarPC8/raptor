@@ -9,7 +9,7 @@ const auth = () => ({ headers: { Authorization: jwt() } });
 export const reloadBD = () =>
   isGuestDataMode()
     ? guestDenied()
-    : axios.get("/comands/reloadBD", { ...auth(), timeout: 120000 });
+    : axios.get("/comands/reloadBD", { ...auth(), timeout: 300000 });
 
 export const saveBackup = () =>
   isGuestDataMode()
@@ -65,15 +65,18 @@ export const uploadBackup = (formData) => {
   const authorization = jwt();
   return axios.post("/comands/upload-backup", formData, {
     headers: authorization ? { Authorization: authorization } : {},
-    timeout: 120000,
+    timeout: 300000,
   });
 };
 
 export const getBackupsWorkbenchRequest = () =>
-  axios.get("/comands/backups", auth());
+  axios.get("/comands/backups", { ...auth(), timeout: 30000 });
 
 export const setMainBackupFromStoredRequest = (filename) =>
-  axios.post(`/comands/backups/stored/${encodeURIComponent(filename)}/set-main`, null, auth());
+  axios.post(`/comands/backups/stored/${encodeURIComponent(filename)}/set-main`, null, {
+    ...auth(),
+    timeout: 300000,
+  });
 
 export const deleteStoredBackupRequest = (filename) =>
   axios.delete(`/comands/backups/stored/${encodeURIComponent(filename)}`, auth());
@@ -81,7 +84,7 @@ export const deleteStoredBackupRequest = (filename) =>
 export const pruneStoredBackupsRequest = () =>
   axios.post("/comands/backups/stored/prune-and-save", null, {
     ...auth(),
-    timeout: 120000,
+    timeout: 300000,
   });
 
 const downloadBlob = (response, filename) => {

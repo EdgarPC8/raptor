@@ -8,6 +8,7 @@ import {
   Container,
   Grid,
   IconButton,
+  LinearProgress,
   Paper,
   Stack,
   Tooltip,
@@ -28,7 +29,7 @@ import TablePro from "../components/Tables/TablePro";
 import SimpleDialog from "../components/Dialogs/SimpleDialog";
 import { useAuth } from "../context/AuthContext.jsx";
 import { runMutationReload } from "../utils/mutationToast.js";
-import { getApiErrorMessage } from "../utils/apiMessages.js";
+import { getApiErrorMessage, getApiSuccessMessage } from "../utils/apiMessages.js";
 import {
   getBackupsWorkbenchRequest,
   uploadBackup,
@@ -41,21 +42,94 @@ import {
   pruneStoredBackupsRequest,
 } from "../api/comandsRequest.js";
 
+const INITIAL_PROGRESS_DIALOG = {
+  open: false,
+  title: "",
+  progress: 0,
+  message: "",
+  loading: false,
+};
+
+const OPERATION_CONFIG = {
+  upload: {
+    title: "Subiendo backup.json",
+    steps: [
+      { until: 30, label: "Leyendo archivo seleccionado…" },
+      { until: 65, label: "Enviando al servidor…" },
+      { until: 90, label: "Validando y guardando JSON…" },
+    ],
+    successMessage: "backup.json actualizado. Usá «Recargar BD» para aplicarlo.",
+    errorMessage: "No se pudo subir el archivo. Debe ser un backup JSON válido.",
+  },
+  save: {
+    title: "Guardando copia desde la BD",
+    steps: [
+      { until: 40, label: "Leyendo datos de la base…" },
+      { until: 75, label: "Escribiendo backup.json…" },
+      { until: 92, label: "Guardando copia con fecha…" },
+    ],
+    successMessage: "Nueva copia guardada y backup.json actualizado",
+    errorMessage: "No se pudo guardar la copia desde la BD",
+  },
+  reload: {
+    title: "Recargando base de datos",
+    steps: [
+      { until: 20, label: "Guardando copia de seguridad previa…" },
+      { until: 45, label: "Comparando esquema de tablas…" },
+      { until: 70, label: "Vaciando o recreando tablas…" },
+      { until: 90, label: "Importando backup.json (puede tardar con archivos grandes)…" },
+    ],
+    successMessage: "Base recargada desde backup.json",
+    errorMessage: "No se pudo recargar la base de datos",
+  },
+  setMain: {
+    title: "Estableciendo backup fijo",
+    steps: [
+      { until: 35, label: "Leyendo copia seleccionada…" },
+      { until: 70, label: "Validando JSON…" },
+      { until: 92, label: "Escribiendo backup.json…" },
+    ],
+    successMessage: "backup.json reemplazado desde la copia seleccionada",
+    errorMessage: "No se pudo establecer como backup fijo",
+  },
+  prune: {
+    title: "Limpiando copias y guardando",
+    steps: [
+      { until: 30, label: "Eliminando copias antiguas…" },
+      { until: 70, label: "Leyendo datos de la BD…" },
+      { until: 92, label: "Guardando copia nueva…" },
+    ],
+    successMessage: "Copias limpiadas y nueva copia guardada desde la BD",
+    errorMessage: "No se pudieron limpiar las copias",
+  },
+};
+
+function stepLabel(steps, progress) {
+  const step = steps.find((s) => progress < s.until);
+  return step?.label || "Finalizando…";
+}
+
 function formatSize(mb, bytes) {
   if (mb > 0) return `${mb} MB`;
   if (bytes > 0) return `${(bytes / 1024).toFixed(1)} KB`;
   return "—";
 }
 
-function summaryLine(counts) {
+function summaryLine(counts, totalRows) {
+  if (totalRows == null && (!counts || typeof counts !== "object")) {
+    return "Metadata en disco (sin abrir el JSON)";
+  }
   if (!counts || typeof counts !== "object") return "";
   const users = counts.Users ?? 0;
   const products = counts.InventoryProduct ?? 0;
   const orders = counts.Order ?? 0;
+  if (totalRows == null && users === 0 && products === 0 && orders === 0) {
+    return "Metadata en disco (sin abrir el JSON)";
+  }
   return `${users} usuarios · ${products} productos · ${orders} pedidos`;
 }
 
-function MainBackupCard({ main, onUpload, onDownload, uploading }) {
+function MainBackupCard({ main, onUpload, onDownload, busy }) {
   return (
     <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, height: "100%" }}>
       <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
@@ -68,7 +142,7 @@ function MainBackupCard({ main, onUpload, onDownload, uploading }) {
             <Chip size="small" color="warning" label="Activo para recargar BD" />
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Este archivo es el que usa <strong>Comandos → Recargar BD</strong>. Súbelo o elige una copia guardada como fija.
+            Este archivo es el que usa <strong>Recargar BD</strong>. Súbelo o elige una copia guardada como fija.
           </Typography>
           {main?.exists ? (
             <Stack spacing={0.5}>
@@ -79,7 +153,8 @@ function MainBackupCard({ main, onUpload, onDownload, uploading }) {
                 <strong>Actualizado:</strong> {formatDateTime(main.modifiedAt)}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {summaryLine(main.counts)} · {main.totalRows ?? 0} filas totales
+                {summaryLine(main.counts, main.totalRows)}
+                {main.totalRows != null ? ` · ${main.totalRows} filas totales` : ""}
               </Typography>
             </Stack>
           ) : (
@@ -96,7 +171,7 @@ function MainBackupCard({ main, onUpload, onDownload, uploading }) {
           variant="contained"
           startIcon={<UploadFileIcon />}
           onClick={onUpload}
-          disabled={uploading}
+          disabled={busy}
         >
           Subir / reemplazar
         </Button>
@@ -104,7 +179,7 @@ function MainBackupCard({ main, onUpload, onDownload, uploading }) {
           variant="outlined"
           startIcon={<DownloadIcon />}
           onClick={onDownload}
-          disabled={!main?.exists}
+          disabled={!main?.exists || busy}
         >
           Descargar
         </Button>
@@ -116,8 +191,9 @@ function MainBackupCard({ main, onUpload, onDownload, uploading }) {
 export default function BackupsPage({ embedded = false }) {
   const { user, toast } = useAuth();
   const fileInputRef = useRef(null);
+  const progressTimer = useRef(null);
+  const activeStepsRef = useRef([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [main, setMain] = useState(null);
   const [stored, setStored] = useState([]);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -125,6 +201,9 @@ export default function BackupsPage({ embedded = false }) {
   const [pruneOpen, setPruneOpen] = useState(false);
   const [reloadOpen, setReloadOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [progressDialog, setProgressDialog] = useState(INITIAL_PROGRESS_DIALOG);
+
+  const isBusy = progressDialog.loading || saving;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,37 +223,96 @@ export default function BackupsPage({ embedded = false }) {
     load();
   }, [load]);
 
-  const handleUploadClick = () => fileInputRef.current?.click();
+  useEffect(
+    () => () => {
+      if (progressTimer.current) clearInterval(progressTimer.current);
+    },
+    [],
+  );
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("backup", file);
-      await runMutationReload(toast, {
-        promise: uploadBackup(fd),
-        reload: load,
-        successMessage: "backup.json actualizado. Ve a Comandos para recargar la BD si lo necesitas.",
-      });
-    } finally {
-      setUploading(false);
+  const stopProgressAnimation = () => {
+    if (progressTimer.current) {
+      clearInterval(progressTimer.current);
+      progressTimer.current = null;
     }
   };
 
-  const handleSaveFromDb = async () => {
-    setSaving(true);
-    try {
-      await runMutationReload(toast, {
-        promise: saveBackup(),
-        reload: load,
-        successMessage: "Nueva copia guardada y backup.json actualizado",
+  const startProgressAnimation = (steps) => {
+    activeStepsRef.current = steps;
+    if (progressTimer.current) clearInterval(progressTimer.current);
+    progressTimer.current = setInterval(() => {
+      setProgressDialog((prev) => {
+        if (!prev.loading || prev.progress >= 92) return prev;
+        const next = Math.min(prev.progress + 3, 92);
+        return {
+          ...prev,
+          progress: next,
+          message: stepLabel(activeStepsRef.current, next),
+        };
       });
-    } finally {
-      setSaving(false);
+    }, 400);
+  };
+
+  const runWithProgress = async (operationKey, task, { reloadList = true } = {}) => {
+    const config = OPERATION_CONFIG[operationKey];
+    const firstMessage = config.steps[0]?.label || "Procesando…";
+
+    setProgressDialog({
+      open: true,
+      title: config.title,
+      progress: 8,
+      message: firstMessage,
+      loading: true,
+    });
+    startProgressAnimation(config.steps);
+
+    try {
+      const res = await task();
+      stopProgressAnimation();
+      setProgressDialog({
+        open: true,
+        title: config.title,
+        progress: 100,
+        message: config.successMessage,
+        loading: false,
+      });
+      toast({
+        message: getApiSuccessMessage(res, config.successMessage),
+        variant: "success",
+      });
+      if (reloadList) await load();
+      setTimeout(() => {
+        setProgressDialog(INITIAL_PROGRESS_DIALOG);
+      }, 900);
+      return res;
+    } catch (error) {
+      stopProgressAnimation();
+      setProgressDialog(INITIAL_PROGRESS_DIALOG);
+      toast({
+        message: getApiErrorMessage(error, config.errorMessage),
+        variant: "error",
+      });
+      return null;
     }
+  };
+
+  const handleUploadClick = () => {
+    if (isBusy) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || isBusy) return;
+    const fd = new FormData();
+    fd.append("backup", file);
+    void runWithProgress("upload", () => uploadBackup(fd));
+  };
+
+  const handleSaveFromDb = () => {
+    if (isBusy) return;
+    void runWithProgress("save", () => saveBackup());
   };
 
   const handleDownloadMain = async () => {
@@ -195,19 +333,11 @@ export default function BackupsPage({ embedded = false }) {
     }
   };
 
-  const confirmSetMain = async () => {
-    if (!setMainTarget) return;
-    setSaving(true);
-    try {
-      await runMutationReload(toast, {
-        promise: setMainBackupFromStoredRequest(setMainTarget),
-        reload: load,
-        onClose: () => setSetMainTarget(null),
-        successMessage: "backup.json reemplazado desde la copia seleccionada",
-      });
-    } finally {
-      setSaving(false);
-    }
+  const confirmSetMain = () => {
+    if (!setMainTarget || isBusy) return;
+    const filename = setMainTarget;
+    setSetMainTarget(null);
+    void runWithProgress("setMain", () => setMainBackupFromStoredRequest(filename));
   };
 
   const confirmDelete = async () => {
@@ -225,32 +355,16 @@ export default function BackupsPage({ embedded = false }) {
     }
   };
 
-  const confirmReloadBd = async () => {
-    setSaving(true);
-    try {
-      await runMutationReload(toast, {
-        promise: reloadBD(),
-        reload: load,
-        onClose: () => setReloadOpen(false),
-        successMessage: "Base recargada desde backup.json",
-      });
-    } finally {
-      setSaving(false);
-    }
+  const confirmReloadBd = () => {
+    if (isBusy) return;
+    setReloadOpen(false);
+    void runWithProgress("reload", () => reloadBD());
   };
 
-  const confirmPruneStored = async () => {
-    setSaving(true);
-    try {
-      await runMutationReload(toast, {
-        promise: pruneStoredBackupsRequest(),
-        reload: load,
-        onClose: () => setPruneOpen(false),
-        successMessage: "Copias limpiadas y nueva copia guardada desde la BD",
-      });
-    } finally {
-      setSaving(false);
-    }
+  const confirmPruneStored = () => {
+    if (isBusy) return;
+    setPruneOpen(false);
+    void runWithProgress("prune", () => pruneStoredBackupsRequest());
   };
 
   const columns = useMemo(
@@ -271,7 +385,7 @@ export default function BackupsPage({ embedded = false }) {
         label: "Contenido",
         render: (row) => (
           <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 280 }}>
-            {row.valid ? summaryLine(row.counts) : "JSON no válido"}
+            {row.valid ? summaryLine(row.counts, row.totalRows) : "JSON no válido"}
           </Typography>
         ),
       },
@@ -282,7 +396,7 @@ export default function BackupsPage({ embedded = false }) {
           <Chip
             size="small"
             color={row.valid ? "success" : "error"}
-            label={row.valid ? "Válido" : "Inválido"}
+            label={row.valid ? (row.totalRows != null ? "Válido" : "En disco") : "Inválido"}
             variant="outlined"
           />
         ),
@@ -293,30 +407,45 @@ export default function BackupsPage({ embedded = false }) {
         render: (row) => (
           <Stack direction="row" spacing={0.25}>
             <Tooltip title="Descargar">
-              <IconButton size="small" onClick={() => handleDownloadStored(row.filename)}>
-                <DownloadIcon fontSize="small" />
-              </IconButton>
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={() => handleDownloadStored(row.filename)}
+                  disabled={isBusy}
+                >
+                  <DownloadIcon fontSize="small" />
+                </IconButton>
+              </span>
             </Tooltip>
             <Tooltip title="Usar como backup.json fijo">
-              <IconButton
-                size="small"
-                color="warning"
-                onClick={() => setSetMainTarget(row.filename)}
-                disabled={!row.valid}
-              >
-                <StarIcon fontSize="small" />
-              </IconButton>
+              <span>
+                <IconButton
+                  size="small"
+                  color="warning"
+                  onClick={() => setSetMainTarget(row.filename)}
+                  disabled={!row.valid || isBusy}
+                >
+                  <StarIcon fontSize="small" />
+                </IconButton>
+              </span>
             </Tooltip>
             <Tooltip title="Eliminar copia">
-              <IconButton size="small" color="error" onClick={() => setDeleteTarget(row.filename)}>
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+              <span>
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={() => setDeleteTarget(row.filename)}
+                  disabled={isBusy}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </span>
             </Tooltip>
           </Stack>
         ),
       },
     ],
-    []
+    [isBusy],
   );
 
   // Página del menú Desarrollador: solo Programador. Embebida en Configuración: Propietario.
@@ -342,14 +471,14 @@ export default function BackupsPage({ embedded = false }) {
           flexWrap="wrap"
           sx={{ mb: 2 }}
         >
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={load} disabled={loading}>
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={load} disabled={loading || isBusy}>
             Actualizar lista
           </Button>
           <Button
             variant="contained"
             startIcon={<SaveIcon />}
             onClick={handleSaveFromDb}
-            disabled={saving || loading}
+            disabled={isBusy || loading}
           >
             Guardar desde BD
           </Button>
@@ -358,44 +487,53 @@ export default function BackupsPage({ embedded = false }) {
             color="warning"
             startIcon={<BackupIcon />}
             onClick={() => setReloadOpen(true)}
-            disabled={saving || loading || !main?.exists}
+            disabled={isBusy || loading || !main?.exists}
           >
             Recargar BD
           </Button>
         </Stack>
       ) : (
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        alignItems={{ xs: "stretch", sm: "center" }}
-        justifyContent="space-between"
-        spacing={2}
-        sx={{ mb: 3 }}
-      >
-        <Box>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <BackupIcon color="primary" />
-            <Typography variant="h5" fontWeight={800}>
-              Backups JSON
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          alignItems={{ xs: "stretch", sm: "center" }}
+          justifyContent="space-between"
+          spacing={2}
+          sx={{ mb: 3 }}
+        >
+          <Box>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <BackupIcon color="primary" />
+              <Typography variant="h5" fontWeight={800}>
+                Backups JSON
+              </Typography>
+            </Stack>
+            <Typography variant="body2" color="text.secondary">
+              Gestiona el backup fijo y las copias con fecha en el servidor.
             </Typography>
+          </Box>
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={load} disabled={loading || isBusy}>
+              Actualizar lista
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={handleSaveFromDb}
+              disabled={isBusy || loading}
+            >
+              Guardar desde BD
+            </Button>
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<BackupIcon />}
+              onClick={() => setReloadOpen(true)}
+              disabled={isBusy || loading || !main?.exists}
+            >
+              Recargar BD
+            </Button>
           </Stack>
-          <Typography variant="body2" color="text.secondary">
-            Gestiona el backup fijo y las copias con fecha en el servidor.
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1} flexWrap="wrap">
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={load} disabled={loading}>
-            Actualizar lista
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<SaveIcon />}
-            onClick={handleSaveFromDb}
-            disabled={saving || loading}
-          >
-            Guardar desde BD
-          </Button>
         </Stack>
-      </Stack>
       )}
 
       <Alert severity="info" sx={{ mb: 2 }}>
@@ -418,7 +556,7 @@ export default function BackupsPage({ embedded = false }) {
             main={main}
             onUpload={handleUploadClick}
             onDownload={handleDownloadMain}
-            uploading={uploading}
+            busy={isBusy}
           />
         </Grid>
       </Grid>
@@ -444,7 +582,7 @@ export default function BackupsPage({ embedded = false }) {
               color="error"
               startIcon={<DeleteSweepIcon />}
               onClick={() => setPruneOpen(true)}
-              disabled={saving || loading}
+              disabled={isBusy || loading}
             >
               Limpiar copias y guardar una
             </Button>
@@ -471,7 +609,7 @@ export default function BackupsPage({ embedded = false }) {
 
       <SimpleDialog
         open={Boolean(setMainTarget)}
-        onClose={() => !saving && setSetMainTarget(null)}
+        onClose={() => !isBusy && setSetMainTarget(null)}
         title="¿Usar como backup fijo?"
         message={`«${setMainTarget}» reemplazará backup.json. Luego recargá la BD para aplicarlo.`}
         onClickAccept={confirmSetMain}
@@ -479,7 +617,7 @@ export default function BackupsPage({ embedded = false }) {
 
       <SimpleDialog
         open={pruneOpen}
-        onClose={() => !saving && setPruneOpen(false)}
+        onClose={() => !isBusy && setPruneOpen(false)}
         title="¿Limpiar todas las copias guardadas?"
         message={
           stored.length > 0
@@ -491,11 +629,46 @@ export default function BackupsPage({ embedded = false }) {
 
       <SimpleDialog
         open={reloadOpen}
-        onClose={() => !saving && setReloadOpen(false)}
+        onClose={() => !isBusy && setReloadOpen(false)}
         title="¿Recargar la base de datos?"
-        message="Se borrarán los datos actuales y se restaurarán desde backup.json. Esta acción no se puede deshacer."
+        message="Se borrarán los datos actuales y se restaurarán desde backup.json. Esta acción no se puede deshacer. Con archivos grandes puede tardar varios minutos."
         onClickAccept={confirmReloadBd}
       />
+
+      <SimpleDialog
+        open={progressDialog.open}
+        onClose={() => {
+          if (!progressDialog.loading) {
+            setProgressDialog(INITIAL_PROGRESS_DIALOG);
+          }
+        }}
+        title={progressDialog.title}
+        maxWidth="sm"
+        fullWidth
+        hideClose={progressDialog.loading}
+        disableClose={progressDialog.loading}
+      >
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {progressDialog.message}
+        </Typography>
+        <LinearProgress
+          variant="determinate"
+          value={progressDialog.progress}
+          sx={{ height: 10, borderRadius: 5 }}
+        />
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: "block", mt: 1, textAlign: "right" }}
+        >
+          {progressDialog.progress}%
+        </Typography>
+        {progressDialog.loading ? (
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+            No cierres esta ventana. La operación sigue en el servidor.
+          </Typography>
+        ) : null}
+      </SimpleDialog>
     </Box>
   );
 }

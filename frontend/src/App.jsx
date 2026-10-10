@@ -130,6 +130,7 @@ const CuentasPage = lazy(() => import("./pages/CuentasPage.jsx"));
 const RolesPage = lazy(() => import("./pages/RolesPage.jsx"));
 const ComandosPage = lazy(() => import("./pages/ComandosPage.jsx"));
 const BackupsPage = lazy(() => import("./pages/BackupsPage.jsx"));
+const PruebasPage = lazy(() => import("./pages/PruebasPage.jsx"));
 const LogsPage = lazy(() => import("./pages/LogsPage.jsx"));
 const ImgManagerPage = lazy(() => import("./pages/ImgManagerPage.jsx"));
 const FileManagerPage = lazy(() => import("./pages/FileManagerPage.jsx"));
@@ -394,6 +395,7 @@ export default function App() {
             <Route path={APP_ROUTES.developer.logs} element={<LogsPage />} />
             <Route path={APP_ROUTES.developer.commands} element={<ComandosPage />} />
             <Route path={APP_ROUTES.developer.backups} element={<BackupsPage />} />
+            <Route path={APP_ROUTES.developer.tests} element={<PruebasPage />} />
             <Route path={APP_ROUTES.developer.images} element={<ImgManagerPage />} />
             <Route path={APP_ROUTES.developer.files} element={<FileManagerPage />} />
           </Route>

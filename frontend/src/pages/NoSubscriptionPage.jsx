@@ -12,6 +12,7 @@ import {
 import LockIcon from "@mui/icons-material/Lock";
 import HomeIcon from "@mui/icons-material/Home";
 import { useSubscriptions } from "../hooks/useSubscriptions.js";
+import { BRAND_NAME } from "../config/raptorBrand.js";
 
 export default function NoSubscriptionPage() {
   const navigate = useNavigate();
@@ -44,7 +45,7 @@ export default function NoSubscriptionPage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
           Esta sección no está incluida en tu plan actual. Si necesitas acceso,
-          pide que te lo habiliten desde el gestor Raptor.
+          pide que te lo habiliten desde el gestor {BRAND_NAME}.
         </Typography>
         {location.state?.from && (
           <Chip

@@ -13,7 +13,9 @@ import { normalizeToastPosition, toastAnchorOf } from "./utils/toastPosition.js"
 import App from "./App.jsx";
 import "./styles/print.css";
 
-const appTitle = String(import.meta.env.VITE_APP_NAME || "Raptor").trim();
+import { BRAND_NAME } from "./config/raptorBrand.js";
+
+const appTitle = String(import.meta.env.VITE_APP_NAME || BRAND_NAME).trim();
 if (appTitle) document.title = appTitle;
 
 function ToastHost({ children }) {

@@ -15,6 +15,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { useSubscriptions } from "../hooks/useSubscriptions.js";
 import { useAppSettings } from "../context/AppSettingsContext.jsx";
+import { BRAND_NAME } from "../config/raptorBrand.js";
 
 export default function SubscriptionExpiredPage() {
   const navigate = useNavigate();
@@ -56,7 +57,7 @@ export default function SubscriptionExpiredPage() {
           Esta instalación de {activeApp?.alias || "la app"} no tiene un plan activo.
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          La habilitación se hace desde el gestor central Raptor (activar o
+          La habilitación se hace desde el gestor central {BRAND_NAME} (activar o
           cambiar el plan). Aquí ya no se pega ninguna licencia.
         </Typography>
 

@@ -30,6 +30,7 @@ import {
 import { listModulesWithGestorStatus } from "../config/sectionMaintenanceAccess.js";
 import { useSubscriptions } from "../hooks/useSubscriptions.js";
 import { formatDateTime } from "../helpers/functions.js";
+import { BRAND_NAME } from "../config/raptorBrand.js";
 
 const ALLOWED = new Set(["Propietario", "Programador", "Administrador"]);
 
@@ -374,7 +375,7 @@ function ModuleCard({ module }) {
                 Prueba finalizada
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.1 }}>
-                Pedí habilitación en el gestor Raptor
+                Pedí habilitación en el gestor {BRAND_NAME}
               </Typography>
             </Stack>
           ) : canOpen ? (
@@ -471,7 +472,7 @@ export default function SystemModulesPage() {
             Módulos disponibles
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Estados controlados desde Raptor Solutions (mantenimiento, próximamente, oculto).
+            Estados controlados desde {BRAND_NAME} (mantenimiento, próximamente, oculto).
           </Typography>
         </Box>
         <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>

@@ -10,6 +10,8 @@ import {
   UpdatingMessage,
 } from "../pages/MaintenancePage.jsx";
 import { APP_ID } from "../config/appInfo.js";
+import { useAuth } from "../context/AuthContext.jsx";
+import { canBypassSectionMaintenance } from "../config/sectionMaintenanceAccess.js";
 
 /** Evita bucles de reload al activar/desactivar «actualizando» en el gestor. */
 const RELOAD_KEY = `${APP_ID}_updating_reload_armed`;
@@ -20,13 +22,15 @@ const RELOAD_KEY = `${APP_ID}_updating_reload_armed`;
  */
 export default function AppMaintenanceOverlay() {
   const location = useLocation();
+  const { user } = useAuth();
   const { subscription, isLoading } = useSubscriptions();
+  const bypass = canBypassSectionMaintenance(user?.loginRol);
 
   const isUpdating = Boolean(subscription?.updating);
   const isMaintenance = Boolean(subscription?.maintenance);
 
   useEffect(() => {
-    if (!SUBSCRIPTIONS_ENABLED || isLoading) return;
+    if (!SUBSCRIPTIONS_ENABLED || isLoading || bypass) return;
 
     try {
       if (isUpdating) {
@@ -46,9 +50,9 @@ export default function AppMaintenanceOverlay() {
     } catch {
       /* private mode / sessionStorage bloqueado */
     }
-  }, [isUpdating, isLoading]);
+  }, [isUpdating, isLoading, bypass]);
 
-  if (!SUBSCRIPTIONS_ENABLED || isLoading) return null;
+  if (!SUBSCRIPTIONS_ENABLED || isLoading || bypass) return null;
   if (!isUpdating && !isMaintenance) return null;
 
   const path = String(location.pathname || "");

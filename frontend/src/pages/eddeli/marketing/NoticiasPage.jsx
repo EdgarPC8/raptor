@@ -28,6 +28,7 @@ import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import NewspaperIcon from "@mui/icons-material/Newspaper";
 import { getNewsRequest } from "../../../api/newsRequest.js";
 import { markNewsAsSeen } from "../../../utils/newsLocalState.js";
+import { BRAND_NAME } from "../../../config/raptorBrand.js";
 
 const FIGURE_PALETTES = [
   { bg: "primary.light", ink: "primary.dark" },
@@ -39,14 +40,26 @@ const FIGURE_PALETTES = [
 
 function pickFigure(item) {
   const text = `${item?.title || ""} ${item?.subtitle || ""} ${item?.kind || ""}`.toLowerCase();
-  if (item?.kind === "proximamente" || /pr[oó]xim|dueño|qr|barra/.test(text)) {
+  if (item?.kind === "proximamente" || /pr[oó]xim|dueño|qr|barra|encuesta|tema|gr[aá]fic/.test(text)) {
     if (/qr|barra|enlace/.test(text)) {
       return { Icon: QrCode2Icon, palette: FIGURE_PALETTES[4] };
     }
     if (/dueño|rol|empleado|admin|programador/.test(text)) {
       return { Icon: BadgeIcon, palette: FIGURE_PALETTES[4] };
     }
+    if (/reporte|financ|gr[aá]fic/.test(text)) {
+      return { Icon: PaymentsIcon, palette: FIGURE_PALETTES[4] };
+    }
+    if (/tema|color|oscuro|claro/.test(text)) {
+      return { Icon: AutoAwesomeIcon, palette: FIGURE_PALETTES[1] };
+    }
+    if (/encuesta/.test(text)) {
+      return { Icon: CampaignIcon, palette: FIGURE_PALETTES[3] };
+    }
     return { Icon: AutoAwesomeIcon, palette: FIGURE_PALETTES[4] };
+  }
+  if (/mantenim|martillo|yunque|gestor/.test(text)) {
+    return { Icon: SyncAltIcon, palette: FIGURE_PALETTES[1] };
   }
   if (/diario|noticia|peri[oó]d/.test(text)) {
     return { Icon: NewspaperIcon, palette: FIGURE_PALETTES[0] };
@@ -760,7 +773,7 @@ export default function NoticiasPage() {
           <Alert severity="error">{error}</Alert>
         ) : !items.length ? (
           <Alert severity="info">
-            Todavía no hay noticias publicadas. Cuando Raptor Solutions empuje
+            Todavía no hay noticias publicadas. Cuando {BRAND_NAME} empuje
             novedades, aparecerán acá automáticamente.
           </Alert>
         ) : (

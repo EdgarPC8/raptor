@@ -387,6 +387,7 @@ export default function CajaPage() {
   });
   const isProgrammer = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
   const isAdmin = user?.loginRol === "Administrador" || isProgrammer;
+  const isEmployee = user?.loginRol === "Empleado";
   /** Admin/Propietario: canasta de accesos rápidos sin tope de stock. */
   const allowBasketOverStock = isAdmin;
   /** Config Inventario: Autocompletar stock (caja + pedidos). */
@@ -1946,6 +1947,20 @@ export default function CajaPage() {
         });
         return;
       }
+      const creditCustomer = customers.find((c) => String(c.id) === String(customerId));
+      const creditName = String(creditCustomer?.name || "").toLowerCase();
+      const creditCed = String(creditCustomer?.cedula || "").replace(/\D/g, "");
+      const isConsumidorFinal =
+        (creditName.includes("consumidor") && creditName.includes("final")) ||
+        (creditCed.length >= 10 && /^9+$/.test(creditCed)) ||
+        (fallbackCustomer && String(fallbackCustomer.id) === String(customerId));
+      if (isConsumidorFinal) {
+        void toast?.({
+          message: "Para venta a crédito elegí un cliente identificado (no Consumidor Final).",
+          variant: "warning",
+        });
+        return;
+      }
     }
     if (saleType === "contado" && paymentMethod === "efectivo") {
       const raw = String(amountReceived ?? "").trim();
@@ -2151,9 +2166,13 @@ export default function CajaPage() {
               color="success"
               icon={<FactCheckIcon />}
               label="Facturación electrónica activa"
-              component={RouterLink}
-              to={APP_ROUTES.electronicDocs.sriSettings}
-              clickable
+              {...(isEmployee
+                ? {}
+                : {
+                    component: RouterLink,
+                    to: APP_ROUTES.electronicDocs.sriSettings,
+                    clickable: true,
+                  })}
             />
           ) : (
             <Chip
@@ -2162,9 +2181,13 @@ export default function CajaPage() {
               color="warning"
               icon={<FactCheckIcon />}
               label="SRI no listo"
-              component={RouterLink}
-              to={APP_ROUTES.electronicDocs.sriSettings}
-              clickable
+              {...(isEmployee
+                ? {}
+                : {
+                    component: RouterLink,
+                    to: APP_ROUTES.electronicDocs.sriSettings,
+                    clickable: true,
+                  })}
             />
           )}
         </Stack>
@@ -2785,6 +2808,7 @@ export default function CajaPage() {
                 margin="dense"
                 label="Condición de pago"
                 value={saleType}
+                InputLabelProps={{ shrink: true }}
                 onChange={(e) => setSaleType(e.target.value)}
               >
                 <MenuItem value="contado">Contado</MenuItem>
@@ -2822,14 +2846,18 @@ export default function CajaPage() {
                 }
                 label="Registrar datos del cliente"
               />
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: -0.5 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: -0.5, mb: 1.25 }}
+              >
                 {documentType === "factura"
                   ? "En factura es obligatorio registrar cliente."
                   : "Si no marcas la casilla, se usa Consumidor Final automáticamente."}
               </Typography>
               {useCustomerData || documentType === "factura" ? (
                 <>
-                  <Stack direction="row" spacing={0.5} alignItems="flex-start">
+                  <Stack direction="row" spacing={0.5} alignItems="flex-start" sx={{ mb: 0.5 }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <SearchableSelect
                         fullWidth
@@ -2872,6 +2900,8 @@ export default function CajaPage() {
                 label="Método de pago"
                 value={paymentMethod}
                 disabled={saleType === "credito"}
+                InputLabelProps={{ shrink: true }}
+                sx={{ mt: 0.5 }}
                 onChange={(e) => {
                   const next = e.target.value;
                   setPaymentMethod(next);

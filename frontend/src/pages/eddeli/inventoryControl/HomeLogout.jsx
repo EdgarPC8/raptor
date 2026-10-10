@@ -34,9 +34,10 @@ import { useAuth } from "../../../context/AuthContext.jsx";
 import { listCatalogModuleGroupsWithStatus } from "../../../config/appModulesCatalog.js";
 import { SHELL_ONLY } from "../../../config/deployEnv.js";
 import { APP_ROUTES } from "../../../config/appRoutes.js";
-import { raptorLogoUrl } from "../../../config/raptorBrand.js";
+import { BRAND_NAME, raptorLogoUrl } from "../../../config/raptorBrand.js";
 import { getPostLoginPath } from "../../../utils/postLoginPath.js";
 import SchoolIcon from "@mui/icons-material/School";
+import FestiveRainBackdrop from "../../../components/FestiveRainBackdrop.jsx";
 
 const HOME_MODULE_IDS = ["operacion", "inventario", "ventas", "finanzas", "produccion"];
 
@@ -60,176 +61,12 @@ const fadeIn = keyframes`
   to { opacity: 1; transform: translateY(0); }
 `;
 
-const softFloat = keyframes`
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-14px) rotate(3deg); }
-`;
-
-const softFloatAlt = keyframes`
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(12px) rotate(-4deg); }
-`;
-
-const slowSpin = keyframes`
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-`;
-
 const sectionSwap = keyframes`
   0% { opacity: 0; transform: translateY(8px); }
   12% { opacity: 1; transform: translateY(0); }
   88% { opacity: 1; transform: translateY(0); }
   100% { opacity: 0; transform: translateY(-6px); }
 `;
-
-const BACKDROP_ICONS = [
-  BakeryDiningIcon,
-  PointOfSaleIcon,
-  Inventory2Icon,
-  AccountBalanceWalletIcon,
-  PeopleIcon,
-  PrecisionManufacturingIcon,
-  StoreMallDirectoryRoundedIcon,
-];
-
-function HomeBackdrop({ logoUrl, wordmark = false }) {
-  const theme = useTheme();
-  const isNeon = theme.palette.customMode === "neon";
-  const colors = theme.palette.colors || {};
-  const accents = [
-    theme.palette.primary.main,
-    theme.palette.secondary.main,
-    colors.teal || "#14B8A6",
-    colors.blue || "#3B9DD9",
-    colors.orange || "#FF9F43",
-    colors.cyan || "#22D3EE",
-    colors.green || "#2DD4A8",
-  ];
-
-  const iconSpots = [
-    { top: "12%", left: "6%", size: 52 },
-    { top: "22%", right: "8%", size: 64 },
-    { top: "58%", left: "4%", size: 46 },
-    { top: "48%", right: "5%", size: 58 },
-    { top: "78%", left: "18%", size: 42 },
-    { top: "70%", right: "16%", size: 50 },
-    { top: "34%", left: "22%", size: 40 },
-  ];
-
-  const logoSpots = [
-    { top: "8%", right: "14%", size: { xs: 120, md: 180 }, opacity: 0.14, delay: "0s" },
-    { bottom: "18%", left: "6%", size: { xs: 90, md: 140 }, opacity: 0.1, delay: "1.2s" },
-    { top: "42%", left: "42%", size: { xs: 160, md: 260 }, opacity: 0.07, delay: "0.6s" },
-  ];
-
-  return (
-    <Box
-      aria-hidden
-      sx={{
-        position: "absolute",
-        inset: 0,
-        overflow: "hidden",
-        pointerEvents: "none",
-        zIndex: 0,
-      }}
-    >
-      {/* Anillos decorativos */}
-      <Box
-        sx={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          width: { xs: 420, md: 640 },
-          height: { xs: 420, md: 640 },
-          ml: { xs: -210, md: -320 },
-          mt: { xs: -210, md: -320 },
-          borderRadius: "50%",
-          border: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
-          animation: `${slowSpin} 48s linear infinite`,
-        }}
-      />
-      <Box
-        sx={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          width: { xs: 300, md: 460 },
-          height: { xs: 300, md: 460 },
-          ml: { xs: -150, md: -230 },
-          mt: { xs: -150, md: -230 },
-          borderRadius: "50%",
-          border: `1px dashed ${alpha(theme.palette.secondary.main, 0.16)}`,
-          animation: `${slowSpin} 64s linear infinite reverse`,
-        }}
-      />
-
-      {/* Logos flotantes (solo circulares; el wordmark offline no se recorta) */}
-      {!wordmark && logoUrl
-        ? logoSpots.map((spot, i) => (
-            <Box
-              key={`logo-${i}`}
-              sx={{
-                position: "absolute",
-                top: spot.top,
-                left: spot.left,
-                right: spot.right,
-                bottom: spot.bottom,
-                width: spot.size,
-                height: spot.size,
-                borderRadius: "50%",
-                overflow: "hidden",
-                opacity: spot.opacity,
-                animation: `${i % 2 ? softFloatAlt : softFloat} ${7 + i}s ease-in-out infinite`,
-                animationDelay: spot.delay,
-                boxShadow: isNeon
-                  ? `0 0 40px ${alpha(theme.palette.primary.main, 0.25)}`
-                  : `0 16px 40px ${alpha("#000", 0.12)}`,
-                border: `2px solid ${alpha(theme.palette.common.white, theme.palette.mode === "light" ? 0.55 : 0.12)}`,
-              }}
-            >
-              <Box
-                component="img"
-                src={logoUrl}
-                alt=""
-                sx={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            </Box>
-          ))
-        : null}
-
-      {/* Burbujas con iconos */}
-      {iconSpots.map((spot, i) => {
-        const Icon = BACKDROP_ICONS[i % BACKDROP_ICONS.length];
-        const accent = accents[i % accents.length];
-        return (
-          <Box
-            key={`icon-${i}`}
-            sx={{
-              position: "absolute",
-              top: spot.top,
-              left: spot.left,
-              right: spot.right,
-              width: spot.size,
-              height: spot.size,
-              borderRadius: "50%",
-              display: "grid",
-              placeItems: "center",
-              color: accent,
-              bgcolor: alpha(accent, theme.palette.mode === "light" ? 0.1 : 0.14),
-              border: `1px solid ${alpha(accent, 0.28)}`,
-              backdropFilter: "blur(2px)",
-              animation: `${i % 2 ? softFloat : softFloatAlt} ${6 + (i % 4)}s ease-in-out infinite`,
-              animationDelay: `${i * 0.35}s`,
-              boxShadow: isNeon ? `0 0 16px ${alpha(accent, 0.22)}` : "none",
-            }}
-          >
-            <Icon sx={{ fontSize: spot.size * 0.48, opacity: 0.75 }} />
-          </Box>
-        );
-      })}
-    </Box>
-  );
-}
 
 function useRotatingIndex(length, intervalMs, offset = 0) {
   const [index, setIndex] = useState(0);
@@ -485,10 +322,7 @@ export default function HomeLogout() {
             `,
       }}
     >
-      <HomeBackdrop
-        logoUrl={activeApp.logoUrl}
-        wordmark={Boolean(activeApp.brandWordmark || activeApp.offlineBrand)}
-      />
+      <FestiveRainBackdrop variant="home" />
 
       {/* Hero compacto */}
       <Box
@@ -518,7 +352,7 @@ export default function HomeLogout() {
                 <Box
                   component="img"
                   src={raptorLogoUrl(theme.palette.mode === "dark" || isNeon)}
-                  alt={activeApp.alias || "Raptor"}
+                  alt={activeApp.alias || BRAND_NAME}
                   sx={{
                     width: { xs: 168, sm: 220, md: 260 },
                     maxWidth: "70vw",
@@ -557,7 +391,7 @@ export default function HomeLogout() {
                       color: colors.teal || theme.palette.secondary.main,
                     }}
                   >
-                    Raptor
+                    {BRAND_NAME}
                   </Typography>
                   <Typography
                     component="h1"
@@ -573,7 +407,7 @@ export default function HomeLogout() {
                       color: "transparent",
                     }}
                   >
-                    {activeApp.alias || "Raptor"}
+                    {activeApp.alias || BRAND_NAME}
                   </Typography>
                 </Box>
               ) : null}
@@ -589,7 +423,7 @@ export default function HomeLogout() {
             >
               {activeApp.description ||
                 (SHELL_ONLY
-                  ? "Plantilla frontend Raptor (solo desarrollo, sin backend)."
+                  ? `Plantilla frontend ${BRAND_NAME} (solo desarrollo, sin backend).`
                   : "Sistema de gestión para panadería, pastelería y operación diaria.")}
             </Typography>
 
