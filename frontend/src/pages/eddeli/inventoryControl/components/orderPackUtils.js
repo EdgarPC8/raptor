@@ -288,6 +288,90 @@ export function applyBoardOrderToItems(items, boardOrder) {
   return next;
 }
 
+/** Claves de productos sueltos (sin paca) en el orden del tablero. */
+export function listFreeBoardItemKeys(boardOrder, items) {
+  const byId = new Map((items || []).map((it) => [it.lineId, it]));
+  return (boardOrder || [])
+    .filter((entry) => entry.type === "item")
+    .map((entry) => entry.key)
+    .filter((key) => {
+      const it = byId.get(key);
+      return it && !it.packKey;
+    });
+}
+
+/** Reescribe las entradas item sueltas del tablero con un orden de claves dado. */
+export function applyFreeItemKeyOrder(boardOrder, orderedKeys) {
+  const queue = [...(orderedKeys || [])];
+  return (boardOrder || []).map((entry) => {
+    if (entry.type !== "item") return entry;
+    const key = queue.shift();
+    return key ? { type: "item", key } : entry;
+  });
+}
+
+/**
+ * Ordena solo productos sueltos del tablero.
+ * @param {"alpha-asc"|"alpha-desc"|"price-asc"|"price-desc"|"reverse"} mode
+ */
+export function sortFreeBoardItems(boardOrder, items, mode) {
+  const keys = listFreeBoardItemKeys(boardOrder, items);
+  if (keys.length < 2) return boardOrder;
+  const byId = new Map((items || []).map((it) => [it.lineId, it]));
+  const sorted = [...keys];
+  if (mode === "reverse") {
+    sorted.reverse();
+  } else if (mode === "alpha-asc" || mode === "alpha-desc") {
+    const dir = mode === "alpha-asc" ? 1 : -1;
+    sorted.sort((a, b) => {
+      const na = String(byId.get(a)?.name || "").localeCompare(
+        String(byId.get(b)?.name || ""),
+        "es",
+        { sensitivity: "base" },
+      );
+      return na * dir;
+    });
+  } else if (mode === "price-asc" || mode === "price-desc") {
+    const dir = mode === "price-asc" ? 1 : -1;
+    sorted.sort((a, b) => {
+      const pa = Number(byId.get(a)?.unitPrice) || 0;
+      const pb = Number(byId.get(b)?.unitPrice) || 0;
+      if (pa === pb) return 0;
+      return pa < pb ? -dir : dir;
+    });
+  } else {
+    return boardOrder;
+  }
+  return applyFreeItemKeyOrder(boardOrder, sorted);
+}
+
+/**
+ * Mueve un producto suelto a otra posición (1-based).
+ * `toPos` = posición destino (queda en ese número, “arriba de” el que estaba ahí).
+ */
+export function moveFreeItemToPosition(boardOrder, items, fromPos, toPos) {
+  const keys = listFreeBoardItemKeys(boardOrder, items);
+  const from = Number(fromPos) - 1;
+  const to = Number(toPos) - 1;
+  if (
+    !Number.isInteger(from) ||
+    !Number.isInteger(to) ||
+    from < 0 ||
+    to < 0 ||
+    from >= keys.length ||
+    to >= keys.length ||
+    from === to
+  ) {
+    return boardOrder;
+  }
+  const next = [...keys];
+  const [moved] = next.splice(from, 1);
+  // Tras quitar `from`, el índice destino `to` baja 1 si veníamos de arriba.
+  const insertAt = from < to ? to - 1 : to;
+  next.splice(insertAt, 0, moved);
+  return applyFreeItemKeyOrder(boardOrder, next);
+}
+
 /** Conserva el orden actual y agrega/quita entradas huérfanas. */
 export function syncBoardOrder(boardOrder, items, packs) {
   const freeIds = new Set(items.filter((it) => !it.packKey).map((it) => it.lineId));

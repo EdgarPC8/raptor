@@ -19,9 +19,7 @@ import {
   RadioGroup,
   MenuItem,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
 import AddBoxIcon from "@mui/icons-material/AddBox";
-import EditIcon from "@mui/icons-material/Edit";
 import CloseIcon from "@mui/icons-material/Close";
 import PrintIcon from "@mui/icons-material/Print";
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
@@ -47,12 +45,11 @@ import {
   storeHoldsInventory,
 } from "../../../../utils/storeLocationKind.js";
 import SearchableSelect from "../../../../components/SearchableSelect";
-import ProductPriceReference, {
+import {
   getDefaultDistributorPrice,
   getProductUnitLabel,
   formatOrderLineTotal,
   formatProductPrice,
-  formatUnitPrice,
 } from "./ProductPriceReference";
 import ProductForm from "./ProductForm.jsx";
 import PrintFormatDialog from "../../../../components/saleReceipt/PrintFormatDialog.jsx";
@@ -140,6 +137,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
   const [printOpen, setPrintOpen] = useState(false);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [productDialogMode, setProductDialogMode] = useState("create");
+  const [productDialogProduct, setProductDialogProduct] = useState(null);
   const [paymentDueDate, setPaymentDueDate] = useState("");
   const [splitPayments, setSplitPayments] = useState(false);
   const [installmentCount, setInstallmentCount] = useState(2);
@@ -173,8 +171,6 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
   }, [packs]);
 
   const selectedProductId = watch("productId");
-  const watchQuantity = watch("quantity");
-  const watchPrice = watch("price");
 
   const currentProduct = useMemo(() => {
     if (!selectedProductId) return null;
@@ -198,19 +194,56 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
     });
   }, [isEditing, datos, items, customers, selectedCustomer]);
 
-  useEffect(() => {
-    if (!currentProduct) return;
-    const defaultPrice = getDefaultDistributorPrice(currentProduct);
-    if (defaultPrice > 0) setValue("price", defaultPrice);
-  }, [currentProduct, setValue]);
+  const clearProductPicker = useCallback(() => {
+    setSelectedProduct("");
+    setValue("productId", "");
+    setValue("quantity", "");
+    setValue("price", "");
+  }, [setValue]);
+
+  const addProductToCart = useCallback(
+    (product, { quantity = 1, unitPrice } = {}) => {
+      if (!product?.id) return;
+      const qty = Number(quantity);
+      const price =
+        unitPrice != null && Number.isFinite(Number(unitPrice))
+          ? Number(unitPrice)
+          : getDefaultDistributorPrice(product);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        toast({ message: "Cantidad inválida", variant: "warning" });
+        return;
+      }
+      if (!Number.isFinite(price) || price < 0) {
+        toast({ message: "Precio inválido", variant: "warning" });
+        return;
+      }
+      const lineId = newPackKey("line");
+      setItems((prev) => [
+        ...prev,
+        {
+          lineId,
+          productId: Number(product.id),
+          quantity: qty,
+          unitPrice: price,
+          hasIva: false,
+          name: product?.name || "",
+          unitLabel: getProductUnitLabel(product),
+          packKey: null,
+          lotKey: null,
+        },
+      ]);
+      setBoardOrder((prev) => [...prev, { type: "item", key: lineId }]);
+      clearProductPicker();
+    },
+    [clearProductPicker, toast],
+  );
 
   const handleBarcodeScan = useCallback(
     (rawCode) => {
       const found = findEddeliProductByCode(products, rawCode);
       if (found) {
-        setSelectedProduct(String(found.id));
-        setValue("productId", String(found.id));
-        toast({ message: `Producto: ${found.name}`, variant: "success" });
+        addProductToCart(found);
+        toast({ message: `Agregado: ${found.name}`, variant: "success" });
         return;
       }
       const code = normalizeProductBarcode(rawCode) || String(rawCode || "").trim();
@@ -219,7 +252,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
         variant: "warning",
       });
     },
-    [products, setValue, toast],
+    [products, addProductToCart, toast],
   );
 
   useBarcodeScanner({
@@ -238,53 +271,54 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
     setCustomers(data || []);
   };
 
-  const handleProductSaved = async () => {
-    const editId =
-      productDialogMode === "edit" ? Number(currentProduct?.id || selectedProduct) : null;
+  const handleProductSaved = async (saved) => {
+    const editingId =
+      productDialogMode === "edit"
+        ? Number(productDialogProduct?.id || currentProduct?.id || selectedProduct)
+        : null;
     setProductDialogOpen(false);
-    await fetchProducts();
-    if (editId) {
-      const { data } = await getAllProductsAll();
-      const list = Array.isArray(data) ? data : [];
-      const updated = list.find((p) => Number(p.id) === editId);
-      if (updated) {
-        setSelectedProduct(String(updated.id));
-        setValue("productId", String(updated.id));
-        const defaultPrice = getDefaultDistributorPrice(updated);
-        if (defaultPrice > 0) setValue("price", defaultPrice);
-      }
-    }
-  };
-
-  const addItem = () => {
-    const productId = Number(watch("productId"));
-    const quantity = Number(watch("quantity"));
-    const unitPrice = Number(watch("price"));
-    if (!productId || !quantity || !Number.isFinite(unitPrice) || unitPrice < 0) {
-      toast({ message: "Seleccione producto, cantidad y precio", variant: "warning" });
+    setProductDialogProduct(null);
+    const { data } = await getAllProductsAll();
+    const list = Array.isArray(data) ? data : [];
+    setProducts(list);
+    const id = saved?.id ?? saved?.data?.id ?? editingId;
+    const product =
+      id != null
+        ? list.find((p) => Number(p.id) === Number(id))
+        : null;
+    if (!product) return;
+    if (editingId) {
+      setItems((prev) =>
+        prev.map((it) =>
+          Number(it.productId) === Number(editingId)
+            ? {
+                ...it,
+                name: product.name || it.name,
+                unitLabel: getProductUnitLabel(product),
+              }
+            : it,
+        ),
+      );
       return;
     }
-    const product = products.find((p) => p.id === productId);
-    const lineId = newPackKey("line");
-    setItems((prev) => [
-      ...prev,
-      {
-        lineId,
-        productId,
-        quantity,
-        unitPrice,
-        hasIva: false,
-        name: product?.name || "",
-        unitLabel: getProductUnitLabel(product),
-        packKey: null,
-        lotKey: null,
-      },
-    ]);
-    setBoardOrder((prev) => [...prev, { type: "item", key: lineId }]);
-    setValue("productId", "");
-    setSelectedProduct("");
-    setValue("quantity", "");
-    setValue("price", "");
+    addProductToCart(product);
+  };
+
+  const openCreateProduct = () => {
+    setProductDialogMode("create");
+    setProductDialogProduct(null);
+    setProductDialogOpen(true);
+  };
+
+  const openEditProduct = (productId) => {
+    const product = products.find((p) => Number(p.id) === Number(productId));
+    if (!product) {
+      toast({ message: "Producto no encontrado en el catálogo", variant: "warning" });
+      return;
+    }
+    setProductDialogMode("edit");
+    setProductDialogProduct(product);
+    setProductDialogOpen(true);
   };
 
   const removeItem = (lineId) => {
@@ -829,12 +863,6 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
         if (gen !== tourGenRef.current) return;
         const price = getDefaultDistributorPrice(p) || 0.15;
         const qty = Number(p.id) === 201 ? 6 : 12;
-        setSelectedProduct(p.id);
-        setValue("productId", p.id);
-        setValue("quantity", qty);
-        setValue("price", price);
-        await sleep(220);
-        if (gen !== tourGenRef.current) return;
         const lineId = newPackKey("line");
         setItems((prev) => [
           ...prev,
@@ -852,10 +880,7 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
           },
         ]);
         setBoardOrder((prev) => [...prev, { type: "item", key: lineId }]);
-        setSelectedProduct("");
-        setValue("productId", "");
-        setValue("quantity", "");
-        setValue("price", "");
+        clearProductPicker();
       }
     },
     createPackDemo() {
@@ -900,8 +925,9 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
       >
       <Alert severity="info" sx={{ mb: 2, py: 0.75 }}>
         <strong>Pedido de cliente</strong>
-        {isEditing ? ` · #${datos?.id ?? ""}` : " · nuevo"}: a la izquierda armás cada línea; a la
-        derecha el carrito y las pacas. Las ventas al contado de caja no se editan aquí.
+        {isEditing ? ` · #${datos?.id ?? ""}` : " · nuevo"}: elegí productos a la izquierda (entran
+        al carrito); a la derecha ajustás cantidad, precio y pacas. Las ventas al contado de caja no
+        se editan aquí.
       </Alert>
       <Grid container spacing={3}>
         <Grid item xs={12} md={5}>
@@ -925,94 +951,37 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
                     items={products}
                     value={selectedProduct}
                     productMeta
+                    clearInputOnSelect
                     onChange={(val) => {
-                      setSelectedProduct(val);
-                      setValue("productId", val);
+                      const product = products.find((p) => String(p.id) === String(val));
+                      if (product) addProductToCart(product);
+                      else {
+                        setSelectedProduct(val);
+                        setValue("productId", val);
+                      }
                     }}
-                    placeholder="Buscar o escanear código de barras…"
+                    placeholder="Elegí un producto y entra al carrito…"
                     getSearchText={(p) => [p?.barcode, p?.sku].filter(Boolean).join(" ")}
                     onEnterWithInput={handleBarcodeScan}
                   />
                 </Box>
-                <Tooltip
-                  title={
-                    currentProduct ? "Editar producto seleccionado" : "Crear producto nuevo"
-                  }
-                >
+                <Tooltip title="Crear producto nuevo">
                   <IconButton
                     color="primary"
-                    onClick={() => {
-                      setProductDialogMode(currentProduct ? "edit" : "create");
-                      setProductDialogOpen(true);
-                    }}
+                    onClick={openCreateProduct}
                     sx={{ border: 1, borderColor: "primary.main" }}
                   >
-                    {currentProduct ? <EditIcon /> : <AddBoxIcon />}
+                    <AddBoxIcon />
                   </IconButton>
                 </Tooltip>
               </Box>
-            </Grid>
-
-            {currentProduct && (
-              <Grid item xs={12}>
-                <ProductPriceReference
-                  product={currentProduct}
-                  quantity={watchQuantity}
-                  unitPrice={watchPrice}
-                  onApplyPrice={(price) =>
-                    setValue("price", price, { shouldDirty: true, shouldValidate: true })
-                  }
-                />
-              </Grid>
-            )}
-
-            <Grid item xs={6} data-tour="pedido-cliente-line">
-              <TextField
-                label="Cantidad"
-                type="number"
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                inputProps={{ min: 0.01, step: "any" }}
-                {...register("quantity")}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                label="Precio unitario"
-                type="number"
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                inputProps={{ step: "any", min: 0 }}
-                helperText={
-                  currentProduct
-                    ? `Por defecto: ${formatUnitPrice(getDefaultDistributorPrice(currentProduct))}`
-                    : undefined
-                }
-                {...register("price")}
-              />
-            </Grid>
-
-            <Grid item xs={12} sx={{ display: "flex", justifyContent: "flex-start" }}>
-              <Tooltip title="Agregar al carrito (sin paca)">
-                <IconButton
-                  color="primary"
-                  onClick={addItem}
-                  sx={{ border: 1, borderColor: "primary.main" }}
-                >
-                  <AddIcon />
-                </IconButton>
-              </Tooltip>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, alignSelf: "center" }}
-              >
-                Se agrega sin paca; después lo agrupás si hace falta
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                Al elegir o crear un producto se agrega al carrito (cant. 1, precio automático).
+                Cantidad y precio se editan a la derecha.
               </Typography>
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid item xs={12} data-tour="pedido-cliente-line">
               <TextField
                 label="Fecha del pedido"
                 type="date"
@@ -1058,49 +1027,59 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
               gap: 1,
               bgcolor: "background.default",
               maxHeight: { md: "70vh" },
-              overflow: "auto",
+              overflow: "hidden",
+              minHeight: 0,
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.25 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
               <ShoppingCartOutlinedIcon fontSize="small" color="action" />
               <Typography variant="subtitle2" fontWeight={700}>
                 Carrito del pedido
               </Typography>
             </Box>
 
-            <SupplierOrderItemsBoard
-              items={items}
-              packs={packs}
-              lots={lots}
-              boardOrder={boardOrder}
-              ivaRate={0}
-              showIva={false}
-              tourIdPrefix="pedido-cliente"
-              helpText={
-                <>
-                  Creá una paca vacía y meté productos con la manito, ↑↓ o el menú ⋮ (meter / sacar /
-                  pasar a otra paca). Podés poner vencimiento y el{" "}
-                  <strong>valor total de la paca</strong> para repartir precios unitarios.
-                </>
-              }
-              onRemoveItem={removeItem}
-              onUpdateItemField={updateItemField}
-              onToggleItemIva={toggleItemIva}
-              onDropItem={handleDropItem}
-              onMoveItem={moveItem}
-              onAssignItem={assignItem}
-              onCreatePack={createPack}
-              onUpdatePack={updatePack}
-              onRemovePack={removePack}
-              onMovePack={movePack}
-              onApplyPackTotal={applyPackTotal}
-              onCreateLot={createLot}
-              onUpdateLot={updateLot}
-              onRemoveLot={removeLot}
-            />
+            <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", pr: 0.25 }}>
+              <SupplierOrderItemsBoard
+                items={items}
+                packs={packs}
+                lots={lots}
+                boardOrder={boardOrder}
+                ivaRate={0}
+                showIva={false}
+                tourIdPrefix="pedido-cliente"
+                onEditProduct={openEditProduct}
+                helpText="Creá paca y meté productos con ↑↓ o ⋮. Valor total de paca reparte precios."
+                onRemoveItem={removeItem}
+                onUpdateItemField={updateItemField}
+                onToggleItemIva={toggleItemIva}
+                onDropItem={handleDropItem}
+                onMoveItem={moveItem}
+                onAssignItem={assignItem}
+                onCreatePack={createPack}
+                onUpdatePack={updatePack}
+                onRemovePack={removePack}
+                onMovePack={movePack}
+                onApplyPackTotal={applyPackTotal}
+                onCreateLot={createLot}
+                onUpdateLot={updateLot}
+                onRemoveLot={removeLot}
+                onBoardOrderChange={(next) => {
+                  setBoardOrder(next);
+                  setItems((prev) => applyBoardOrderToItems(prev, next));
+                }}
+              />
+            </Box>
 
             {items.length > 0 && (
-              <Box sx={{ mt: "auto", pt: 1, borderTop: 1, borderColor: "divider" }}>
+              <Box
+                sx={{
+                  flexShrink: 0,
+                  pt: 1,
+                  borderTop: 1,
+                  borderColor: "divider",
+                  bgcolor: "background.default",
+                }}
+              >
                 <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                   <Typography variant="subtitle1" fontWeight={700}>
                     Total
@@ -1349,7 +1328,14 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
           <DialogTitle sx={{ p: 0, fontWeight: 700, fontSize: "1.05rem" }}>
             {productDialogMode === "edit" ? "Editar producto" : "Crear producto"}
           </DialogTitle>
-          <IconButton aria-label="Cerrar" onClick={() => setProductDialogOpen(false)} size="small">
+          <IconButton
+            aria-label="Cerrar"
+            onClick={() => {
+              setProductDialogOpen(false);
+              setProductDialogProduct(null);
+            }}
+            size="small"
+          >
             <CloseIcon />
           </IconButton>
         </Box>
@@ -1358,13 +1344,16 @@ function OrderFormInner({ onClose, reload, isEditing = false, datos = null, acti
             key={
               productDialogOpen
                 ? productDialogMode === "edit"
-                  ? `edit-product-${currentProduct?.id || "x"}`
+                  ? `edit-product-${productDialogProduct?.id || "x"}`
                   : "new-customer-order-product"
                 : "closed"
             }
             isEditing={productDialogMode === "edit"}
-            datos={productDialogMode === "edit" ? currentProduct || {} : {}}
-            onClose={() => setProductDialogOpen(false)}
+            datos={productDialogMode === "edit" ? productDialogProduct || {} : {}}
+            onClose={() => {
+              setProductDialogOpen(false);
+              setProductDialogProduct(null);
+            }}
             reload={handleProductSaved}
           />
         </DialogContent>

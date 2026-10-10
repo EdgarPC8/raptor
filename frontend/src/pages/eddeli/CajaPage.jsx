@@ -16,6 +16,8 @@ import {
   Grid,
   IconButton,
   InputAdornment,
+  ListItemIcon,
+  Menu,
   MenuItem,
   Paper,
   Stack,
@@ -44,6 +46,8 @@ import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PrintIcon from "@mui/icons-material/Print";
 import AppsIcon from "@mui/icons-material/Apps";
+import SortIcon from "@mui/icons-material/Sort";
+import SwapVertIcon from "@mui/icons-material/SwapVert";
 import PrintFormatDialog from "../../components/saleReceipt/PrintFormatDialog.jsx";
 import {
   getAllProducts,
@@ -377,6 +381,59 @@ function sortCartDisplayGroups(groups, sort) {
   });
 }
 
+/** Unidades visuales del carrito (línea suelta o grupo surtido) → claves de fila. */
+function cartDisplayUnitsFromGroups(groups) {
+  return (groups || []).map((g) => {
+    if (g.type === "mix") {
+      return {
+        type: "mix",
+        keys: (g.rows || []).map((r) => cartRowKey(r)),
+      };
+    }
+    return { type: "single", keys: [cartRowKey(g.row)] };
+  });
+}
+
+function rebuildCartFromDisplayUnits(cart, units) {
+  const byKey = new Map((cart || []).map((r) => [cartRowKey(r), r]));
+  const next = [];
+  const used = new Set();
+  for (const unit of units || []) {
+    for (const key of unit.keys || []) {
+      const row = byKey.get(key);
+      if (!row || used.has(key)) continue;
+      next.push(row);
+      used.add(key);
+    }
+  }
+  for (const row of cart || []) {
+    const key = cartRowKey(row);
+    if (!used.has(key)) next.push(row);
+  }
+  return next;
+}
+
+function moveCartDisplayUnit(units, fromPos, toPos) {
+  const from = Number(fromPos) - 1;
+  const to = Number(toPos) - 1;
+  if (
+    !Number.isInteger(from) ||
+    !Number.isInteger(to) ||
+    from < 0 ||
+    to < 0 ||
+    from >= units.length ||
+    to >= units.length ||
+    from === to
+  ) {
+    return units;
+  }
+  const next = [...units];
+  const [moved] = next.splice(from, 1);
+  const insertAt = from < to ? to - 1 : to;
+  next.splice(insertAt, 0, moved);
+  return next;
+}
+
 export default function CajaPage() {
   const { toast, user } = useAuth();
   const { activeApp, loading: appSettingsLoading } = useAppSettings();
@@ -451,6 +508,9 @@ export default function CajaPage() {
   const [showOpenShiftBanner, setShowOpenShiftBanner] = useState(false);
   const [showCartStock, setShowCartStock] = useState(false);
   const [cartSort, setCartSort] = useState({ field: null, direction: "asc" });
+  const [showCartPositions, setShowCartPositions] = useState(false);
+  const [cartOrderMenuAnchor, setCartOrderMenuAnchor] = useState(null);
+  const [cartPosDraft, setCartPosDraft] = useState({});
   const [printOpen, setPrintOpen] = useState(false);
   const [printReceipt, setPrintReceipt] = useState(null);
   const [lastSaleReceipt, setLastSaleReceipt] = useState(null);
@@ -1286,6 +1346,24 @@ export default function CajaPage() {
     }
     return sortCartDisplayGroups(groups, cartSort);
   }, [pricedCart, allowPercentDiscount, ticketPctActive, cartSort]);
+
+  const reverseCartOrder = useCallback(() => {
+    setCartOrderMenuAnchor(null);
+    setCartSort({ field: null, direction: "asc" });
+    setCart((prev) => [...prev].reverse());
+  }, []);
+
+  const moveCartUnitToPosition = useCallback(
+    (fromPos, toPos) => {
+      const units = cartDisplayUnitsFromGroups(cartDisplayGroups);
+      const nextUnits = moveCartDisplayUnit(units, fromPos, toPos);
+      if (nextUnits === units) return;
+      setCartSort({ field: null, direction: "asc" });
+      setCart((prev) => rebuildCartFromDisplayUnits(prev, nextUnits));
+      setCartPosDraft({});
+    },
+    [cartDisplayGroups],
+  );
 
   const summary = useMemo(() => {
     return pricedCart.reduce(
@@ -2364,7 +2442,7 @@ export default function CajaPage() {
               spacing={1}
               sx={{ mb: 1 }}
             >
-              <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
+              <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
                 <Typography variant="body2" color="text.secondary">
                   Registros en venta: {cart.length}
                 </Typography>
@@ -2383,6 +2461,49 @@ export default function CajaPage() {
                   }
                   sx={{ m: 0 }}
                 />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={showCartPositions}
+                      onChange={(e) => setShowCartPositions(e.target.checked)}
+                      disabled={cart.length === 0}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" color="text.secondary">
+                      Posiciones
+                    </Typography>
+                  }
+                  sx={{ m: 0 }}
+                />
+                <Tooltip title="Orden del listado">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      disabled={cart.length < 2}
+                      onClick={(e) => setCartOrderMenuAnchor(e.currentTarget)}
+                      aria-label="Ordenar listado"
+                      sx={{ border: 1, borderColor: "divider", p: 0.35 }}
+                    >
+                      <SortIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Menu
+                  anchorEl={cartOrderMenuAnchor}
+                  open={Boolean(cartOrderMenuAnchor)}
+                  onClose={() => setCartOrderMenuAnchor(null)}
+                  dense
+                >
+                  <MenuItem onClick={reverseCartOrder} disabled={cart.length < 2}>
+                    <ListItemIcon>
+                      <SwapVertIcon fontSize="small" />
+                    </ListItemIcon>
+                    Invertir orden
+                  </MenuItem>
+                </Menu>
               </Stack>
               <Stack direction="row" spacing={1} data-tour="caja-sell-actions">
                 <Button
@@ -2415,6 +2536,11 @@ export default function CajaPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
+                    {showCartPositions ? (
+                      <TableCell align="center" sx={{ width: 52, px: 0.5 }}>
+                        #
+                      </TableCell>
+                    ) : null}
                     <TableCell sortDirection={cartSort.field === "barcode" ? cartSort.direction : false}>
                       <TableSortLabel
                         active={cartSort.field === "barcode"}
@@ -2458,7 +2584,61 @@ export default function CajaPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {cartDisplayGroups.map((group) => {
+                  {cartDisplayGroups.map((group, groupIndex) => {
+                    const positionNumber = groupIndex + 1;
+                    const positionCell = showCartPositions ? (
+                      <TableCell align="center" sx={{ width: 52, px: 0.5, verticalAlign: "middle" }}>
+                        <Tooltip title="Posición destino + Enter (ej. 4)">
+                          <TextField
+                            size="small"
+                            value={
+                              cartPosDraft[positionNumber] != null
+                                ? cartPosDraft[positionNumber]
+                                : String(positionNumber)
+                            }
+                            onFocus={() =>
+                              setCartPosDraft((prev) => ({
+                                ...prev,
+                                [positionNumber]: String(positionNumber),
+                              }))
+                            }
+                            onChange={(e) =>
+                              setCartPosDraft((prev) => ({
+                                ...prev,
+                                [positionNumber]: e.target.value.replace(/\D/g, "").slice(0, 3),
+                              }))
+                            }
+                            onBlur={() =>
+                              setCartPosDraft((prev) => {
+                                const next = { ...prev };
+                                delete next[positionNumber];
+                                return next;
+                              })
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key !== "Enter") return;
+                              e.preventDefault();
+                              const dest = Number(
+                                cartPosDraft[positionNumber] || positionNumber,
+                              );
+                              if (Number.isFinite(dest) && dest >= 1) {
+                                moveCartUnitToPosition(positionNumber, dest);
+                              }
+                              e.currentTarget.blur();
+                            }}
+                            inputProps={{
+                              inputMode: "numeric",
+                              style: { textAlign: "center", padding: "2px 4px", fontWeight: 700 },
+                            }}
+                            sx={{
+                              width: 40,
+                              "& .MuiInputBase-input": { fontSize: "0.75rem" },
+                            }}
+                          />
+                        </Tooltip>
+                      </TableCell>
+                    ) : null;
+
                     if (group.type === "single") {
                       const row = group.row;
                       const rowKey = cartRowKey(row);
@@ -2471,6 +2651,7 @@ export default function CajaPage() {
                       );
                       return (
                         <TableRow key={rowKey} sx={getTierVisualRowSx(tierKind, theme)}>
+                          {positionCell}
                           <TableCell>{row.barcode || "—"}</TableCell>
                           <TableCell>{row.name}</TableCell>
                           {showCartStock ? (
@@ -2584,12 +2765,15 @@ export default function CajaPage() {
                     }
 
                     const colSpan =
-                      (showCartStock ? 8 : 7) + (allowPercentDiscount ? 1 : 0);
+                      (showCartStock ? 8 : 7) +
+                      (allowPercentDiscount ? 1 : 0) +
+                      (showCartPositions ? 1 : 0);
                     const mixTierKind = isPanTierGroup({ name: group.label }) ? "pan-group" : "other-group";
                     return (
                       <React.Fragment key={group.mixGroupId}>
                         <TableRow sx={getTierVisualRowSx(mixTierKind, theme)}>
-                          <TableCell colSpan={colSpan - 2}>
+                          {positionCell}
+                          <TableCell colSpan={colSpan - 2 - (showCartPositions ? 1 : 0)}>
                             <Stack direction="row" alignItems="center" spacing={1}>
                               <Typography variant="subtitle2" fontWeight={800}>
                                 {group.label}
@@ -2631,6 +2815,7 @@ export default function CajaPage() {
                               key={rowKey}
                               sx={getTierVisualRowSx(mixTierKind, theme)}
                             >
+                              {showCartPositions ? <TableCell /> : null}
                               <TableCell sx={{ pl: 3 }}>{row.barcode || "—"}</TableCell>
                               <TableCell sx={{ pl: 3 }}>
                                 <Typography variant="body2">{row.name}</Typography>
@@ -2753,7 +2938,13 @@ export default function CajaPage() {
                   })}
                   {cart.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={showCartStock ? 8 : 7}>
+                      <TableCell
+                        colSpan={
+                          (showCartStock ? 8 : 7) +
+                          (allowPercentDiscount ? 1 : 0) +
+                          (showCartPositions ? 1 : 0)
+                        }
+                      >
                         <Typography variant="body2" color="text.secondary">
                           Aún no hay productos agregados.
                         </Typography>

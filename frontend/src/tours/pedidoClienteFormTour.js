@@ -45,18 +45,9 @@ export function getPedidoClienteFormTourSteps(hooks = {}) {
       element: "[data-tour='pedido-cliente-product']",
       popover: {
         title: "Producto",
-        description: "Busca el producto. Debajo verás la referencia de precios si aplica.",
-        side: "bottom",
-        align: "start",
-      },
-    },
-    {
-      element: "[data-tour='pedido-cliente-line']",
-      popover: {
-        title: "Cantidad y precio",
         description:
-          "Indica cuántas unidades y el precio. El botón + suma la línea al carrito (sin paca al inicio).",
-        side: "top",
+          "Elegí o creá un producto (+): entra solo al carrito. Cantidad y precios se ajustan a la derecha.",
+        side: "bottom",
         align: "start",
       },
     },
@@ -68,7 +59,7 @@ export function getPedidoClienteFormTourSteps(hooks = {}) {
       popover: {
         title: "Carrito (demo)",
         description:
-          "Acá se acumulan las líneas. Podés quitar productos o agruparlos en pacas antes de guardar.",
+          "Acá se acumulan las líneas. Editá cantidad/precio o el lápiz del producto. Podés agrupar en pacas.",
         side: "left",
         align: "center",
       },

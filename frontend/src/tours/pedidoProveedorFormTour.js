@@ -47,18 +47,8 @@ export function getPedidoProveedorFormTourSteps(hooks = {}) {
       popover: {
         title: "Producto",
         description:
-          "Buscá por nombre o código de barras. También podés crear un producto nuevo con el botón +.",
+          "Elegí o creá un producto (+): entra solo al carrito. Cantidad, precio e IVA se ajustan a la derecha.",
         side: "bottom",
-        align: "start",
-      },
-    },
-    {
-      element: "[data-tour='pedido-prov-line']",
-      popover: {
-        title: "Cantidad, precio e IVA",
-        description:
-          "El precio unitario admite varios decimales (más exacto al repartir pacas). Sumá la línea con +; queda sin paca hasta que la organices.",
-        side: "top",
         align: "start",
       },
     },
@@ -70,7 +60,7 @@ export function getPedidoProveedorFormTourSteps(hooks = {}) {
       popover: {
         title: "Lista del pedido",
         description:
-          "Acá ves los productos, subtotal e IVA. Podés arrastrarlos a una paca o dejarlos sueltos.",
+          "Acá ves productos, subtotal e IVA. Editá cantidad/precio o el lápiz del producto. Podés arrastrarlos a una paca.",
         side: "left",
         align: "center",
       },

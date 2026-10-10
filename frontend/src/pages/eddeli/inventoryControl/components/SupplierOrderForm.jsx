@@ -20,10 +20,8 @@ import {
   FormLabel,
   MenuItem,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
 import AddBoxIcon from "@mui/icons-material/AddBox";
 import AddBusinessIcon from "@mui/icons-material/AddBusiness";
-import EditIcon from "@mui/icons-material/Edit";
 import CloseIcon from "@mui/icons-material/Close";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import SearchIcon from "@mui/icons-material/Search";
@@ -63,7 +61,7 @@ import {
   normalizeScheduleForApi,
   toDateOnly,
 } from "../../../../utils/orderPaymentSchedule.js";
-import ProductPriceReference, {
+import {
   getProductUnitLabel,
   formatOrderLineTotal,
   formatProductPrice,
@@ -292,8 +290,9 @@ function SupplierOrderForm(
   const [selectedSupplier, setSelectedSupplier] = useState("");
   const [pendingVoucherFile, setPendingVoucherFile] = useState(null);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
-  /** create = producto nuevo · edit = editar el seleccionado */
+  /** create = producto nuevo · edit = editar desde el carrito */
   const [productDialogMode, setProductDialogMode] = useState("create");
+  const [productDialogProduct, setProductDialogProduct] = useState(null);
   const [supplierDialogOpen, setSupplierDialogOpen] = useState(false);
   const [xmlImportOpen, setXmlImportOpen] = useState(false);
   const [xmlParsed, setXmlParsed] = useState(null);
@@ -338,8 +337,6 @@ function SupplierOrderForm(
   }, [packs]);
 
   const selectedProductId = watch("productId");
-  const watchQuantity = watch("quantity");
-  const watchUnitPrice = watch("unitPrice");
 
   const currentProduct = useMemo(() => {
     if (!selectedProductId) return null;
@@ -355,11 +352,6 @@ function SupplierOrderForm(
   const lastPurchaseByProductId = useMemo(
     () => buildLastPurchaseByProductId(supplierOrdersCache),
     [supplierOrdersCache],
-  );
-
-  const currentLastPurchase = useMemo(
-    () => getLastPurchaseForProduct(lastPurchaseByProductId, selectedProductId),
-    [lastPurchaseByProductId, selectedProductId],
   );
 
   const lastOrderWithPacks = useMemo(
@@ -422,18 +414,68 @@ function SupplierOrderForm(
     setLoadingSoldProducts(false);
   }, [selectedSupplier, supplierOrdersCache]);
 
-  useEffect(() => {
-    if (!selectedProductId) return;
-    const last = getLastPurchaseForProduct(lastPurchaseByProductId, selectedProductId);
-    if (last && Number.isFinite(Number(last.unitPrice)) && Number(last.unitPrice) >= 0) {
-      setValue("unitPrice", last.unitPrice);
-      return;
-    }
-    const product = products.find((p) => p.id === Number(selectedProductId));
-    if (product?.supplierPrice != null) {
-      setValue("unitPrice", product.supplierPrice);
-    }
-  }, [selectedProductId, products, setValue, lastPurchaseByProductId]);
+  const clearProductPicker = useCallback(() => {
+    setSelectedProduct("");
+    setValue("productId", "");
+    setValue("quantity", "");
+    setValue("unitPrice", "");
+  }, [setValue]);
+
+  const resolveSupplierUnitPrice = useCallback(
+    (product) => {
+      if (!product) return 0;
+      const last = getLastPurchaseForProduct(lastPurchaseByProductId, product.id);
+      if (last && Number.isFinite(Number(last.unitPrice)) && Number(last.unitPrice) >= 0) {
+        return Number(last.unitPrice);
+      }
+      if (product.supplierPrice != null && Number.isFinite(Number(product.supplierPrice))) {
+        return Number(product.supplierPrice);
+      }
+      return Number(product.price ?? 0);
+    },
+    [lastPurchaseByProductId],
+  );
+
+  const addProductToCart = useCallback(
+    (product, { quantity = 1, unitPrice } = {}) => {
+      if (!product?.id) return;
+      const qty = Number(quantity);
+      const price =
+        unitPrice != null && Number.isFinite(Number(unitPrice))
+          ? Number(unitPrice)
+          : resolveSupplierUnitPrice(product);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        toast({ message: "Cantidad inválida", variant: "warning" });
+        return;
+      }
+      if (!Number.isFinite(price) || price < 0) {
+        toast({ message: "Precio inválido", variant: "warning" });
+        return;
+      }
+      const productIva = Number(product?.taxRate) || 0;
+      if (productIva > 0) setIvaRate(productIva);
+      const lineId = newKey("line");
+      setItems((prev) => [
+        ...prev,
+        {
+          lineId,
+          productId: Number(product.id),
+          quantity: qty,
+          unitPrice: price,
+          discount: 0,
+          hasIva: productIva > 0,
+          taxRate: productIva,
+          name: product?.name || "",
+          unitLabel: getProductUnitLabel(product),
+          packKey: null,
+          lotKey: null,
+        },
+      ]);
+      setBoardOrder((prev) => [...prev, { type: "item", key: lineId }]);
+      clearProductPicker();
+    },
+    [clearProductPicker, resolveSupplierUnitPrice, toast],
+  );
 
   const fetchCatalog = async () => {
     const [prodRes, supRes] = await Promise.all([getAllProductsAll(), getAllSuppliersRequest()]);
@@ -445,23 +487,48 @@ function SupplierOrderForm(
 
   const handleProductSaved = async (saved) => {
     const editingId =
-      productDialogMode === "edit" ? Number(currentProduct?.id || selectedProductId) : null;
+      productDialogMode === "edit"
+        ? Number(productDialogProduct?.id || currentProduct?.id || selectedProductId)
+        : null;
     setProductDialogOpen(false);
+    setProductDialogProduct(null);
     const list = await fetchCatalog();
     const id = saved?.id ?? saved?.data?.id ?? editingId;
-    if (id != null) {
-      setSelectedProduct(String(id));
-      setValue("productId", String(id));
-      const last = getLastPurchaseForProduct(lastPurchaseByProductId, id);
-      if (last && Number.isFinite(Number(last.unitPrice)) && Number(last.unitPrice) >= 0) {
-        setValue("unitPrice", last.unitPrice);
-      } else {
-        const updated = list.find((p) => Number(p.id) === Number(id));
-        if (updated?.supplierPrice != null) {
-          setValue("unitPrice", updated.supplierPrice);
-        }
-      }
+    const product = id != null ? list.find((p) => Number(p.id) === Number(id)) : null;
+    if (!product) return;
+    if (editingId) {
+      setItems((prev) =>
+        prev.map((it) =>
+          Number(it.productId) === Number(editingId)
+            ? {
+                ...it,
+                name: product.name || it.name,
+                unitLabel: getProductUnitLabel(product),
+                taxRate: Number(product?.taxRate) || it.taxRate || 0,
+              }
+            : it,
+        ),
+      );
+      return;
     }
+    addProductToCart(product);
+  };
+
+  const openCreateProduct = () => {
+    setProductDialogMode("create");
+    setProductDialogProduct(null);
+    setProductDialogOpen(true);
+  };
+
+  const openEditProduct = (productId) => {
+    const product = products.find((p) => Number(p.id) === Number(productId));
+    if (!product) {
+      toast({ message: "Producto no encontrado en el catálogo", variant: "warning" });
+      return;
+    }
+    setProductDialogMode("edit");
+    setProductDialogProduct(product);
+    setProductDialogOpen(true);
   };
 
   const normalizeAccessKeyInput = useCallback((raw) => {
@@ -540,9 +607,8 @@ function SupplierOrderForm(
           });
           return;
         }
-        setSelectedProduct(String(found.id));
-        setValue("productId", String(found.id));
-        toast({ message: `Producto: ${found.name}`, variant: "success" });
+        addProductToCart(found);
+        toast({ message: `Agregado: ${found.name}`, variant: "success" });
         return;
       }
       const code = normalizeProductBarcode(rawCode) || String(rawCode || "").trim();
@@ -553,13 +619,13 @@ function SupplierOrderForm(
     },
     [
       products,
-      setValue,
       toast,
       onlySoldBySupplier,
       selectedSupplier,
       soldProductIds,
       lookupInvoiceByAccessKey,
       normalizeAccessKeyInput,
+      addProductToCart,
     ],
   );
 
@@ -574,41 +640,6 @@ function SupplierOrderForm(
     onScan: handleBarcodeScan,
     ignoreWhenTypingInInputs: true,
   });
-
-  const addItem = () => {
-    const productId = Number(watch("productId"));
-    const quantity = Number(watch("quantity"));
-    const unitPrice = Number(watch("unitPrice"));
-    if (!productId || !quantity || unitPrice == null || Number.isNaN(unitPrice)) {
-      toast({ message: "Seleccione producto, cantidad y precio unitario", variant: "warning" });
-      return;
-    }
-    const product = products.find((p) => p.id === productId);
-    const productIva = Number(product?.taxRate) || 0;
-    if (productIva > 0) setIvaRate(productIva);
-    const lineId = newKey("line");
-    setItems((prev) => [
-      ...prev,
-      {
-        lineId,
-        productId,
-        quantity,
-        unitPrice,
-        discount: 0,
-        hasIva: productIva > 0,
-        taxRate: productIva,
-        name: product?.name || "",
-        unitLabel: getProductUnitLabel(product),
-        packKey: null,
-        lotKey: null,
-      },
-    ]);
-    setBoardOrder((prev) => [...prev, { type: "item", key: lineId }]);
-    setValue("productId", "");
-    setSelectedProduct("");
-    setValue("quantity", "");
-    setValue("unitPrice", "");
-  };
 
   const handleXmlFilePicked = async (e) => {
     const file = e.target?.files?.[0];
@@ -1480,12 +1511,6 @@ function SupplierOrderForm(
         if (gen !== tourGenRef.current) return;
         const unitPrice = Number(p.supplierPrice ?? p.price ?? 0.5);
         const qty = Number(p.id) === 201 ? 10 : 20;
-        setSelectedProduct(p.id);
-        setValue("productId", p.id);
-        setValue("quantity", qty);
-        setValue("unitPrice", unitPrice);
-        await sleep(220);
-        if (gen !== tourGenRef.current) return;
         const lineId = newKey("line");
         setItems((prev) => [
           ...prev,
@@ -1505,10 +1530,7 @@ function SupplierOrderForm(
           },
         ]);
         setBoardOrder((prev) => [...prev, { type: "item", key: lineId }]);
-        setSelectedProduct("");
-        setValue("productId", "");
-        setValue("quantity", "");
-        setValue("unitPrice", "");
+        clearProductPicker();
       }
     },
     resetDemo() {
@@ -1616,16 +1638,21 @@ function SupplierOrderForm(
                     items={productOptions}
                     value={selectedProduct}
                     productMeta
+                    clearInputOnSelect
                     onChange={(val) => {
-                      setSelectedProduct(val);
-                      setValue("productId", val);
+                      const product = productOptions.find((p) => String(p.id) === String(val));
+                      if (product) addProductToCart(product);
+                      else {
+                        setSelectedProduct(val);
+                        setValue("productId", val);
+                      }
                     }}
                     placeholder={
                       onlySoldBySupplier && !selectedSupplier
                         ? "Seleccioná un proveedor primero…"
                         : onlySoldBySupplier && soldProductIds.size === 0
                           ? "Sin historial de ventas de este proveedor…"
-                          : "Buscar o escanear código…"
+                          : "Elegí un producto y entra al carrito…"
                     }
                     getSearchText={(p) =>
                       [p?.barcode, p?.sku].filter(Boolean).join(" ")
@@ -1633,80 +1660,23 @@ function SupplierOrderForm(
                     onEnterWithInput={handleBarcodeScan}
                   />
                 </Box>
-                <Tooltip
-                  title={
-                    currentProduct
-                      ? "Editar producto seleccionado"
-                      : "Crear producto nuevo"
-                  }
-                >
+                <Tooltip title="Crear producto nuevo">
                   <IconButton
                     color="primary"
                     size="small"
-                    onClick={() => {
-                      if (currentProduct) {
-                        setProductDialogMode("edit");
-                      } else {
-                        setProductDialogMode("create");
-                      }
-                      setProductDialogOpen(true);
-                    }}
+                    onClick={openCreateProduct}
                     sx={{ border: 1, borderColor: "primary.main" }}
                   >
-                    {currentProduct ? <EditIcon fontSize="small" /> : <AddBoxIcon fontSize="small" />}
+                    <AddBoxIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
               </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                Al elegir o crear un producto se agrega al carrito (cant. 1; precio de última compra
+                o proveedor). Cantidad y precio se editan a la derecha.
+              </Typography>
             </Grid>
-            {currentProduct && (
-              <Grid item xs={12}>
-                <ProductPriceReference
-                  product={currentProduct}
-                  quantity={watchQuantity}
-                  unitPrice={watchUnitPrice}
-                  variant="supplier"
-                  lastPurchase={currentLastPurchase}
-                  onApplyPrice={(price) =>
-                    setValue("unitPrice", price, { shouldDirty: true, shouldValidate: true })
-                  }
-                />
-              </Grid>
-            )}
-            <Grid item xs={4} data-tour="pedido-prov-line">
-              <TextField
-                fullWidth
-                size="small"
-                label="Cantidad"
-                type="number"
-                InputLabelProps={{ shrink: true }}
-                inputProps={{ min: 0.01, step: "any" }}
-                {...register("quantity")}
-              />
-            </Grid>
-            <Grid item xs={4}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Precio unit."
-                type="number"
-                InputLabelProps={{ shrink: true }}
-                inputProps={{ min: 0, step: "any" }}
-                {...register("unitPrice")}
-              />
-            </Grid>
-            <Grid item xs={4} sx={{ display: "flex", alignItems: "stretch" }}>
-              <Button
-                fullWidth
-                size="small"
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={addItem}
-                sx={{ minHeight: 40 }}
-              >
-                Agregar
-              </Button>
-            </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} data-tour="pedido-prov-line">
               <input
                 ref={xmlFileInputRef}
                 type="file"
@@ -1875,84 +1845,101 @@ function SupplierOrderForm(
               borderColor: "divider",
               borderRadius: 2,
               p: 1,
-              height: "100%",
+              height: { xs: "auto", md: "100%" },
               minHeight: { xs: 280, md: 420 },
               display: "flex",
               flexDirection: "column",
               gap: 0.75,
               bgcolor: "background.default",
-              maxHeight: { md: "100%" },
-              overflow: "auto",
+              maxHeight: { md: "70vh" },
+              overflow: "hidden",
             }}
           >
             {!isEditing && selectedSupplier && (lastOrderWithPacks || lastOrderAny) ? (
-              <Alert
-                severity="info"
-                sx={{ py: 0.5, "& .MuiAlert-message": { width: "100%" } }}
+              <Box
+                sx={{
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 0.5,
+                  px: 0.75,
+                  py: 0.35,
+                  borderRadius: 1,
+                  bgcolor: "action.hover",
+                  border: 1,
+                  borderColor: "divider",
+                }}
               >
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
-                  <Typography variant="body2">
-                    {lastOrderWithPacks
-                      ? `Último pedido con pacas: #${lastOrderWithPacks.id}. Podés reutilizar esa estructura.`
-                      : `Último pedido: #${lastOrderAny.id}. Todavía no tenía pacas; igual podés traerlo.`}
-                  </Typography>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      disabled={!lastOrderWithPacks || cartMatchesLastPacks === 0}
-                      onClick={applyPacksFromLastOrder}
-                    >
-                      Armar pacas del carrito
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      disableElevation
-                      onClick={importLastSupplierOrder}
-                    >
-                      Traer último pedido
-                    </Button>
-                  </Box>
-                  {!items.length ? (
-                    <Typography variant="caption" color="text.secondary">
-                      Opción 1: agregá productos y después “Armar pacas del carrito”. Opción 2: traé
-                      todo y andá quitando.
-                    </Typography>
-                  ) : lastOrderWithPacks && cartMatchesLastPacks === 0 ? (
-                    <Typography variant="caption" color="text.secondary">
-                      Los productos del carrito no coinciden con las pacas del último pedido.
-                    </Typography>
-                  ) : null}
-                </Box>
-              </Alert>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.2 }}
+                >
+                  {lastOrderWithPacks
+                    ? `Último #${lastOrderWithPacks.id} (con pacas)`
+                    : `Último #${lastOrderAny.id}`}
+                </Typography>
+                <Button
+                  size="small"
+                  variant="text"
+                  disabled={!lastOrderWithPacks || cartMatchesLastPacks === 0}
+                  onClick={applyPacksFromLastOrder}
+                  sx={{ py: 0, minHeight: 26, fontSize: "0.7rem" }}
+                >
+                  Armar pacas
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={importLastSupplierOrder}
+                  sx={{ py: 0, minHeight: 26, fontSize: "0.7rem" }}
+                >
+                  Traer último pedido
+                </Button>
+              </Box>
             ) : null}
 
-            <SupplierOrderItemsBoard
-              items={items}
-              packs={packs}
-              lots={lots}
-              boardOrder={boardOrder}
-              ivaRate={ivaRate}
-              onRemoveItem={removeItem}
-              onUpdateItemField={updateItemField}
-              onToggleItemIva={toggleItemIva}
-              onDropItem={handleDropItem}
-              onMoveItem={moveItem}
-              onAssignItem={assignItem}
-              onCreatePack={createPack}
-              onUpdatePack={updatePack}
-              onRemovePack={removePack}
-              onMovePack={movePack}
-              onApplyPackTotal={applyPackTotal}
-              onCreateLot={createLot}
-              onUpdateLot={updateLot}
-              onRemoveLot={removeLot}
-              onOpenShoppingList={() => setShoppingListOpen(true)}
-            />
+            <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", pr: 0.25 }}>
+              <SupplierOrderItemsBoard
+                items={items}
+                packs={packs}
+                lots={lots}
+                boardOrder={boardOrder}
+                ivaRate={ivaRate}
+                onEditProduct={openEditProduct}
+                onRemoveItem={removeItem}
+                onUpdateItemField={updateItemField}
+                onToggleItemIva={toggleItemIva}
+                onDropItem={handleDropItem}
+                onMoveItem={moveItem}
+                onAssignItem={assignItem}
+                onCreatePack={createPack}
+                onUpdatePack={updatePack}
+                onRemovePack={removePack}
+                onMovePack={movePack}
+                onApplyPackTotal={applyPackTotal}
+                onCreateLot={createLot}
+                onUpdateLot={updateLot}
+                onRemoveLot={removeLot}
+                onOpenShoppingList={() => setShoppingListOpen(true)}
+                onBoardOrderChange={(next) => {
+                  setBoardOrder(next);
+                  setItems((prev) => applyBoardOrderToItems(prev, next));
+                }}
+              />
+            </Box>
 
             {items.length > 0 && (
-              <Box sx={{ mt: "auto", pt: 1, borderTop: 1, borderColor: "divider" }}>
+              <Box
+                sx={{
+                  flexShrink: 0,
+                  pt: 1,
+                  borderTop: 1,
+                  borderColor: "divider",
+                  bgcolor: "background.default",
+                }}
+              >
                 {discountTotal > 0 ? (
                   <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                     <Typography variant="body2" color="text.secondary">
@@ -2322,7 +2309,14 @@ function SupplierOrderForm(
           <DialogTitle sx={{ p: 0, fontWeight: 700, fontSize: "1.05rem" }}>
             {productDialogMode === "edit" ? "Editar producto" : "Crear producto"}
           </DialogTitle>
-          <IconButton aria-label="Cerrar" onClick={() => setProductDialogOpen(false)} size="small">
+          <IconButton
+            aria-label="Cerrar"
+            onClick={() => {
+              setProductDialogOpen(false);
+              setProductDialogProduct(null);
+            }}
+            size="small"
+          >
             <CloseIcon />
           </IconButton>
         </Box>
@@ -2331,13 +2325,16 @@ function SupplierOrderForm(
             key={
               productDialogOpen
                 ? productDialogMode === "edit"
-                  ? `edit-product-${currentProduct?.id || "x"}`
+                  ? `edit-product-${productDialogProduct?.id || "x"}`
                   : "new-supplier-product"
                 : "closed"
             }
             isEditing={productDialogMode === "edit"}
-            datos={productDialogMode === "edit" ? currentProduct || {} : {}}
-            onClose={() => setProductDialogOpen(false)}
+            datos={productDialogMode === "edit" ? productDialogProduct || {} : {}}
+            onClose={() => {
+              setProductDialogOpen(false);
+              setProductDialogProduct(null);
+            }}
             reload={handleProductSaved}
           />
         </DialogContent>
