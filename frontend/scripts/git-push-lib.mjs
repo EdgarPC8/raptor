@@ -51,8 +51,11 @@ function assertGitRepo(dir, label) {
 const BLOCKED_BACKUP_JSON =
   /(^|\/)\.env($|\.)|backup.*\.json$|\.backup\.json$|backup-eddeli-servidor\.json$|backup-tienda\.json$|backup-gestor-.*\.json$/i;
 
+const BLOCKED_ROOT_LOCKED = /(^|\/)[^/]*\.root-locked(\.|$)/i;
+
 function isBlockedStagingPath(name) {
   if (/backup\.json\.example$/i.test(name)) return false;
+  if (BLOCKED_ROOT_LOCKED.test(name)) return true;
   return BLOCKED_BACKUP_JSON.test(name);
 }
 

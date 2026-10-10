@@ -8,7 +8,15 @@
  *   npm run build-eddeli   → dist/ + copia al destino de deploy
  *   npm run build-store    → dist/ + copia al destino de deploy
  */
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import {
@@ -25,6 +33,32 @@ const mode = String(process.argv[2] || process.env.VITE_COPY_MODE || "eddeli")
   .trim()
   .toLowerCase();
 const env = loadEnvForMode(mode);
+
+/** Si rm falla por permisos (p. ej. dueño root), aparta la ruta para poder seguir. */
+function removeOrPark(target) {
+  if (!existsSync(target)) return;
+  try {
+    rmSync(target, { recursive: true, force: true });
+    return;
+  } catch (err) {
+    if (err?.code !== "EACCES" && err?.code !== "EPERM") throw err;
+  }
+  const parked = `${target}.root-locked.${Date.now()}`;
+  try {
+    renameSync(target, parked);
+    console.warn(
+      `[copy-build] Sin permiso para borrar ${target}; apartado a ${parked}`,
+    );
+  } catch (err) {
+    console.error(
+      `[copy-build] No se pudo borrar ni apartar ${target} (${err?.code || err}).`,
+    );
+    console.error(
+      "Ejecutá sin sudo el build, o: sudo chown -R \"$USER\" el destino de deploy.",
+    );
+    process.exit(1);
+  }
+}
 
 if (shouldSkipDeploy(mode, env)) {
   console.log(`[copy-build] mode=${mode}: sin copia de deploy (shell / VITE_SKIP_DEPLOY).`);
@@ -44,15 +78,16 @@ if (!existsSync(deployDir)) {
   console.log(`[copy-build] Carpeta creada:`, deployDir);
 }
 
-const assetsTarget = join(deployDir, "assets");
-if (existsSync(assetsTarget)) {
-  rmSync(assetsTarget, { recursive: true, force: true });
-}
+removeOrPark(join(deployDir, "assets"));
+removeOrPark(join(deployDir, "index.html"));
 
 for (const entry of readdirSync(distDir)) {
   if (entry === ".htaccess") continue;
   const src = join(distDir, entry);
   const dest = join(deployDir, entry);
+  if (entry !== "assets" && entry !== "index.html" && existsSync(dest)) {
+    removeOrPark(dest);
+  }
   cpSync(src, dest, { recursive: true, force: true });
 }
 

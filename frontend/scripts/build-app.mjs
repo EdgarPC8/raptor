@@ -10,7 +10,8 @@
  *   npm run build:app -- scheduly
  */
 import { execSync } from "child_process";
-import { dirname, resolve } from "path";
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from "fs";
+import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 import {
   frontendRoot,
@@ -28,6 +29,38 @@ const PRODUCTION_ORIGIN = "https://aplicaciones.marianosamaniego.edu.ec";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const mode = process.argv[2];
+
+/** Borra o aparta (si es de root) para que Vite pueda vaciar dist/. */
+function removeOrPark(target) {
+  if (!existsSync(target)) return;
+  try {
+    rmSync(target, { recursive: true, force: true });
+    return;
+  } catch (err) {
+    if (err?.code !== "EACCES" && err?.code !== "EPERM") throw err;
+  }
+  const parked = `${target}.root-locked.${Date.now()}`;
+  try {
+    renameSync(target, parked);
+    console.warn(`[build-app] Sin permiso para borrar ${target}; apartado a ${parked}`);
+  } catch (err) {
+    console.error(
+      `[build-app] No se pudo borrar ni apartar ${target} (${err?.code || err}).`,
+    );
+    console.error('Ejecutá el build sin sudo, o: sudo chown -R "$USER" dist');
+    process.exit(1);
+  }
+}
+
+function ensureWritableOutDir(outDir) {
+  if (!existsSync(outDir)) {
+    mkdirSync(outDir, { recursive: true });
+    return;
+  }
+  for (const name of readdirSync(outDir)) {
+    removeOrPark(join(outDir, name));
+  }
+}
 
 if (!mode) {
   console.error("Uso: npm run build:app -- <mode>   (ej. eddeli, store, scheduly)");
@@ -76,6 +109,8 @@ console.log(
   `[build-app] mode=${mode} · app=${appName} · ${subsLabel} · API=${apiLabel} · ${apiTarget}`,
 );
 console.log(`[build-app] Perfil del comando: ${JSON.stringify(cmdOverrides)}`);
+
+ensureWritableOutDir(resolve(frontendRoot, "dist"));
 
 execSync(`vite build --mode ${mode}`, {
   cwd: frontendRoot,
