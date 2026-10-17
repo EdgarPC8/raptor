@@ -28,16 +28,38 @@ export default function PlaybackPreview({
   title = "Vista previa",
   musicMode = MUSIC_MODES.NONE,
   musicTracks = [],
+  compact = false,
 }) {
   const engine = usePlaybackEngine(playlist, { loop, autoPlay: playlist.length > 0 });
   const { current, leaving, index, total, playing, progress, toggle, next, prev, reset, notifyMediaEnded } =
     engine;
 
   return (
-    <Paper variant="outlined" sx={{ overflow: "hidden" }}>
-      <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: "divider" }}>
+    <Paper
+      variant="outlined"
+      sx={{
+        overflow: "hidden",
+        flex: compact ? 1 : undefined,
+        flexShrink: compact ? 1 : 0,
+        minHeight: 0,
+        height: compact ? "100%" : undefined,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <Box
+        sx={{
+          px: compact ? 1.25 : 2,
+          py: compact ? 0.75 : 1.5,
+          borderBottom: 1,
+          borderColor: "divider",
+          flexShrink: 0,
+        }}
+      >
         <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography fontWeight={700}>{title}</Typography>
+          <Typography fontWeight={700} variant={compact ? "subtitle2" : "body1"}>
+            {title}
+          </Typography>
           {total > 0 && (
             <Chip size="small" label={`${index + 1} / ${total}`} variant="outlined" />
           )}
@@ -47,8 +69,12 @@ export default function PlaybackPreview({
       <Box
         sx={{
           position: "relative",
-          aspectRatio: "16 / 9",
+          flex: 1,
+          minHeight: 0,
           overflow: "hidden",
+          ...(compact
+            ? { bgcolor: "action.hover" }
+            : { aspectRatio: "16 / 9" }),
         }}
       >
         <SignagePreviewFrame>
@@ -66,8 +92,12 @@ export default function PlaybackPreview({
         </SignagePreviewFrame>
       </Box>
 
-      <Box sx={{ px: 2, py: 1.5 }}>
-        <LinearProgress variant="determinate" value={progress} sx={{ mb: 1.5, borderRadius: 1 }} />
+      <Box sx={{ px: compact ? 1.25 : 2, py: compact ? 1 : 1.5, flexShrink: 0 }}>
+        <LinearProgress
+          variant="determinate"
+          value={progress}
+          sx={{ mb: compact ? 1 : 1.5, borderRadius: 1 }}
+        />
         <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center">
           <Tooltip title="Reiniciar">
             <span>
@@ -98,7 +128,14 @@ export default function PlaybackPreview({
             </span>
           </Tooltip>
         </Stack>
-        <Typography variant="caption" color="text.secondary" display="block" textAlign="center" sx={{ mt: 1 }}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          display="block"
+          textAlign="center"
+          sx={{ mt: compact ? 0.5 : 1 }}
+          noWrap
+        >
           {current ? `${current.title} · ${current.durationSeconds}s` : "Añade piezas a la playlist"}
         </Typography>
       </Box>

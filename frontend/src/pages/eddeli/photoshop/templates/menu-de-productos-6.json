@@ -1,0 +1,832 @@
+{
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "meta": {
+    "name": "Menu de Productos",
+    "templateKind": "mixto",
+    "requiresProduct": true,
+    "backgroundMode": "color",
+    "folders": [
+      {
+        "id": "folder_card_1",
+        "name": "Card 1",
+        "parentId": null,
+        "productSlot": 0
+      },
+      {
+        "id": "folder_card_2",
+        "name": "Card 2",
+        "parentId": null,
+        "productSlot": 1
+      },
+      {
+        "id": "folder_card_3",
+        "name": "Card 3",
+        "parentId": null,
+        "productSlot": 2
+      },
+      {
+        "id": "folder_card_4",
+        "name": "Card 4",
+        "parentId": null,
+        "productSlot": 3
+      },
+      {
+        "id": "folder_card_5",
+        "name": "Card 5",
+        "parentId": null,
+        "productSlot": 4
+      },
+      {
+        "id": "folder_card_6",
+        "name": "Card 6",
+        "parentId": null,
+        "productSlot": 5
+      }
+    ]
+  },
+  "folders": [
+    {
+      "id": "folder_card_1",
+      "name": "Card 1",
+      "parentId": null,
+      "productSlot": 0
+    },
+    {
+      "id": "folder_card_2",
+      "name": "Card 2",
+      "parentId": null,
+      "productSlot": 1
+    },
+    {
+      "id": "folder_card_3",
+      "name": "Card 3",
+      "parentId": null,
+      "productSlot": 2
+    },
+    {
+      "id": "folder_card_4",
+      "name": "Card 4",
+      "parentId": null,
+      "productSlot": 3
+    },
+    {
+      "id": "folder_card_5",
+      "name": "Card 5",
+      "parentId": null,
+      "productSlot": 4
+    },
+    {
+      "id": "folder_card_6",
+      "name": "Card 6",
+      "parentId": null,
+      "productSlot": 5
+    }
+  ],
+  "groups": [
+    {
+      "id": "group_main",
+      "x": 0,
+      "y": 0,
+      "visible": true,
+      "locked": false
+    }
+  ],
+  "layers": [
+    {
+      "id": "background",
+      "name": "Fondo",
+      "groupId": "group_main",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 1920,
+      "h": 1080,
+      "zIndex": 0,
+      "props": {
+        "fill": "#F4F7FB",
+        "borderRadius": 0
+      },
+      "bind": null,
+      "visible": true,
+      "locked": true
+    },
+    {
+      "id": "header_bar",
+      "name": "Barra título",
+      "groupId": "group_main",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "w": 1920,
+      "h": 130,
+      "zIndex": 1,
+      "props": {
+        "fill": "#1B2A4A",
+        "borderRadius": 0
+      },
+      "bind": null,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "title_text",
+      "name": "Título (fijo)",
+      "groupId": "group_main",
+      "type": "text",
+      "x": 64,
+      "y": 28,
+      "w": 1200,
+      "h": 74,
+      "zIndex": 2,
+      "props": {
+        "text": "Menú de productos",
+        "fontFamily": "Montserrat, Inter, system-ui, Arial",
+        "fontSize": 52,
+        "fontWeight": 900,
+        "color": "#FFFFFF",
+        "align": "left",
+        "verticalAlign": "center",
+        "lineHeight": 1.1
+      },
+      "bind": null,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "subtitle_text",
+      "name": "Subtítulo (fijo)",
+      "groupId": "group_main",
+      "type": "text",
+      "x": 1280,
+      "y": 40,
+      "w": 580,
+      "h": 50,
+      "zIndex": 3,
+      "props": {
+        "text": "Elige tu favorito",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 28,
+        "fontWeight": 600,
+        "color": "rgba(255,255,255,0.85)",
+        "align": "right",
+        "verticalAlign": "center",
+        "lineHeight": 1.1
+      },
+      "bind": null,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_1_bg",
+      "name": "Card 1 fondo",
+      "groupId": "group_main",
+      "folderId": "folder_card_1",
+      "type": "shape",
+      "x": 56,
+      "y": 130,
+      "w": 578,
+      "h": 433,
+      "zIndex": 10,
+      "props": {
+        "fill": "#FFFFFF",
+        "borderRadius": 28,
+        "folderId": "folder_card_1"
+      },
+      "bind": null,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_1_img",
+      "name": "Card 1 imagen",
+      "groupId": "group_main",
+      "folderId": "folder_card_1",
+      "type": "image",
+      "x": 232,
+      "y": 158,
+      "w": 225,
+      "h": 225,
+      "zIndex": 11,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 18,
+        "folderId": "folder_card_1",
+        "productSlot": 0
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": "",
+        "productSlot": 0
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_1_name",
+      "name": "Card 1 nombre",
+      "groupId": "group_main",
+      "folderId": "folder_card_1",
+      "type": "text",
+      "x": 80,
+      "y": 399,
+      "w": 530,
+      "h": 64,
+      "zIndex": 12,
+      "props": {
+        "text": "Producto 1",
+        "fontFamily": "Montserrat, Inter, system-ui, Arial",
+        "fontSize": 30,
+        "fontWeight": 800,
+        "color": "#1B2A4A",
+        "align": "center",
+        "verticalAlign": "center",
+        "maxLines": 2,
+        "lineHeight": 1.15,
+        "folderId": "folder_card_1",
+        "productSlot": 0
+      },
+      "bind": {
+        "textFrom": "product.name",
+        "maxLen": 40,
+        "productSlot": 0
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_1_price",
+      "name": "Card 1 precio",
+      "groupId": "group_main",
+      "folderId": "folder_card_1",
+      "type": "text",
+      "x": 80,
+      "y": 485,
+      "w": 530,
+      "h": 54,
+      "zIndex": 13,
+      "props": {
+        "text": "$0.00",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 36,
+        "fontWeight": 900,
+        "color": "#E67E22",
+        "align": "center",
+        "verticalAlign": "center",
+        "lineHeight": 1.1,
+        "folderId": "folder_card_1",
+        "productSlot": 0
+      },
+      "bind": {
+        "textFrom": "computed.priceText",
+        "productSlot": 0
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_2_bg",
+      "name": "Card 2 fondo",
+      "groupId": "group_main",
+      "folderId": "folder_card_2",
+      "type": "shape",
+      "x": 670,
+      "y": 130,
+      "w": 578,
+      "h": 433,
+      "zIndex": 14,
+      "props": {
+        "fill": "#FFFFFF",
+        "borderRadius": 28,
+        "folderId": "folder_card_2"
+      },
+      "bind": null,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_2_img",
+      "name": "Card 2 imagen",
+      "groupId": "group_main",
+      "folderId": "folder_card_2",
+      "type": "image",
+      "x": 846,
+      "y": 158,
+      "w": 225,
+      "h": 225,
+      "zIndex": 15,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 18,
+        "folderId": "folder_card_2",
+        "productSlot": 1
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": "",
+        "productSlot": 1
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_2_name",
+      "name": "Card 2 nombre",
+      "groupId": "group_main",
+      "folderId": "folder_card_2",
+      "type": "text",
+      "x": 694,
+      "y": 399,
+      "w": 530,
+      "h": 64,
+      "zIndex": 16,
+      "props": {
+        "text": "Producto 2",
+        "fontFamily": "Montserrat, Inter, system-ui, Arial",
+        "fontSize": 30,
+        "fontWeight": 800,
+        "color": "#1B2A4A",
+        "align": "center",
+        "verticalAlign": "center",
+        "maxLines": 2,
+        "lineHeight": 1.15,
+        "folderId": "folder_card_2",
+        "productSlot": 1
+      },
+      "bind": {
+        "textFrom": "product.name",
+        "maxLen": 40,
+        "productSlot": 1
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_2_price",
+      "name": "Card 2 precio",
+      "groupId": "group_main",
+      "folderId": "folder_card_2",
+      "type": "text",
+      "x": 694,
+      "y": 485,
+      "w": 530,
+      "h": 54,
+      "zIndex": 17,
+      "props": {
+        "text": "$0.00",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 36,
+        "fontWeight": 900,
+        "color": "#E67E22",
+        "align": "center",
+        "verticalAlign": "center",
+        "lineHeight": 1.1,
+        "folderId": "folder_card_2",
+        "productSlot": 1
+      },
+      "bind": {
+        "textFrom": "computed.priceText",
+        "productSlot": 1
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_3_bg",
+      "name": "Card 3 fondo",
+      "groupId": "group_main",
+      "folderId": "folder_card_3",
+      "type": "shape",
+      "x": 1284,
+      "y": 130,
+      "w": 578,
+      "h": 433,
+      "zIndex": 18,
+      "props": {
+        "fill": "#FFFFFF",
+        "borderRadius": 28,
+        "folderId": "folder_card_3"
+      },
+      "bind": null,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_3_img",
+      "name": "Card 3 imagen",
+      "groupId": "group_main",
+      "folderId": "folder_card_3",
+      "type": "image",
+      "x": 1460,
+      "y": 158,
+      "w": 225,
+      "h": 225,
+      "zIndex": 19,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 18,
+        "folderId": "folder_card_3",
+        "productSlot": 2
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": "",
+        "productSlot": 2
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_3_name",
+      "name": "Card 3 nombre",
+      "groupId": "group_main",
+      "folderId": "folder_card_3",
+      "type": "text",
+      "x": 1308,
+      "y": 399,
+      "w": 530,
+      "h": 64,
+      "zIndex": 20,
+      "props": {
+        "text": "Producto 3",
+        "fontFamily": "Montserrat, Inter, system-ui, Arial",
+        "fontSize": 30,
+        "fontWeight": 800,
+        "color": "#1B2A4A",
+        "align": "center",
+        "verticalAlign": "center",
+        "maxLines": 2,
+        "lineHeight": 1.15,
+        "folderId": "folder_card_3",
+        "productSlot": 2
+      },
+      "bind": {
+        "textFrom": "product.name",
+        "maxLen": 40,
+        "productSlot": 2
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_3_price",
+      "name": "Card 3 precio",
+      "groupId": "group_main",
+      "folderId": "folder_card_3",
+      "type": "text",
+      "x": 1308,
+      "y": 485,
+      "w": 530,
+      "h": 54,
+      "zIndex": 21,
+      "props": {
+        "text": "$0.00",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 36,
+        "fontWeight": 900,
+        "color": "#E67E22",
+        "align": "center",
+        "verticalAlign": "center",
+        "lineHeight": 1.1,
+        "folderId": "folder_card_3",
+        "productSlot": 2
+      },
+      "bind": {
+        "textFrom": "computed.priceText",
+        "productSlot": 2
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_4_bg",
+      "name": "Card 4 fondo",
+      "groupId": "group_main",
+      "folderId": "folder_card_4",
+      "type": "shape",
+      "x": 56,
+      "y": 599,
+      "w": 578,
+      "h": 433,
+      "zIndex": 22,
+      "props": {
+        "fill": "#FFFFFF",
+        "borderRadius": 28,
+        "folderId": "folder_card_4"
+      },
+      "bind": null,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_4_img",
+      "name": "Card 4 imagen",
+      "groupId": "group_main",
+      "folderId": "folder_card_4",
+      "type": "image",
+      "x": 232,
+      "y": 627,
+      "w": 225,
+      "h": 225,
+      "zIndex": 23,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 18,
+        "folderId": "folder_card_4",
+        "productSlot": 3
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": "",
+        "productSlot": 3
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_4_name",
+      "name": "Card 4 nombre",
+      "groupId": "group_main",
+      "folderId": "folder_card_4",
+      "type": "text",
+      "x": 80,
+      "y": 868,
+      "w": 530,
+      "h": 64,
+      "zIndex": 24,
+      "props": {
+        "text": "Producto 4",
+        "fontFamily": "Montserrat, Inter, system-ui, Arial",
+        "fontSize": 30,
+        "fontWeight": 800,
+        "color": "#1B2A4A",
+        "align": "center",
+        "verticalAlign": "center",
+        "maxLines": 2,
+        "lineHeight": 1.15,
+        "folderId": "folder_card_4",
+        "productSlot": 3
+      },
+      "bind": {
+        "textFrom": "product.name",
+        "maxLen": 40,
+        "productSlot": 3
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_4_price",
+      "name": "Card 4 precio",
+      "groupId": "group_main",
+      "folderId": "folder_card_4",
+      "type": "text",
+      "x": 80,
+      "y": 954,
+      "w": 530,
+      "h": 54,
+      "zIndex": 25,
+      "props": {
+        "text": "$0.00",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 36,
+        "fontWeight": 900,
+        "color": "#E67E22",
+        "align": "center",
+        "verticalAlign": "center",
+        "lineHeight": 1.1,
+        "folderId": "folder_card_4",
+        "productSlot": 3
+      },
+      "bind": {
+        "textFrom": "computed.priceText",
+        "productSlot": 3
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_5_bg",
+      "name": "Card 5 fondo",
+      "groupId": "group_main",
+      "folderId": "folder_card_5",
+      "type": "shape",
+      "x": 670,
+      "y": 599,
+      "w": 578,
+      "h": 433,
+      "zIndex": 26,
+      "props": {
+        "fill": "#FFFFFF",
+        "borderRadius": 28,
+        "folderId": "folder_card_5"
+      },
+      "bind": null,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_5_img",
+      "name": "Card 5 imagen",
+      "groupId": "group_main",
+      "folderId": "folder_card_5",
+      "type": "image",
+      "x": 846,
+      "y": 627,
+      "w": 225,
+      "h": 225,
+      "zIndex": 27,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 18,
+        "folderId": "folder_card_5",
+        "productSlot": 4
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": "",
+        "productSlot": 4
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_5_name",
+      "name": "Card 5 nombre",
+      "groupId": "group_main",
+      "folderId": "folder_card_5",
+      "type": "text",
+      "x": 694,
+      "y": 868,
+      "w": 530,
+      "h": 64,
+      "zIndex": 28,
+      "props": {
+        "text": "Producto 5",
+        "fontFamily": "Montserrat, Inter, system-ui, Arial",
+        "fontSize": 30,
+        "fontWeight": 800,
+        "color": "#1B2A4A",
+        "align": "center",
+        "verticalAlign": "center",
+        "maxLines": 2,
+        "lineHeight": 1.15,
+        "folderId": "folder_card_5",
+        "productSlot": 4
+      },
+      "bind": {
+        "textFrom": "product.name",
+        "maxLen": 40,
+        "productSlot": 4
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_5_price",
+      "name": "Card 5 precio",
+      "groupId": "group_main",
+      "folderId": "folder_card_5",
+      "type": "text",
+      "x": 694,
+      "y": 954,
+      "w": 530,
+      "h": 54,
+      "zIndex": 29,
+      "props": {
+        "text": "$0.00",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 36,
+        "fontWeight": 900,
+        "color": "#E67E22",
+        "align": "center",
+        "verticalAlign": "center",
+        "lineHeight": 1.1,
+        "folderId": "folder_card_5",
+        "productSlot": 4
+      },
+      "bind": {
+        "textFrom": "computed.priceText",
+        "productSlot": 4
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_6_bg",
+      "name": "Card 6 fondo",
+      "groupId": "group_main",
+      "folderId": "folder_card_6",
+      "type": "shape",
+      "x": 1284,
+      "y": 599,
+      "w": 578,
+      "h": 433,
+      "zIndex": 30,
+      "props": {
+        "fill": "#FFFFFF",
+        "borderRadius": 28,
+        "folderId": "folder_card_6"
+      },
+      "bind": null,
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_6_img",
+      "name": "Card 6 imagen",
+      "groupId": "group_main",
+      "folderId": "folder_card_6",
+      "type": "image",
+      "x": 1460,
+      "y": 627,
+      "w": 225,
+      "h": 225,
+      "zIndex": 31,
+      "props": {
+        "src": "",
+        "fit": "contain",
+        "borderRadius": 18,
+        "folderId": "folder_card_6",
+        "productSlot": 5
+      },
+      "bind": {
+        "srcFrom": "imageUrl",
+        "fallbackSrc": "",
+        "productSlot": 5
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_6_name",
+      "name": "Card 6 nombre",
+      "groupId": "group_main",
+      "folderId": "folder_card_6",
+      "type": "text",
+      "x": 1308,
+      "y": 868,
+      "w": 530,
+      "h": 64,
+      "zIndex": 32,
+      "props": {
+        "text": "Producto 6",
+        "fontFamily": "Montserrat, Inter, system-ui, Arial",
+        "fontSize": 30,
+        "fontWeight": 800,
+        "color": "#1B2A4A",
+        "align": "center",
+        "verticalAlign": "center",
+        "maxLines": 2,
+        "lineHeight": 1.15,
+        "folderId": "folder_card_6",
+        "productSlot": 5
+      },
+      "bind": {
+        "textFrom": "product.name",
+        "maxLen": 40,
+        "productSlot": 5
+      },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "card_6_price",
+      "name": "Card 6 precio",
+      "groupId": "group_main",
+      "folderId": "folder_card_6",
+      "type": "text",
+      "x": 1308,
+      "y": 954,
+      "w": 530,
+      "h": 54,
+      "zIndex": 33,
+      "props": {
+        "text": "$0.00",
+        "fontFamily": "Inter, system-ui, Arial",
+        "fontSize": 36,
+        "fontWeight": 900,
+        "color": "#E67E22",
+        "align": "center",
+        "verticalAlign": "center",
+        "lineHeight": 1.1,
+        "folderId": "folder_card_6",
+        "productSlot": 5
+      },
+      "bind": {
+        "textFrom": "computed.priceText",
+        "productSlot": 5
+      },
+      "visible": true,
+      "locked": false
+    }
+  ],
+  "data": {}
+}

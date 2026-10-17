@@ -12,21 +12,16 @@ function CroppedImagePreview({ src, fit, cropNorm, borderRadius, isSvg }) {
   const url = editorImageUrl(src);
 
   if (!url) {
+    // Capa vacía: transparente (se ve al seleccionar por el outline)
     return (
       <div
         style={{
           width: "100%",
           height: "100%",
-          display: "grid",
-          placeItems: "center",
-          background: "rgba(0,0,0,0.06)",
-          color: "#666",
-          fontSize: 11,
+          background: "transparent",
           borderRadius,
         }}
-      >
-        {isSvg ? "SVG vacío" : "Sin imagen"}
-      </div>
+      />
     );
   }
 

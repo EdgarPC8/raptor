@@ -77,28 +77,50 @@ function PastryRain({ compact, figures, visible }) {
   );
 }
 
-export default function SignageOfflineScreen({ compact = false }) {
+/**
+ * @param {object} props
+ * @param {boolean} [props.compact]
+ * @param {boolean} [props.skipIntro] salta spinner (evita flash al precargar campaña)
+ * @param {number|null} [props.transitionProgress] 0..1 = barra; null = ocultar
+ * @param {string} [props.transitionLabel]
+ */
+export default function SignageOfflineScreen({
+  compact = false,
+  skipIntro = false,
+  transitionProgress = null,
+  transitionLabel = "Cargando contenido…",
+}) {
   const { slides, rainFigures } = OFFLINE_SIGNAGE;
-  const [phase, setPhase] = useState("loading");
+  const [phase, setPhase] = useState(skipIntro ? "ready" : "loading");
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
 
   const slide = slides[index] || slides[0];
+  const showBar =
+    transitionProgress != null &&
+    Number.isFinite(Number(transitionProgress));
+  const barPct = showBar
+    ? Math.round(Math.min(1, Math.max(0, Number(transitionProgress))) * 100)
+    : 0;
 
   useEffect(() => {
+    if (skipIntro) {
+      setPhase("ready");
+      return undefined;
+    }
     setPhase("loading");
     setIndex(0);
     setVisible(true);
 
     const toWarm = setTimeout(() => setPhase("warming"), SPINNER_MS);
     return () => clearTimeout(toWarm);
-  }, []);
+  }, [skipIntro]);
 
   useEffect(() => {
-    if (phase !== "warming") return undefined;
+    if (skipIntro || phase !== "warming") return undefined;
     const toReady = setTimeout(() => setPhase("ready"), WARMUP_MS);
     return () => clearTimeout(toReady);
-  }, [phase]);
+  }, [phase, skipIntro]);
 
   useEffect(() => {
     if (phase !== "ready" || slides.length <= 1) return undefined;
@@ -221,6 +243,64 @@ export default function SignageOfflineScreen({ compact = false }) {
             </Box>
           </Box>
         </>
+      ) : null}
+
+      {showBar ? (
+        <Box
+          sx={{
+            position: "absolute",
+            left: "50%",
+            top: "58%",
+            transform: "translate(-50%, -50%)",
+            width: compact ? "72%" : "min(420px, 46vw)",
+            zIndex: 20,
+            px: 1,
+          }}
+        >
+          <Typography
+            sx={{
+              color: T.goldLight,
+              fontWeight: 700,
+              fontSize: compact ? 12 : 15,
+              mb: 1,
+              textAlign: "center",
+              textShadow: "0 2px 8px rgba(0,0,0,0.45)",
+            }}
+          >
+            {transitionLabel}
+          </Typography>
+          <Box
+            sx={{
+              height: compact ? 8 : 12,
+              borderRadius: 999,
+              bgcolor: "rgba(0,0,0,0.35)",
+              border: "1px solid rgba(245,230,163,0.45)",
+              overflow: "hidden",
+            }}
+          >
+            <Box
+              sx={{
+                height: "100%",
+                width: `${barPct}%`,
+                bgcolor: T.gold,
+                borderRadius: 999,
+                transition: "width 0.25s ease",
+                boxShadow: "0 0 12px rgba(212,175,55,0.55)",
+              }}
+            />
+          </Box>
+          <Typography
+            sx={{
+              mt: 0.75,
+              textAlign: "center",
+              color: "rgba(255,255,255,0.85)",
+              fontWeight: 700,
+              fontSize: compact ? 11 : 13,
+            }}
+          >
+            {barPct}%
+          </Typography>
+        </Box>
       ) : null}
     </Box>
   );

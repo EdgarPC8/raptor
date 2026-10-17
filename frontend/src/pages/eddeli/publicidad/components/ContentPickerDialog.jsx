@@ -1,5 +1,5 @@
 /**
- * Selector de contenido del backend + subida de imágenes a sistema/publicidad.
+ * Selector de contenido del backend + subida de imágenes/videos + plantillas de diseño.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -27,8 +27,10 @@ import UploadIcon from "@mui/icons-material/Upload";
 import BakeryDiningIcon from "@mui/icons-material/BakeryDining";
 import ImageIcon from "@mui/icons-material/Image";
 import VideocamIcon from "@mui/icons-material/Videocam";
+import DashboardCustomizeIcon from "@mui/icons-material/DashboardCustomize";
 import {
   fetchMediaCatalog,
+  fetchPromoTemplatesForCampaign,
   uploadPublicidadImage,
   uploadPublicidadVideo,
   publicidadImgFolder,
@@ -36,8 +38,9 @@ import {
 import { getMediaFolders } from "../../../../api/mediaRequest.js";
 import { useAuth } from "../../../../context/AuthContext.jsx";
 import { CONTENT_TYPES } from "../constants.js";
+import { exportPromoTemplateAsPublicidadItem } from "../utils/exportPromoTemplateMedia.js";
 
-const TAB_KEYS = ["products", "images", "videos"];
+const TAB_KEYS = ["products", "images", "videos", "templates"];
 
 export default function ContentPickerDialog({ open, onClose, onSelect, existingIds = [] }) {
   const { toast } = useAuth();
@@ -46,14 +49,27 @@ export default function ContentPickerDialog({ open, onClose, onSelect, existingI
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [catalog, setCatalog] = useState({ products: [], images: [], videos: [] });
+  const [catalog, setCatalog] = useState({
+    products: [],
+    images: [],
+    videos: [],
+    templates: [],
+  });
   const [q, setQ] = useState("");
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchMediaCatalog();
-      setCatalog(data);
+      const [media, templates] = await Promise.all([
+        fetchMediaCatalog(),
+        fetchPromoTemplatesForCampaign().catch(() => []),
+      ]);
+      setCatalog({
+        products: media.products || [],
+        images: media.images || [],
+        videos: media.videos || [],
+        templates: templates || [],
+      });
     } catch {
       toast?.({ message: "No se pudo cargar el catálogo", variant: "error" });
     } finally {
@@ -79,9 +95,30 @@ export default function ContentPickerDialog({ open, onClose, onSelect, existingI
     );
   }, [items, q]);
 
-  const handlePick = (item) => {
+  const handlePick = async (item) => {
     const key = `${item.type}:${item.id}`;
     if (existingIds.includes(key)) return;
+
+    if (item.type === CONTENT_TYPES.TEMPLATE) {
+      setUploading(true);
+      try {
+        const exported = await toast({
+          promise: exportPromoTemplateAsPublicidadItem(item.templateId || item.id),
+          successMessage: "Plantilla lista para la campaña",
+          errorMessage:
+            "No se pudo generar la plantilla. Guarda productos en Vista con productos primero.",
+        });
+        const payload = exported?.data ?? exported;
+        if (payload?.mediaPath) {
+          onSelect?.(payload);
+          onClose?.();
+        }
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
+
     onSelect?.(item);
     onClose?.();
   };
@@ -127,6 +164,7 @@ export default function ContentPickerDialog({ open, onClose, onSelect, existingI
   const iconFor = (type) => {
     if (type === CONTENT_TYPES.VIDEO) return <VideocamIcon />;
     if (type === CONTENT_TYPES.PRODUCT) return <BakeryDiningIcon />;
+    if (type === CONTENT_TYPES.TEMPLATE) return <DashboardCustomizeIcon />;
     return <ImageIcon />;
   };
 
@@ -143,18 +181,32 @@ export default function ContentPickerDialog({ open, onClose, onSelect, existingI
     );
   };
 
+  const emptyHint =
+    tab === 0
+      ? "No hay productos activos con imagen. Añade primaryImageUrl en inventario."
+      : tab === 3
+        ? "No hay plantillas. Crea una en Diseño promocional → Plantillas y guarda productos en Vista."
+        : "Sin resultados";
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={uploading ? undefined : onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Seleccionar contenido</DialogTitle>
       <DialogContent dividers>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Productos con imagen del inventario, banners en servidor o sube una imagen nueva.
+          Productos, imágenes, videos o plantillas de diseño (con productos guardados).
         </Typography>
 
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+        <Tabs
+          value={tab}
+          onChange={(_, v) => setTab(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ mb: 2 }}
+        >
           <Tab label={`Productos (${catalog.products.length})`} />
           <Tab label={`Imágenes (${catalog.images.length})`} />
           <Tab label={`Videos (${catalog.videos.length})`} />
+          <Tab label={`Plantillas (${catalog.templates.length})`} />
         </Tabs>
 
         {tab === 1 && (
@@ -199,6 +251,13 @@ export default function ContentPickerDialog({ open, onClose, onSelect, existingI
           </Stack>
         )}
 
+        {tab === 3 && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
+            Al elegir una plantilla se genera una imagen con los productos guardados en Vista con
+            productos y se añade a la campaña.
+          </Typography>
+        )}
+
         <TextField
           fullWidth
           size="small"
@@ -215,9 +274,14 @@ export default function ContentPickerDialog({ open, onClose, onSelect, existingI
           }}
         />
 
-        {loading ? (
-          <Box sx={{ py: 4, display: "grid", placeItems: "center" }}>
+        {loading || uploading ? (
+          <Box sx={{ py: 4, display: "grid", placeItems: "center", gap: 1 }}>
             <CircularProgress size={28} />
+            {uploading && (
+              <Typography variant="caption" color="text.secondary">
+                Generando plantilla…
+              </Typography>
+            )}
           </Box>
         ) : (
           <List dense sx={{ maxHeight: 360, overflow: "auto" }}>
@@ -232,7 +296,10 @@ export default function ContentPickerDialog({ open, onClose, onSelect, existingI
                     secondary={
                       disabled
                         ? "Ya está en la playlist"
-                        : [item.subtitle, item.price != null ? `$${Number(item.price).toFixed(2)}` : null]
+                        : [
+                            item.subtitle,
+                            item.price != null ? `$${Number(item.price).toFixed(2)}` : null,
+                          ]
                             .filter(Boolean)
                             .join(" · ")
                     }
@@ -242,16 +309,16 @@ export default function ContentPickerDialog({ open, onClose, onSelect, existingI
             })}
             {!filtered.length && (
               <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: "center" }}>
-                {tab === 0
-                  ? "No hay productos activos con imagen. Añade primaryImageUrl en inventario."
-                  : "Sin resultados"}
+                {emptyHint}
               </Typography>
             )}
           </List>
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cerrar</Button>
+        <Button onClick={onClose} disabled={uploading}>
+          Cerrar
+        </Button>
       </DialogActions>
     </Dialog>
   );

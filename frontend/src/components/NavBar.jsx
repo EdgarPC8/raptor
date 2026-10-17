@@ -531,6 +531,8 @@ export default function NavBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const isPromoEditor = /\/diseno-promocional\/editor\/\d+/.test(location.pathname);
+  const isCampaignEditor = /^\/publicidad\/campanas\/[^/]+/.test(location.pathname);
+  const isFillViewportPage = isPromoEditor || isCampaignEditor;
   const isConfigPage = /\/configuracion\/?$/.test(location.pathname) || location.pathname.includes("/sistema/configuracion");
   const { isAuthenticated, isLoading, isGuest, user, logout, profileImageUser, toast } =
     useAuth();
@@ -1002,7 +1004,7 @@ export default function NavBar() {
       sx={{
         display: "flex",
         minHeight: "100vh",
-        ...(isPromoEditor && { height: "100vh", overflow: "hidden" }),
+        ...(isFillViewportPage && { height: "100vh", overflow: "hidden" }),
         width: "100%",
         overflowX: "hidden",
       }}
@@ -1442,16 +1444,18 @@ export default function NavBar() {
           width: "100%",
           minWidth: 0,
           boxSizing: "border-box",
-          ...(isPromoEditor
+          ...(isFillViewportPage
             ? {
                 pt: `${theme.mixins.toolbar?.minHeight ?? 64}px`,
-                px: 0,
-                pb: 0,
+                px: isCampaignEditor ? { xs: 1, sm: 1.25, md: 1.5 } : 0,
+                pb: isCampaignEditor ? 1 : 0,
                 overflow: "hidden",
                 display: "flex",
                 flexDirection: "column",
                 minHeight: 0,
                 alignSelf: "stretch",
+                height: "100vh",
+                boxSizing: "border-box",
               }
             : {
                 pt: isConfigPage ? 8.5 : 10,
@@ -1463,16 +1467,41 @@ export default function NavBar() {
               }),
         }}
       >
-        <Suspense
-          fallback={
-            <Box sx={{ py: 2 }}>
-              <PageSkeleton />
-            </Box>
+        <Box
+          sx={
+            isFillViewportPage
+              ? {
+                  flex: 1,
+                  minHeight: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                  ...(isCampaignEditor
+                    ? {
+                        "& > *": {
+                          flex: 1,
+                          minHeight: 0,
+                          display: "flex",
+                          flexDirection: "column",
+                          overflow: "hidden",
+                        },
+                      }
+                    : null),
+                }
+              : undefined
           }
         >
-          {/* Remonta la página al cambiar de rol (sin reload de toda la app). */}
-          <Outlet key={user?.rolId ?? user?.loginRol ?? "anon"} />
-        </Suspense>
+          <Suspense
+            fallback={
+              <Box sx={{ py: 2 }}>
+                <PageSkeleton />
+              </Box>
+            }
+          >
+            {/* Remonta la página al cambiar de rol (sin reload de toda la app). */}
+            <Outlet key={user?.rolId ?? user?.loginRol ?? "anon"} />
+          </Suspense>
+        </Box>
         {showUserActions && <RecurringMonthPrompt role={user?.loginRol} toast={toast} />}
       </Box>
     </Box>

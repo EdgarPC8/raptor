@@ -24,6 +24,12 @@ import {
   makeFolderId,
   getFolderAncestorIds,
 } from "./layerFolders.js";
+import {
+  nextFreeProductSlot,
+  layerHasProductBind,
+  withLayerProductSlot,
+  normalizeSlotIndex,
+} from "./productSlots.js";
 
 export const initialState = (template) => ({
   doc: {
@@ -275,30 +281,22 @@ export function editorReducer(state, action) {
       if (!groupId) return state;
 
       const used = new Set(state.doc.layers.map((l) => l.id));
-      let layer = makeDefaultLayer({ type: layerType, groupId });
+      let layer = makeDefaultLayer({
+        type: layerType,
+        groupId,
+        canvas: state.doc.canvas,
+      });
       layer.id = ensureUniqueId(layer.id, used);
 
       const maxZ = Math.max(...state.doc.layers.map((l) => l.zIndex || 0), 0);
       layer.zIndex = maxZ + 1;
 
-      layer.x = Math.round(state.doc.canvas.width * 0.1);
-      layer.y = Math.round(state.doc.canvas.height * 0.1);
-
+      // Por defecto: ocupa todo el lienzo y queda transparente hasta que el usuario dibuje/cargue contenido
       if (!action.layerPatch || typeof action.layerPatch !== "object") {
-        if (layer.type === "image" || layer.type === "svg") {
-          layer.w = state.doc.canvas.width;
-          layer.h = state.doc.canvas.height;
-          layer.x = 0;
-          layer.y = 0;
-        }
-        if (layer.type === "shape") {
-          const halfW = Math.max(240, Math.round(state.doc.canvas.width * 0.28));
-          const halfH = Math.max(140, Math.round(state.doc.canvas.height * 0.18));
-          layer.w = halfW;
-          layer.h = halfH;
-          layer.x = Math.round((state.doc.canvas.width - halfW) / 2);
-          layer.y = Math.round((state.doc.canvas.height - halfH) / 2);
-        }
+        layer.x = 0;
+        layer.y = 0;
+        layer.w = state.doc.canvas.width;
+        layer.h = state.doc.canvas.height;
       }
 
       if (action.propsPatch && typeof action.propsPatch === "object") {
@@ -881,6 +879,37 @@ export function editorReducer(state, action) {
       );
     }
 
+    case "APPLY_PRODUCT_SLOT_TO_FOLDER": {
+      const folderId = action.folderId;
+      const slot = normalizeSlotIndex(action.slotIndex);
+      if (!folderId || slot == null) return state;
+
+      const folders = state.doc.folders || [];
+      if (!folders.some((f) => f.id === folderId)) return state;
+
+      const nextFolders = folders.map((f) =>
+        f.id === folderId ? { ...f, productSlot: slot } : f
+      );
+      const nextLayers = (state.doc.layers || []).map((l) => {
+        if (getLayerFolderId(l) !== folderId) return l;
+        if (!layerHasProductBind(l)) return l;
+        return withLayerProductSlot(l, slot);
+      });
+
+      return pushOp(
+        {
+          ...state,
+          doc: {
+            ...state.doc,
+            folders: nextFolders,
+            layers: nextLayers,
+            meta: { ...(state.doc.meta || {}), folders: nextFolders },
+          },
+        },
+        { type: "apply-product-slot-folder", folderId, slotIndex: slot }
+      );
+    }
+
     case "DUPLICATE_FOLDER": {
       const { folderId } = action;
       if (!folderId) return state;
@@ -933,6 +962,15 @@ export function editorReducer(state, action) {
 
       cloneFolderTree(folderId);
 
+      // Al duplicar una card/carpeta, asignar el siguiente slot de producto libre
+      const hasBoundInSubtree = layers.some((l) => {
+        const fid = getLayerFolderId(l);
+        return fid && subtreeIds.has(fid) && layerHasProductBind(l);
+      });
+      const nextSlot = hasBoundInSubtree
+        ? nextFreeProductSlot(layers, folders)
+        : null;
+
       const usedLayerIds = new Set(layers.map((l) => l.id));
       const copiedLayers = [];
       for (const layer of layers) {
@@ -952,6 +990,14 @@ export function editorReducer(state, action) {
         const props = { ...(cloned.props || {}) };
         if (nextFolderId) props.folderId = nextFolderId;
         else delete props.folderId;
+        if (nextSlot != null && (cloned.bind?.textFrom || cloned.bind?.srcFrom || cloned.fieldKey)) {
+          props.productSlot = nextSlot;
+        }
+
+        const bind =
+          nextSlot != null && cloned.bind
+            ? { ...cloned.bind, productSlot: nextSlot }
+            : cloned.bind;
 
         copiedLayers.push({
           ...cloned,
@@ -959,6 +1005,7 @@ export function editorReducer(state, action) {
           name: copiedName,
           folderId: nextFolderId,
           props,
+          bind,
           x: (Number(cloned.x) || 0) + 24,
           y: (Number(cloned.y) || 0) + 24,
           zIndex: (Number(cloned.zIndex) || 0) + 1,
@@ -967,7 +1014,14 @@ export function editorReducer(state, action) {
         });
       }
 
-      const nextFolders = [...folders, ...newFolders];
+      const nextFolders = [...folders, ...newFolders].map((f) => {
+        if (nextSlot == null || !idMap.has(folderId)) return f;
+        // Solo la carpeta raíz duplicada recibe el nuevo slot
+        if (f.id === idMap.get(folderId)) {
+          return { ...f, productSlot: nextSlot };
+        }
+        return f;
+      });
       const nextLayers = [...layers, ...copiedLayers];
 
       return pushOp(

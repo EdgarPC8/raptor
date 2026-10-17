@@ -12,9 +12,13 @@ import {
   Select,
   Stack,
   Typography,
+  Tooltip,
+  IconButton,
 } from "@mui/material";
+import SaveIcon from "@mui/icons-material/Save";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { APP_ROUTES } from "../../../config/appRoutes.js";
+import { useAuth } from "../../../context/AuthContext";
 
 import { EditorProvider, useEditor } from "./EditorProvider";
 import CanvasViewport from "./canvas/CanvasViewport";
@@ -34,13 +38,15 @@ export default function ProductTemplateStudio() {
 function StudioLayout() {
   const nav = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { loadTemplateById, requiresProduct, state } = useEditor();
+  const { toast } = useAuth();
+  const { loadTemplateById, requiresProduct, state, savePreviewProducts } = useEditor();
 
   const [templates, setTemplates] = useState([]);
   const [templateId, setTemplateId] = useState("");
   const [loadingList, setLoadingList] = useState(true);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [savingProducts, setSavingProducts] = useState(false);
 
   const queryTemplateId = searchParams.get("templateId") || "";
 
@@ -118,6 +124,16 @@ function StudioLayout() {
   const showProductSelector = requiresProduct;
   const gridColumns = showProductSelector ? "280px 1fr" : "1fr";
 
+  const handleSaveProducts = async () => {
+    setSavingProducts(true);
+    await toast({
+      promise: savePreviewProducts(),
+      successMessage: "✅ Productos guardados en la plantilla",
+      errorMessage: "❌ No se pudieron guardar los productos",
+    });
+    setSavingProducts(false);
+  };
+
   return (
     <Box
       sx={{
@@ -175,6 +191,30 @@ function StudioLayout() {
               </Select>
             </FormControl>
           )}
+
+          <Tooltip title="Guardar productos en la plantilla (se verán también al diseñar)">
+            <span>
+              <IconButton
+                size="small"
+                onClick={handleSaveProducts}
+                disabled={savingProducts || loadingTemplate || !templateId}
+                sx={{
+                  color: "#0b0f14",
+                  background: "#81c784",
+                  border: "1px solid #81c784",
+                  borderRadius: 1.5,
+                  "&:hover": { background: "#a5d6a7" },
+                  "&.Mui-disabled": { color: "rgba(0,0,0,0.35)", background: "rgba(255,255,255,0.2)" },
+                }}
+              >
+                {savingProducts ? (
+                  <CircularProgress size={18} sx={{ color: "#0b0f14" }} />
+                ) : (
+                  <SaveIcon fontSize="small" />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
 
           <Button size="small" variant="outlined" onClick={() => nav(APP_ROUTES.promoDesign.templates)}>
             Plantillas

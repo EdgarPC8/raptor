@@ -48,6 +48,11 @@ import {
   combineSvgLayersAtPositions,
   fetchSvgText,
 } from "../mergeSvgLayers.js";
+import {
+  getLayerProductSlot,
+  slotLabel,
+  normalizeSlotIndex,
+} from "../productSlots";
 import { uploadEditorImageFile } from "../editorImageUpload.js";
 import { useAuth } from "../../../../context/AuthContext";
 import {
@@ -541,6 +546,26 @@ export default function LayersPanel() {
             dispatch({ type: "UPDATE_LAYER", layerId: l.id, patch: { name } })
           }
         />
+        {(() => {
+          const slot = getLayerProductSlot(l, doc.folders || []);
+          if (slot == null) return null;
+          return (
+            <Typography
+              sx={{
+                fontSize: 9,
+                fontWeight: 800,
+                color: PE.accent,
+                px: 0.4,
+                borderRadius: 0.5,
+                border: `1px solid ${PE.accent}`,
+                flexShrink: 0,
+              }}
+              title={slotLabel(slot)}
+            >
+              P{slot + 1}
+            </Typography>
+          );
+        })()}
         <Tooltip title={l.locked ? "Desbloquear" : "Bloquear"}>
           <IconButton
             size="small"
@@ -704,6 +729,21 @@ export default function LayersPanel() {
               dispatch({ type: "RENAME_FOLDER", folderId: folder.id, name })
             }
           />
+          {normalizeSlotIndex(folder.productSlot) != null && (
+            <Typography
+              sx={{
+                fontSize: 9,
+                fontWeight: 800,
+                color: PE.accent,
+                px: 0.4,
+                borderRadius: 0.5,
+                border: `1px solid ${PE.accent}`,
+                flexShrink: 0,
+              }}
+            >
+              P{normalizeSlotIndex(folder.productSlot) + 1}
+            </Typography>
+          )}
           <Typography sx={{ fontSize: 10, color: PE.textMuted }}>
             {layersIn.length +
               (children || []).reduce(

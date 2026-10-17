@@ -7,6 +7,7 @@ import { getTransitionSx } from "../utils/transitions.js";
 import ProductHeroLayout from "./layouts/ProductHeroLayout.jsx";
 import MenuBoardLayout from "./layouts/MenuBoardLayout.jsx";
 import ImageBannerLayout from "./layouts/ImageBannerLayout.jsx";
+import FullBleedImageLayout from "./layouts/FullBleedImageLayout.jsx";
 import VideoLayout from "./layouts/VideoLayout.jsx";
 import TextMessageLayout from "./layouts/TextMessageLayout.jsx";
 
@@ -33,6 +34,9 @@ export default function SlideRenderer({
     content = <VideoLayout slide={slide} playing={playing} onEnded={onMediaEnded} />;
   } else if (slide.contentType === CONTENT_TYPES.PRODUCT) {
     content = <ProductHeroLayout slide={slide} compact={compact} />;
+  } else if (slide.contentType === CONTENT_TYPES.TEMPLATE) {
+    // Plantillas de diseño: ya vienen renderizadas a PNG a lienzo completo → sin marco
+    content = <FullBleedImageLayout slide={slide} />;
   } else if (slide.contentType === CONTENT_TYPES.IMAGE) {
     content = <ImageBannerLayout slide={slide} compact={compact} />;
   } else if (slide.contentType === CONTENT_TYPES.TEXT) {

@@ -7,7 +7,6 @@
  * - makeDefaultLayer({ type, groupId }): crea una capa por defecto (text | image | shape).
  */
 import { pathImg } from "../../../api/axios";
-import { mediaStoragePath } from "../../../utils/mediaPaths.js";
 
 /** Escala visual del canvas (píxeles lógicos / SCALE = píxeles mostrados) */
 export const SCALE = 3;
@@ -40,8 +39,10 @@ export const ensureUniqueId = (id, used) => {
   return out;
 };
 
-export const makeDefaultLayer = ({ type, groupId }) => {
+export const makeDefaultLayer = ({ type, groupId, canvas } = {}) => {
   const id = `${type}_${nowId()}`;
+  const cw = Math.max(1, Number(canvas?.width) || 1920);
+  const ch = Math.max(1, Number(canvas?.height) || 1080);
 
   const base = {
     id,
@@ -49,20 +50,19 @@ export const makeDefaultLayer = ({ type, groupId }) => {
     groupId,
     visible: true,
     locked: false,
+    x: 0,
+    y: 0,
+    w: cw,
+    h: ch,
   };
 
-  // editorActions.js  (solo cambia el bloque type === "text")
   if (type === "text") {
     return {
       ...base,
       type: "text",
-      x: 0,
-      y: 0,
-      w: 600,
-      h: 80,
       zIndex: 100,
       props: {
-        text: "NUEVO TEXTO",
+        text: "",
         fontFamily: "Inter, system-ui, Arial",
         fontSize: 48,
         fontWeight: 800,
@@ -85,10 +85,6 @@ export const makeDefaultLayer = ({ type, groupId }) => {
     return {
       ...base,
       type: "svg",
-      x: 0,
-      y: 0,
-      w: 1920,
-      h: 1080,
       zIndex: 100,
       props: {
         src: "",
@@ -103,13 +99,9 @@ export const makeDefaultLayer = ({ type, groupId }) => {
     return {
       ...base,
       type: "image",
-      x: 0,
-      y: 0,
-      w: 1920,
-      h: 1080,
       zIndex: 100,
       props: {
-        src: img(mediaStoragePath("ads/placeholders/no_image.png")),
+        src: "",
         fit: "contain",
         borderRadius: 0,
       },
@@ -120,12 +112,8 @@ export const makeDefaultLayer = ({ type, groupId }) => {
   return {
     ...base,
     type: "shape",
-    x: 0,
-    y: 0,
-    w: 500,
-    h: 160,
     zIndex: 90,
-    props: { fill: "rgba(0,0,0,0.35)", borderRadius: 18 },
+    props: { fill: "transparent", borderRadius: 0 },
     bind: null,
   };
 };

@@ -62,6 +62,33 @@ export function normalizeMediaItem(item) {
   return { ...item, previewUrl: url };
 }
 
+/** Lista plantillas de diseño activas para el picker de campañas. */
+export async function fetchPromoTemplatesForCampaign() {
+  const { getEditorTemplates } = await import("./editorRequest.js");
+  const res = await getEditorTemplates({ isActive: true, limit: 200 });
+  const rows = Array.isArray(res?.data?.rows)
+    ? res.data.rows
+    : Array.isArray(res?.data)
+      ? res.data
+      : [];
+  return rows.map((t) =>
+    normalizeMediaItem({
+      id: String(t.id),
+      type: CONTENT_TYPES.TEMPLATE,
+      title: t.name || `Plantilla #${t.id}`,
+      subtitle: [
+        t.isDefault ? "★ default" : null,
+        t.format || null,
+        "Diseño promocional",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      mediaPath: null,
+      templateId: t.id,
+    }),
+  );
+}
+
 export async function fetchMediaCatalog() {
   const res = await axios.get("/publicidad/media-catalog", authHeaders());
   const data = res.data || {};
@@ -73,12 +100,13 @@ export async function fetchMediaCatalog() {
   };
 }
 
-export async function uploadPublicidadImage(file, { name = "" } = {}) {
+export async function uploadPublicidadImage(file, { name = "", replace = true } = {}) {
   const res = await uploadImageRequest({
     file,
     folder: publicidadImgFolder(),
     name,
-    replace: false,
+    // Plantillas / piezas con el mismo nombre se regeneran: hay que reemplazar.
+    replace: !!replace,
   });
   const relPath = res.data?.data?.relativePath;
   const backendMsg = res.data?.message;

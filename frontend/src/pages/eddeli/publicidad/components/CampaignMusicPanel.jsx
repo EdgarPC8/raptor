@@ -38,7 +38,12 @@ function trackFromCatalogItem(item) {
   };
 }
 
-export default function CampaignMusicPanel({ musicMode, musicTracks = [], onChange }) {
+export default function CampaignMusicPanel({
+  musicMode,
+  musicTracks = [],
+  onChange,
+  embedded = false,
+}) {
   const { toast } = useAuth();
   const fileRef = useRef(null);
   const [audios, setAudios] = useState([]);
@@ -111,18 +116,21 @@ export default function CampaignMusicPanel({ musicMode, musicTracks = [], onChan
     (a) => !musicTracks.some((t) => t.mediaPath === a.mediaPath),
   );
 
-  return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-        <MusicNoteIcon color="action" />
-        <Typography variant="subtitle1" fontWeight={700}>
-          Música de campaña
-        </Typography>
-      </Stack>
+  const body = (
+    <>
+      {!embedded && (
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+          <MusicNoteIcon color="action" />
+          <Typography variant="subtitle1" fontWeight={700}>
+            Música de campaña
+          </Typography>
+        </Stack>
+      )}
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Se reproduce en bucle mientras la campaña está activa (TV y vista previa). Los videos de la
-        playlist se muestran sin sonido; la música va por separado.
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        {embedded
+          ? "Música de fondo en bucle (TV y vista previa). Los videos van sin sonido."
+          : "Se reproduce en bucle mientras la campaña está activa (TV y vista previa). Los videos de la playlist se muestran sin sonido; la música va por separado."}
       </Typography>
 
       <FormControl fullWidth size="small" sx={{ mb: 2 }}>
@@ -238,6 +246,13 @@ export default function CampaignMusicPanel({ musicMode, musicTracks = [], onChan
           )}
         </>
       ) : null}
+    </>
+  );
+
+  if (embedded) return <Box>{body}</Box>;
+  return (
+    <Paper variant="outlined" sx={{ p: 2 }}>
+      {body}
     </Paper>
   );
 }

@@ -1,113 +1,219 @@
 /**
  * ProductSelector.jsx
  *
- * Componente compartido para seleccionar productos del catálogo y ver el estado de las capas.
- * - Carga productos del catálogo (getCatalogTemplateItems)
- * - Selector con búsqueda
- * - Al seleccionar producto → actualiza doc.data con SET_DOC_DATA_PATCH
- * - Vista rápida: muestra doc.data (JSON), textos e imágenes con su estado de bind
- * 
- * Se usa en:
- * - ProductTemplateStudio (Vista con productos)
+ * Selección de productos del inventario (como Caja) para Vista con productos.
+ * - Un slot → un selector (compatible con plantillas de 1 producto).
+ * - Varios slots (cards) → un selector por Producto 1…N.
+ * - UI tipo Caja (SearchableSelect): nombre + precio en verde.
  */
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Box,
   Typography,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Stack,
   Divider,
-  CircularProgress,
   Chip,
 } from "@mui/material";
 
 import { useEditor } from "../EditorProvider";
-import { getCatalogTemplateItems } from "../../../../api/inventoryControlRequest";
+import { getAllProducts } from "../../../../api/inventoryControlRequest";
 import { pathImg } from "../../../../api/axios";
 import { resolveLayer } from "../bind/resolveTemplate";
-import { normalizeKey, resolveValue } from "../bind/resolveMedia";
-import { code128SvgMarkup } from "../../../../utils/code128Barcode.js";
+import { resolveValue } from "../bind/resolveMedia";
+import SearchableSelect from "../../../../components/SearchableSelect";
+import { isSellableInCaja } from "../../../../utils/productLookup";
+import {
+  collectUsedProductSlots,
+  getSlotData,
+  buildSlotSelectionPatch,
+  slotLabel,
+  getLayerProductSlot,
+} from "../productSlots";
 
-function buildCatalogComputed(catalogItem = {}, product = {}) {
-  const price =
-    catalogItem.displayPrice ??
-    catalogItem.priceOverride ??
-    product.price ??
-    null;
-  const priceText =
-    price != null && !Number.isNaN(Number(price)) ? `$${Number(price).toFixed(2)}` : "";
-
-  const barcodeRaw = String(product.barcode || product.sku || "").trim();
-  const barcodeImageUrl = barcodeRaw
-    ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
-        code128SvgMarkup(barcodeRaw, { height: 80, maxWidth: 420 })
-      )}`
-    : "";
-
+/** Normaliza un producto de inventario al shape que espera buildSlotSelectionPatch. */
+const mapProductToSlotItem = (product) => {
+  if (!product) return null;
+  const price = Number(product.price);
+  const displayPrice = Number.isFinite(price) ? `$${price.toFixed(2)}` : "";
   return {
-    priceText,
-    barcodeImageUrl,
+    id: product.id,
+    displayName: product.name || "",
+    title: product.name || "",
+    displayPrice,
+    imageUrl: product.primaryImageUrl || "",
+    product: {
+      id: product.id,
+      name: product.name || "",
+      desc: product.desc || "",
+      price: Number.isFinite(price) ? price : 0,
+      primaryImageUrl: product.primaryImageUrl || "",
+      barcode: product.barcode || "",
+      sku: product.sku || "",
+      categoryId: product.categoryId,
+      unitId: product.unitId,
+      type: product.type,
+      wholesaleRules: product.wholesaleRules,
+      standardWeightGrams: product.standardWeightGrams,
+    },
   };
-}
+};
+
+const itemName = (it) =>
+  it?.displayName || it?.title || it?.product?.name || (it?.id != null ? `Item #${it.id}` : "");
+
+const itemProductId = (it) => it?.product?.id ?? it?.id;
+
+/** Precio numérico (displayPrice del API a veces ya viene como "$0.50"). */
+const itemPriceNumber = (it) => {
+  if (typeof it?.displayPrice === "string" && it.displayPrice.trim()) {
+    const fromStr = Number(String(it.displayPrice).replace(/[^0-9.-]/g, ""));
+    if (Number.isFinite(fromStr)) return fromStr;
+  }
+  const raw = it?.priceOverride ?? it?.product?.price ?? it?.price ?? null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+};
+
+const formatItemLabel = (it) => itemName(it);
+
+const formatItemPrice = (it) => {
+  if (typeof it?.displayPrice === "string" && /^\$/.test(it.displayPrice.trim())) {
+    return it.displayPrice.trim();
+  }
+  const n = itemPriceNumber(it);
+  if (n == null) return "";
+  return `$${n.toFixed(2)}`;
+};
+
+const renderProductOption = (props, it) => {
+  if (!it) return null;
+  const price = formatItemPrice(it);
+  const optId = itemProductId(it);
+  return (
+    <Box
+      component="li"
+      {...props}
+      key={optId ?? props.key}
+      sx={{
+        display: "flex !important",
+        alignItems: "center !important",
+        justifyContent: "space-between !important",
+        gap: 1,
+        py: "6px !important",
+        width: "100%",
+      }}
+    >
+      <Typography variant="body2" fontWeight={600} noWrap sx={{ minWidth: 0, flex: 1 }}>
+        {formatItemLabel(it)}
+      </Typography>
+      {!!price && (
+        <Typography
+          variant="body2"
+          fontWeight={800}
+          sx={{ color: "#2e7d32", textAlign: "right", flexShrink: 0, pl: 1 }}
+        >
+          {price}
+        </Typography>
+      )}
+    </Box>
+  );
+};
+
+const darkSelectSx = {
+  "& .MuiInputBase-root": { color: "#fff" },
+  "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.72)" },
+  "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255,255,255,0.28)" },
+  "& .MuiInputBase-root:hover .MuiOutlinedInput-notchedOutline": {
+    borderColor: "rgba(255,255,255,0.45)",
+  },
+  "& .MuiSvgIcon-root": { color: "rgba(255,255,255,0.7)" },
+};
 
 export default function ProductSelector({ autoSelectFirst = false, compact = false }) {
   const { state, dispatch } = useEditor();
 
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
-  const [search, setSearch] = useState("");
 
-  const selectedId = state?.doc?.data?.id ?? "";
+  const doc = state?.doc || {};
+  const docData = doc?.data || {};
+  const layers = doc?.layers || [];
+  const folders = doc?.folders || doc?.meta?.folders || [];
 
-  // ✅ Aplica selección de producto: actualiza doc.data con los datos del catálogo
-  const applySelection = useCallback(
-    (it) => {
-      if (!it) return;
-
-      const product = it.product || {};
-      const { product: _p, ...catalogItem } = it;
-
-      const imageUrl =
-        catalogItem.imageUrl ??
-        product.primaryImageUrl ??
-        (typeof catalogItem.data?.imageUrl === "string" ? catalogItem.data.imageUrl : "");
-
-      dispatch({
-        type: "SET_DOC_DATA_PATCH",
-        patch: {
-          ...catalogItem,
-          product,
-          imageUrl: imageUrl || undefined,
-          computed: buildCatalogComputed(catalogItem, product),
-        },
-      });
-    },
-    [dispatch]
+  const usedSlots = useMemo(
+    () => collectUsedProductSlots(layers, folders),
+    [layers, folders]
   );
 
-  // Cargar productos del catálogo
+  // Si no hay binds aún, mostrar al menos Producto 1
+  const slotsToShow = usedSlots.length > 0 ? usedSlots : [0];
+  const multiSlot = slotsToShow.length > 1;
+
+  const applySelection = useCallback(
+    (slotIndex, it) => {
+      if (!it) return;
+      const patch = buildSlotSelectionPatch(docData, slotIndex, it);
+      if (!patch) return;
+      dispatch({ type: "SET_DOC_DATA_PATCH", patch });
+    },
+    [dispatch, docData]
+  );
+
   useEffect(() => {
     let alive = true;
 
     (async () => {
       try {
         setLoading(true);
-        const { data } = await getCatalogTemplateItems();
+        const { data } = await getAllProducts({ all: "true" });
         if (!alive) return;
 
-        const arr = Array.isArray(data) ? data : [];
+        const raw = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.products)
+            ? data.products
+            : Array.isArray(data?.rows)
+              ? data.rows
+              : [];
+        const arr = raw
+          .filter(isSellableInCaja)
+          .map(mapProductToSlotItem)
+          .filter(Boolean)
+          .sort((a, b) =>
+            String(a.displayName || "").localeCompare(String(b.displayName || ""), "es", {
+              sensitivity: "base",
+            })
+          );
         setItems(arr);
 
-        // Si autoSelectFirst está activo y no hay producto seleccionado, toma el primero
-        if (autoSelectFirst && (!state?.doc?.data || !state.doc.data?.id) && arr.length) {
-          applySelection(arr[0]);
+        if (autoSelectFirst && arr.length) {
+          // Si la plantilla ya trae productos guardados, no pisarlos
+          const hasSaved =
+            !!itemProductId(getSlotData(docData, 0)) ||
+            (Array.isArray(docData?.slots) &&
+              docData.slots.some((s) => s && itemProductId(s) != null));
+          if (!hasSaved) {
+            const slots = collectUsedProductSlots(
+              state?.doc?.layers || [],
+              state?.doc?.folders || state?.doc?.meta?.folders || []
+            );
+            const slotsNeeded = (slots.length ? slots : [0]).filter(
+              (slot) => itemProductId(getSlotData(docData, slot)) == null
+            );
+
+            if (slotsNeeded.length) {
+              let nextData = { ...(docData || {}) };
+              slotsNeeded.forEach((slot, i) => {
+                const it = arr[Math.min(i, arr.length - 1)];
+                const patch = buildSlotSelectionPatch(nextData, slot, it);
+                if (patch) nextData = { ...nextData, ...patch };
+              });
+              dispatch({ type: "SET_DOC_DATA_PATCH", patch: nextData });
+            }
+          }
         }
       } catch (e) {
-        console.error("getCatalogTemplateItems error:", e);
+        console.error("getAllProducts (ProductSelector) error:", e);
         if (alive) setItems([]);
       } finally {
         if (alive) setLoading(false);
@@ -118,35 +224,17 @@ export default function ProductSelector({ autoSelectFirst = false, compact = fal
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [applySelection, autoSelectFirst]);
+  }, [autoSelectFirst]);
 
-  // Filtrar productos por búsqueda
-  const filtered = useMemo(() => {
-    const q = String(search || "").toLowerCase().trim();
-    if (!q) return items;
-
-    return items.filter((it) => {
-      const name = String(it?.displayName || it?.title || it?.product?.name || "").toLowerCase();
-      const badge = String(it?.badge || "").toLowerCase();
-      const section = String(it?.section || "").toLowerCase();
-      return name.includes(q) || badge.includes(q) || section.includes(q);
-    });
-  }, [items, search]);
-
-  const handleSelect = (id) => {
-    const it = items.find((x) => String(x?.id) === String(id));
-    applySelection(it);
+  const handleSelect = (slotIndex, id) => {
+    if (id === "" || id == null) return;
+    const it = items.find((x) => String(itemProductId(x)) === String(id));
+    applySelection(slotIndex, it);
   };
-
-  // Datos del documento y capas
-  const doc = state?.doc || {};
-  const docData = state?.doc?.data || {};
-  const layers = state?.doc?.layers || [];
 
   const textLayers = useMemo(() => layers.filter((l) => l?.type === "text"), [layers]);
   const imageLayers = useMemo(() => layers.filter((l) => l?.type === "image"), [layers]);
 
-  // ✅ Verificar estado de carga de imágenes
   const [imgStatus, setImgStatus] = useState({});
 
   useEffect(() => {
@@ -187,103 +275,78 @@ export default function ProductSelector({ autoSelectFirst = false, compact = fal
     };
   }, [doc, docData, imageLayers]);
 
-  // Helpers para obtener keys de bind y estado del valor
   const getRawKeyForText = (l) => l?.fieldKey || l?.bind?.textFrom || "";
   const getRawKeyForImage = (l) => l?.fieldKey || l?.bind?.srcFrom || "";
-  
-  const getValueState = (rawKey) => {
+
+  const getValueState = (rawKey, slotData) => {
     if (!rawKey) return { k: "", value: undefined, state: "no-key" };
 
-    const v = resolveValue(docData, rawKey);
+    const v = resolveValue(slotData, rawKey);
 
-    // ❌ solo undefined significa que no existe
     if (v === undefined) return { k: rawKey, value: v, state: "missing" };
-
-    // ⚠️ null es un valor válido pero vacío
     if (v === null) return { k: rawKey, value: v, state: "null" };
-
-    // 🔢 números SIEMPRE son válidos
     if (typeof v === "number") {
-      if (Number.isNaN(v)) {
-        return { k: rawKey, value: v, state: "nan" };
-      }
+      if (Number.isNaN(v)) return { k: rawKey, value: v, state: "nan" };
       return { k: rawKey, value: v, state: "ok" };
     }
-
-    // 🧵 strings
     if (typeof v === "string") {
       if (!v.trim()) return { k: rawKey, value: v, state: "empty" };
       return { k: rawKey, value: v, state: "ok" };
     }
-
-    // 📦 otros tipos (boolean, object)
     return { k: rawKey, value: v, state: "ok" };
+  };
+
+  const renderSlotSelect = (slotIndex) => {
+    const slotData = getSlotData(docData, slotIndex);
+    const selectedId = itemProductId(slotData) ?? "";
+
+    return (
+      <Box key={slotIndex} sx={{ ...darkSelectSx, mt: multiSlot || slotsToShow[0] !== slotIndex ? 1.25 : 0 }}>
+        <SearchableSelect
+          label={multiSlot ? slotLabel(slotIndex) : "Producto"}
+          placeholder="Buscar producto…"
+          items={items}
+          value={selectedId}
+          onChange={(id) => handleSelect(slotIndex, id)}
+          loading={loading}
+          getOptionLabel={formatItemLabel}
+          getOptionValue={(item) => itemProductId(item)}
+          getSearchText={(item) =>
+            [
+              itemName(item),
+              item?.product?.name,
+              item?.product?.barcode,
+              item?.product?.sku,
+            ]
+              .filter(Boolean)
+              .join(" ")
+          }
+          renderOption={renderProductOption}
+        />
+      </Box>
+    );
   };
 
   const catalogPanel = (
     <Box sx={{ p: 2 }}>
       <Typography sx={{ fontWeight: 900, color: "#fff", mb: 1 }}>
-        {compact ? "Productos" : "Catálogo"}
+        {compact ? "Productos" : multiSlot ? "Productos por card" : "Catálogo"}
       </Typography>
 
-      <TextField
-        size="small"
-        label="Buscar producto"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        fullWidth
-      />
-
-      <Box sx={{ height: 10 }} />
-
-      <FormControl size="small" fullWidth>
-        <InputLabel id="catalog-item-select">Producto</InputLabel>
-        <Select
-          labelId="catalog-item-select"
-          label="Producto"
-          value={selectedId}
-          onChange={(e) => handleSelect(e.target.value)}
-        >
-          {loading && (
-            <MenuItem value="">
-              <Stack direction="row" spacing={1} alignItems="center">
-                <CircularProgress size={16} />
-                <span>Cargando...</span>
-              </Stack>
-            </MenuItem>
-          )}
-
-          {!loading && filtered.length === 0 && <MenuItem value="">No hay productos</MenuItem>}
-
-          {!loading &&
-            filtered.map((it) => {
-              const name = it?.displayName || it?.title || it?.product?.name || `Item #${it.id}`;
-              const sec = it.section ? `[${it.section}] ` : "";
-              const price =
-                typeof it.displayPrice !== "undefined"
-                  ? ` — $${it.displayPrice}`
-                  : typeof it.price !== "undefined"
-                  ? ` — $${it.price}`
-                  : "";
-              return (
-                <MenuItem key={it.id} value={it.id}>
-                  {sec}
-                  {name}
-                  {price}
-                </MenuItem>
-              );
-            })}
-        </Select>
-      </FormControl>
+      {slotsToShow.map((slot) => renderSlotSelect(slot))}
 
       {compact ? (
         <Box sx={{ mt: 1.5, color: "rgba(255,255,255,0.65)", fontSize: 12 }}>
-          Solo cambias qué producto se muestra. Para editar la plantilla usa el Editor de plantilla.
+          {multiSlot
+            ? "Cada selector alimenta una card distinta de la plantilla."
+            : "Solo cambias qué producto se muestra. Para editar la plantilla usa el Editor."}
         </Box>
       ) : (
         <>
           <Box sx={{ mt: 1, color: "rgba(255,255,255,0.7)", fontSize: 12 }}>
-            Selecciona un producto para ver el preview en el canvas.
+            {multiSlot
+              ? "Asigna un producto a cada card (Producto 1, 2…). El slot se define en el inspector de cada capa."
+              : "Selecciona un producto para ver el preview en el canvas."}
           </Box>
           <Box sx={{ mt: 1, color: "rgba(255,255,255,0.5)", fontSize: 11 }}>
             base pathImg: <span style={{ wordBreak: "break-all" }}>{String(pathImg)}</span>
@@ -325,14 +388,12 @@ export default function ProductSelector({ autoSelectFirst = false, compact = fal
 
       <Divider sx={{ borderColor: "rgba(255,255,255,0.08)" }} />
 
-      {/* debug panel — solo en modo editor */}
       <Box sx={{ p: 2, overflow: "auto", minHeight: 0, flex: 1 }}>
         <Typography sx={{ fontWeight: 900, color: "#fff", mb: 1 }}>Vista rápida (capas)</Typography>
 
-        {/* DOC DATA (JSON) */}
         <Box sx={{ mb: 2 }}>
           <Typography sx={{ color: "rgba(255,255,255,0.8)", fontWeight: 800, fontSize: 12, mb: 1 }}>
-            doc.data (lo que leen las capas)
+            doc.data.slots
           </Typography>
           <Box
             component="pre"
@@ -348,11 +409,18 @@ export default function ProductSelector({ autoSelectFirst = false, compact = fal
               maxHeight: 180,
             }}
           >
-            {JSON.stringify(docData || {}, null, 2)}
+            {JSON.stringify(
+              {
+                slots: docData?.slots,
+                id: docData?.id,
+                displayName: docData?.displayName,
+              },
+              null,
+              2
+            )}
           </Box>
         </Box>
 
-        {/* TEXTOS */}
         <Box sx={{ mb: 2 }}>
           <Typography sx={{ color: "rgba(255,255,255,0.8)", fontWeight: 800, fontSize: 12, mb: 1 }}>
             Textos ({textLayers.length})
@@ -367,10 +435,10 @@ export default function ProductSelector({ autoSelectFirst = false, compact = fal
               textLayers.map((rawLayer) => {
                 const resolved = resolveLayer(doc, docData, rawLayer);
                 const rawKey = getRawKeyForText(rawLayer);
-                const s = getValueState(rawKey);
-
-                const defaultText = rawLayer?.props?.text ?? "";
-                const shown = resolved?.props?.text ?? defaultText;
+                const slot = getLayerProductSlot(rawLayer, folders);
+                const slotData = getSlotData(docData, slot ?? 0);
+                const s = getValueState(rawKey, slotData);
+                const shown = resolved?.props?.text ?? rawLayer?.props?.text ?? "";
 
                 let statusLabel = "❌ vacío";
                 if (!rawKey) statusLabel = "🟡 default";
@@ -378,22 +446,6 @@ export default function ProductSelector({ autoSelectFirst = false, compact = fal
                 else if (s.state === "missing") statusLabel = "❌ no existe";
                 else if (s.state === "null") statusLabel = "⚠️ nulo";
                 else if (s.state === "empty") statusLabel = "🟡 default";
-
-                const from =
-                  !rawKey
-                    ? "default(no-key)"
-                    : s.state === "ok"
-                    ? `data(${s.k})`
-                    : s.state === "null"
-                    ? `data(null:${s.k})`
-                    : s.state === "missing"
-                    ? "missing"
-                    : "default";
-
-                const hasShown =
-                  shown !== undefined &&
-                  shown !== null &&
-                  !(typeof shown === "string" && !shown.trim());
 
                 return (
                   <Box
@@ -407,22 +459,15 @@ export default function ProductSelector({ autoSelectFirst = false, compact = fal
                   >
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5, flexWrap: "wrap" }}>
                       <Typography sx={{ color: "#fff", fontWeight: 900, fontSize: 12 }}>
-                        {rawLayer.id}
+                        {rawLayer.name || rawLayer.id}
                       </Typography>
-                      <Chip size="small" label={rawKey || "sin fieldKey/textFrom"} />
+                      {slot != null && <Chip size="small" label={slotLabel(slot)} />}
+                      <Chip size="small" label={rawKey || "fijo"} />
                       <Chip size="small" label={statusLabel} />
-                      <Chip size="small" label={from} />
                     </Stack>
-
                     <Typography sx={{ color: "#fff", fontSize: 12 }}>
-                      {hasShown ? shown : <span style={{ color: "rgba(255,255,255,0.45)" }}>(vacío)</span>}
+                      {shown || <span style={{ color: "rgba(255,255,255,0.45)" }}>(vacío)</span>}
                     </Typography>
-
-                    {!!rawKey && (
-                      <Typography sx={{ mt: 0.5, color: "rgba(255,255,255,0.55)", fontSize: 11 }}>
-                        key usada: {s.k}
-                      </Typography>
-                    )}
                   </Box>
                 );
               })
@@ -430,7 +475,6 @@ export default function ProductSelector({ autoSelectFirst = false, compact = fal
           </Stack>
         </Box>
 
-        {/* IMÁGENES */}
         <Box>
           <Typography sx={{ color: "rgba(255,255,255,0.8)", fontWeight: 800, fontSize: 12, mb: 1 }}>
             Imágenes ({imageLayers.length})
@@ -445,21 +489,9 @@ export default function ProductSelector({ autoSelectFirst = false, compact = fal
               imageLayers.map((rawLayer) => {
                 const resolved = resolveLayer(doc, docData, rawLayer);
                 const rawKey = getRawKeyForImage(rawLayer);
-                const s = getValueState(rawKey);
-
+                const slot = getLayerProductSlot(rawLayer, folders);
                 const src = resolved?.props?.src || "";
                 const loaded = imgStatus[rawLayer?.id || ""] === true;
-
-                let from =
-                  !rawKey
-                    ? "default(no-key)"
-                    : s.state === "ok"
-                    ? `data(${s.k})`
-                    : s.state === "null"
-                    ? `data(null:${s.k})`
-                    : s.state === "missing"
-                    ? "missing"
-                    : "default";
 
                 return (
                   <Box
@@ -473,22 +505,15 @@ export default function ProductSelector({ autoSelectFirst = false, compact = fal
                   >
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5, flexWrap: "wrap" }}>
                       <Typography sx={{ color: "#fff", fontWeight: 900, fontSize: 12 }}>
-                        {rawLayer.id}
+                        {rawLayer.name || rawLayer.id}
                       </Typography>
-                      <Chip size="small" label={rawKey || "sin fieldKey/srcFrom"} />
+                      {slot != null && <Chip size="small" label={slotLabel(slot)} />}
+                      <Chip size="small" label={rawKey || "fijo"} />
                       <Chip size="small" label={src ? (loaded ? "✅ cargó" : "❌ error") : "sin src"} />
-                      <Chip size="small" label={from} />
                     </Stack>
-
                     <Typography sx={{ color: "rgba(255,255,255,0.75)", fontSize: 11, wordBreak: "break-all" }}>
                       {src || "(sin ruta)"}
                     </Typography>
-
-                    {!!rawKey && (
-                      <Typography sx={{ mt: 0.5, color: "rgba(255,255,255,0.55)", fontSize: 11 }}>
-                        key usada: {s.k}
-                      </Typography>
-                    )}
                   </Box>
                 );
               })

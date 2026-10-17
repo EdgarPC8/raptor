@@ -12,6 +12,8 @@ export const CONTENT_TYPES = {
   MENU: "menu",
   /** Mensaje de texto grande (promoción, aviso) */
   TEXT: "text",
+  /** Plantilla de diseño promocional (renderizada a imagen con productos) */
+  TEMPLATE: "template",
 };
 
 export const CONTENT_TYPE_LABELS = {
@@ -20,6 +22,7 @@ export const CONTENT_TYPE_LABELS = {
   [CONTENT_TYPES.VIDEO]: "Video",
   [CONTENT_TYPES.MENU]: "Tablero menú",
   [CONTENT_TYPES.TEXT]: "Mensaje de texto",
+  [CONTENT_TYPES.TEMPLATE]: "Plantilla diseño",
 };
 
 /**

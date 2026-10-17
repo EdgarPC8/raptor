@@ -53,8 +53,8 @@ import {
   getEditorTemplateById,
   getEditorDefaultTemplate,
   updateEditorTemplateDoc,
-  getEditorTemplateResolved
-
+  updateEditorTemplate,
+  getEditorTemplateResolved,
 } from "../../../api/editorRequest";
 
 const Ctx = createContext(null);
@@ -168,7 +168,15 @@ const normalizeDoc = (doc) => {
 // ✅ soporta row DB o doc ya resuelto
 const mapDbTemplateToDoc = (row) => {
   if (row?.canvas?.width && Array.isArray(row?.layers)) {
-  return normalizeDoc({
+    const settingsObj = parseSettingsJson(row.settingsJson || row.meta || {});
+    const previewData =
+      (row?.data && typeof row.data === "object" && Object.keys(row.data).length
+        ? row.data
+        : null) ||
+      settingsObj.previewData ||
+      row?.meta?.previewData ||
+      {};
+    return normalizeDoc({
       ...row,
       id:
         row?.id ??
@@ -176,11 +184,16 @@ const mapDbTemplateToDoc = (row) => {
         row?.template?.id ??
         row?.resolved?.templateId ??
         null,
+      data: previewData,
       folders:
         row.folders ||
         row.meta?.folders ||
-        parseSettingsJson(row.settingsJson).folders ||
+        settingsObj.folders ||
         [],
+      meta: {
+        ...(row.meta || {}),
+        ...(Object.keys(previewData).length ? { previewData } : {}),
+      },
     });
   }
 
@@ -230,6 +243,18 @@ const mapDbTemplateToDoc = (row) => {
   }
 
   const settingsObj = parseSettingsJson(row?.settingsJson || row?.meta || {});
+  const normalizedSettings = normalizeTemplateSettings(settingsObj, {
+    layers,
+    backgroundSrc: row?.backgroundSrc,
+  });
+  const previewData =
+    (row?.data && typeof row.data === "object" && Object.keys(row.data).length
+      ? row.data
+      : null) ||
+    normalizedSettings.previewData ||
+    settingsObj.previewData ||
+    row?.meta?.previewData ||
+    {};
 
   return normalizeDoc({
     id: row?.id ?? null,
@@ -241,12 +266,11 @@ const mapDbTemplateToDoc = (row) => {
       row?.meta?.folders ||
       settingsObj.folders ||
       [],
+    data: previewData,
     meta: {
       name: row?.name || "Template",
-      ...normalizeTemplateSettings(settingsObj, {
-        layers,
-        backgroundSrc: row?.backgroundSrc,
-      }),
+      ...normalizedSettings,
+      ...(Object.keys(previewData).length ? { previewData } : {}),
     },
     app: row?.app ?? null,
     format: row?.format ?? null,
@@ -441,15 +465,25 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
       }
       return out;
     });
+    const previewData =
+      (doc.data && typeof doc.data === "object" && Object.keys(doc.data).length
+        ? doc.data
+        : null) ||
+      doc.meta?.previewData ||
+      undefined;
     docClean.meta = {
       ...(doc.meta || {}),
       ...settingsToMeta({
         ...(doc.meta || {}),
         folders: doc.folders || doc.meta?.folders,
+        previewData,
       }),
       folders: doc.folders || doc.meta?.folders || [],
+      ...(previewData ? { previewData } : {}),
     };
     docClean.folders = doc.folders || doc.meta?.folders || [];
+    // Persistir productos de vista en el doc (settingsJson.previewData al guardar)
+    if (previewData) docClean.data = previewData;
     return docClean;
   };
 
@@ -460,6 +494,38 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
       throw new Error("No hay templateId para guardar.");
     }
     await updateEditorTemplateDoc(templateId, getDocForExport());
+    return templateId;
+  };
+
+  /** Guarda los productos elegidos en Vista (settingsJson.previewData) para verlos también en el editor. */
+  const savePreviewProducts = async () => {
+    const templateId = getTemplateId();
+    if (!templateId) {
+      throw new Error("No hay plantilla cargada para guardar productos.");
+    }
+    const doc = stateRef.current?.doc || state.doc || {};
+    const previewData = doc.data && typeof doc.data === "object" ? doc.data : {};
+    if (!Object.keys(previewData).length) {
+      throw new Error("No hay productos seleccionados para guardar.");
+    }
+
+    const settings = settingsFromRow(doc);
+    await updateEditorTemplate(templateId, {
+      settingsJson: {
+        ...settings,
+        folders: doc.folders || doc.meta?.folders || settings.folders,
+        previewData,
+      },
+      templateKind: settings.templateKind,
+      requiresProduct: settings.requiresProduct,
+      backgroundMode: settings.backgroundMode,
+    });
+
+    dispatch({
+      type: "SET_DOC_META",
+      patch: { previewData },
+    });
+
     return templateId;
   };
 
@@ -533,18 +599,33 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
   
     const templateId = Number(row?.templateId ?? row?.id ?? doc?.id ?? id);
 
+    const previewFromSettings =
+      parseSettingsJson(templateInfo.settingsJson).previewData ||
+      settings.previewData ||
+      doc.meta?.previewData ||
+      doc.data ||
+      {};
+    const data =
+      previewFromSettings && typeof previewFromSettings === "object"
+        ? previewFromSettings
+        : {};
+
     // Guardar rutas relativas en estado; resolveLayer/resolveTemplate resuelven al pintar/exportar.
     setDoc(
       {
         ...doc,
-        meta: doc.meta,
+        data,
+        meta: {
+          ...doc.meta,
+          ...(Object.keys(data).length ? { previewData: data } : {}),
+        },
         id: templateId,
         __metaTemplateId: templateId,
       },
       "backend(loadById)"
     );
 
-    return { ...doc, meta: doc.meta };
+    return { ...doc, data, meta: doc.meta };
   };
   
 
@@ -771,6 +852,7 @@ export function EditorProvider({ children, designId = null, autoload = true }) {
       setDoc,
 
       saveTemplateDoc,
+      savePreviewProducts,
       autoSaveTemplateDoc,
       getTemplateId,
       updateTemplateMeta,

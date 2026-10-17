@@ -48,10 +48,11 @@ function thumbUrl(slide) {
   }
   if (!slide?.mediaPath) return null;
   if (slide.contentType === CONTENT_TYPES.VIDEO) return null;
+  // image, product, template
   return buildImageUrl(slide.mediaPath);
 }
 
-export default function PlaylistBuilder({ playlist, onChange }) {
+export default function PlaylistBuilder({ playlist, onChange, compact = false }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuEditSlide, setMenuEditSlide] = useState(null);
@@ -101,7 +102,9 @@ export default function PlaylistBuilder({ playlist, onChange }) {
       subtitle: item.subtitle || "",
       mediaPath: item.mediaPath,
       price: item.price,
-      durationSeconds: item.durationHint || 8,
+      durationSeconds:
+        item.durationHint ||
+        (item.type === CONTENT_TYPES.TEMPLATE ? 12 : 8),
       ...PLAYLIST_TRANSITION_TEMPLATE,
       order: sorted.length,
     };
@@ -142,27 +145,38 @@ export default function PlaylistBuilder({ playlist, onChange }) {
 
   return (
     <Box>
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Añade <strong>productos</strong>, <strong>tableros menú</strong>, <strong>mensajes de texto</strong>,
-        imágenes o videos. El título del menú lo defines al crearlo o editándolo en la playlist.
-      </Alert>
+      {!compact && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Añade <strong>productos</strong>, <strong>plantillas de diseño</strong>, <strong>tableros menú</strong>,
+          <strong>mensajes de texto</strong>, imágenes o videos. Las plantillas usan los productos guardados en
+          Vista con productos.
+        </Alert>
+      )}
 
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <PlaylistPlayIcon color="primary" />
-          <Typography variant="h6" fontWeight={700}>
-            Lista de reproducción
-          </Typography>
-          <Chip size="small" label={`${sorted.length} piezas`} />
-        </Stack>
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        justifyContent="space-between"
+        alignItems={{ sm: "center" }}
+        spacing={1}
+        sx={{ mb: compact ? 1.25 : 2 }}
+      >
+        {!compact && (
+          <Stack direction="row" spacing={1} alignItems="center">
+            <PlaylistPlayIcon color="primary" />
+            <Typography variant="h6" fontWeight={700}>
+              Lista de reproducción
+            </Typography>
+            <Chip size="small" label={`${sorted.length} piezas`} />
+          </Stack>
+        )}
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ width: compact ? "100%" : "auto" }}>
           <Button
             variant="outlined"
             size="small"
             startIcon={<TextFieldsIcon />}
             onClick={() => openTextDialog(null)}
           >
-            Mensaje texto
+            Texto
           </Button>
           <Button
             variant="outlined"
@@ -170,10 +184,10 @@ export default function PlaylistBuilder({ playlist, onChange }) {
             startIcon={<ViewModuleIcon />}
             onClick={() => openMenuDialog(null)}
           >
-            Tablero menú
+            Menú
           </Button>
           <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setPickerOpen(true)}>
-            Añadir contenido
+            Añadir
           </Button>
         </Stack>
       </Stack>
@@ -181,7 +195,7 @@ export default function PlaylistBuilder({ playlist, onChange }) {
       {!sorted.length ? (
         <Card variant="outlined" sx={{ p: 3, textAlign: "center" }}>
           <Typography color="text.secondary" gutterBottom>
-            Añade productos, tableros menú, banners o videos.
+            Añade productos, plantillas de diseño, tableros menú, banners o videos.
           </Typography>
           <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap" useFlexGap>
             <Button variant="outlined" startIcon={<TextFieldsIcon />} onClick={() => openTextDialog(null)}>

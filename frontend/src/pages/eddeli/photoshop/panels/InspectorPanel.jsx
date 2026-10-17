@@ -18,6 +18,13 @@ import { useEditorImageUpload } from "../useEditorImageUpload.jsx";
 import { useImageCropCtx } from "../useImageCrop.jsx";
 import { editorImageUrl } from "../editorImageUpload.js";
 import LayerGeometryFields from "./LayerGeometryFields.jsx";
+import {
+  MAX_PRODUCT_SLOTS,
+  getLayerProductSlot,
+  slotLabel,
+  withLayerProductSlot,
+} from "../productSlots";
+import { getLayerFolderId } from "../layerFolders.js";
 
 const FONT_OPTIONS = [
   { label: "Inter (Normal)", value: "Inter, system-ui, Arial" },
@@ -151,7 +158,49 @@ export default function InspectorPanel({
       return;
     }
     const preset = bindPresets[0];
-    if (preset) setBindKey(preset.value);
+    const keyPatch = preset ? patchBindKey(layer, preset.value) : {};
+    const foldersNow = state?.doc?.folders || state?.doc?.meta?.folders || [];
+    const needsSlot = getLayerProductSlot(layer, foldersNow) == null;
+    const slotted = needsSlot ? withLayerProductSlot(layer, 0) : layer;
+    dispatch({
+      type: "UPDATE_LAYER",
+      layerId: layer.id,
+      patch: {
+        ...(keyPatch || {}),
+        props: slotted.props || layer.props,
+        bind: {
+          ...(layer.bind || {}),
+          ...(keyPatch.bind || {}),
+          ...(needsSlot ? { productSlot: 0 } : {}),
+        },
+      },
+    });
+  };
+
+  const folders = state?.doc?.folders || state?.doc?.meta?.folders || [];
+  const currentSlot = getLayerProductSlot(layer, folders);
+  const setProductSlot = (slotIndex) => {
+    const patched = withLayerProductSlot(layer, slotIndex);
+    dispatch({
+      type: "UPDATE_LAYER",
+      layerId: layer.id,
+      patch: {
+        props: patched.props,
+        bind: layer.bind
+          ? { ...layer.bind, productSlot: slotIndex }
+          : { productSlot: slotIndex },
+      },
+    });
+  };
+
+  const applySlotToFolder = () => {
+    const folderId = getLayerFolderId(layer);
+    if (!folderId || currentSlot == null) return;
+    dispatch({
+      type: "APPLY_PRODUCT_SLOT_TO_FOLDER",
+      folderId,
+      slotIndex: currentSlot,
+    });
   };
 
   const applyGoldTitle = () => {
@@ -253,22 +302,51 @@ export default function InspectorPanel({
 
       {/* Referencia REAL (bind.textFrom / bind.srcFrom) */}
       {bindMode === "product" && (
-      <TextField
-        size="small"
-        label="Referencia (fieldKey)"
-        value={bindKeyValue}
-        onChange={(e) => setBindKey(e.target.value)}
-        placeholder={
-          layer.type === "text"
-            ? "Ej: computed.priceText | product.name | desc"
-            : layer.type === "image" || layer.type === "svg"
-            ? "Ej: product.primaryImageUrl | imageUrl"
-            : "—"
-        }
-        fullWidth
-        disabled={layer.type === "shape"}
-        helperText="Puedes escribir corto: desc -> data.desc (si quieres)."
-      />
+        <>
+          <TextField
+            size="small"
+            label="Referencia (fieldKey)"
+            value={bindKeyValue}
+            onChange={(e) => setBindKey(e.target.value)}
+            placeholder={
+              layer.type === "text"
+                ? "Ej: computed.priceText | product.name | desc"
+                : layer.type === "image" || layer.type === "svg"
+                ? "Ej: product.primaryImageUrl | imageUrl"
+                : "—"
+            }
+            fullWidth
+            disabled={layer.type === "shape"}
+            helperText="Puedes escribir corto: desc -> data.desc (si quieres)."
+          />
+
+          <TextField
+            select
+            size="small"
+            label="Producto en la vista (slot)"
+            value={currentSlot != null ? String(currentSlot) : "0"}
+            onChange={(e) => setProductSlot(Number(e.target.value))}
+            fullWidth
+            helperText="Cada card usa un slot distinto (Producto 1, 2…). En Vista con productos eliges uno por slot."
+          >
+            {Array.from({ length: MAX_PRODUCT_SLOTS }, (_, i) => (
+              <MenuItem key={i} value={String(i)}>
+                {slotLabel(i)}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          {!!getLayerFolderId(layer) && (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={applySlotToFolder}
+              sx={{ alignSelf: "flex-start", color: "#fff", borderColor: "rgba(255,255,255,0.3)" }}
+            >
+              Aplicar {slotLabel(currentSlot ?? 0)} a toda la carpeta
+            </Button>
+          )}
+        </>
       )}
 
       {/* ======== PROPIEDADES POR TIPO ======== */}

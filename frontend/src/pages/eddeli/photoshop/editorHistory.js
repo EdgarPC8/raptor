@@ -34,6 +34,7 @@ const MUTATING = new Set([
   "RENAME_FOLDER",
   "MOVE_TO_FOLDER",
   "MERGE_SVG_LAYERS",
+  "APPLY_PRODUCT_SLOT_TO_FOLDER",
 ]);
 
 export function makeSnapshot(state) {

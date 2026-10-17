@@ -868,10 +868,12 @@ export const APP_MODULE_GROUPS = [
         description: "Gestión de plantillas: crear, importar, diseñar (editor tipo Photoshop) o abrir en la vista con productos.",
         functions: [
           { name: "Listado de plantillas", description: "Búsqueda por nombre, app y formato." },
-          { name: "Crear plantilla", description: "Nueva plantilla vacía con formato 16:9 u otro." },
+          { name: "Crear plantilla", description: "Nueva plantilla con capa Fondo blanca y formato 16:9 u otro." },
           { name: "Diseñar", description: "Abre el editor de capas (/editor/:id)." },
           { name: "Usar en vista", description: "Abre la vista con productos con esa plantilla." },
-          { name: "Importar/exportar", description: "JSON de plantilla desde archivo." },
+          { name: "Importar JSON", description: "Sube un .json de plantilla (capas, binds y slots)." },
+          { name: "Exportar JSON", description: "Descarga la plantilla completa para respaldo o copiar a otra app." },
+          { name: "Slots multi-producto", description: "Asignar Producto 1…N a cada card; duplicar carpeta crea el siguiente slot." },
         ],
       },
       {
@@ -879,10 +881,10 @@ export const APP_MODULE_GROUPS = [
         path: APP_ROUTES.promoDesign.preview,
         roles: ["Propietario", "Programador", "Administrador"],
         status: "active",
-        description: "Solo cambiar qué producto se muestra en una plantilla ya diseñada. Canvas de solo lectura; exporta PNG/JPG/PDF.",
+        description: "Elegir producto(s) por slot/card en una plantilla ya diseñada. Canvas de solo lectura; exporta PNG/JPG/PDF.",
         functions: [
           { name: "Selector de plantilla", description: "Por defecto carga la plantilla marcada como default." },
-          { name: "Selector de productos", description: "Solo si la plantilla lo requiere." },
+          { name: "Selector(es) de productos", description: "Uno por cada card/slot de la plantilla." },
           { name: "Exportar", description: "PNG, JPG y PDF. No edita capas ni diseño." },
         ],
       },

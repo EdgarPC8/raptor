@@ -104,19 +104,29 @@ export function normalizeTemplateSettings(raw = {}, ctx = {}) {
   const folders = Array.isArray(raw.folders)
     ? raw.folders
         .filter((f) => f && f.id)
-        .map((f) => ({
-          id: String(f.id),
-          name: String(f.name || f.id),
-          parentId: f.parentId ? String(f.parentId) : null,
-          ...(f.collapsed ? { collapsed: true } : {}),
-        }))
+        .map((f) => {
+          const slot = Number(f.productSlot);
+          return {
+            id: String(f.id),
+            name: String(f.name || f.id),
+            parentId: f.parentId ? String(f.parentId) : null,
+            ...(f.collapsed ? { collapsed: true } : {}),
+            ...(Number.isFinite(slot) && slot >= 0 ? { productSlot: Math.floor(slot) } : {}),
+          };
+        })
     : undefined;
+
+  const previewData =
+    raw.previewData && typeof raw.previewData === "object" && !Array.isArray(raw.previewData)
+      ? raw.previewData
+      : undefined;
 
   return {
     templateKind,
     requiresProduct,
     backgroundMode,
     ...(folders ? { folders } : {}),
+    ...(previewData ? { previewData } : {}),
   };
 }
 
@@ -172,6 +182,7 @@ export function settingsToMeta(settings = {}) {
     backgroundMode: normalized.backgroundMode,
   };
   if (Array.isArray(normalized.folders)) out.folders = normalized.folders;
+  if (normalized.previewData) out.previewData = normalized.previewData;
   return out;
 }
 

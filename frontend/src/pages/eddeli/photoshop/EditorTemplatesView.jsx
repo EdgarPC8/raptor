@@ -12,7 +12,21 @@ import {
   TextField,
   Typography,
   MenuItem,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import AddIcon from "@mui/icons-material/Add";
+import FileUploadIcon from "@mui/icons-material/FileUpload";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import StarIcon from "@mui/icons-material/Star";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import BrushIcon from "@mui/icons-material/Brush";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "../../../config/appRoutes.js";
 
@@ -21,7 +35,7 @@ import {
   importEditorTemplate,
   updateEditorTemplate,
   deleteEditorTemplate,
-  getEditorTemplateById,
+  getEditorTemplateResolved,
 } from "../../../api/editorRequest";
 
 import SimpleDialog from "../../../components/Dialogs/SimpleDialog";
@@ -61,7 +75,76 @@ export default function EditorTemplatesView({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [exportingId, setExportingId] = useState(null);
   const [creating, setCreating] = useState(false);
+
+  const iconBtnSx = {
+    color: "rgba(255,255,255,0.85)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    borderRadius: 1.5,
+    "&:hover": {
+      background: "rgba(255,255,255,0.08)",
+      borderColor: "rgba(255,255,255,0.35)",
+    },
+    "&.Mui-disabled": { color: "rgba(255,255,255,0.3)" },
+  };
+
+  /** Doc listo para exportar/importar JSON (incluye slots/carpetas). */
+  const buildExportableDoc = (resolved, tplRow = {}) => {
+    const folders =
+      resolved?.folders ||
+      resolved?.meta?.folders ||
+      settingsFromRow(tplRow).folders ||
+      [];
+    const layers = (resolved?.layers || []).map((l) => {
+      const slot =
+        l?.props?.productSlot != null
+          ? Number(l.props.productSlot)
+          : l?.bind?.productSlot != null
+            ? Number(l.bind.productSlot)
+            : null;
+      const bind = l.bind
+        ? {
+            ...l.bind,
+            ...(Number.isFinite(slot) ? { productSlot: slot } : {}),
+          }
+        : Number.isFinite(slot)
+          ? { productSlot: slot }
+          : null;
+      return {
+        ...l,
+        folderId: l.folderId ?? l.props?.folderId ?? null,
+        bind,
+      };
+    });
+
+    return {
+      canvas: resolved?.canvas || {
+        width: tplRow.canvasWidth || 1920,
+        height: tplRow.canvasHeight || 1080,
+      },
+      name: tplRow.name || resolved?.meta?.name || "Plantilla",
+      app: tplRow.app || null,
+      format: tplRow.format || null,
+      meta: {
+        name: tplRow.name || resolved?.meta?.name || "Plantilla",
+        ...(resolved?.meta || {}),
+        folders,
+        templateKind:
+          resolved?.meta?.templateKind || settingsFromRow(tplRow).templateKind,
+        requiresProduct:
+          resolved?.meta?.requiresProduct ??
+          settingsFromRow(tplRow).requiresProduct,
+        backgroundMode:
+          resolved?.meta?.backgroundMode ||
+          settingsFromRow(tplRow).backgroundMode,
+      },
+      folders,
+      groups: resolved?.groups || [],
+      layers,
+      data: {},
+    };
+  };
 
   // form import
   const [importForm, setImportForm] = useState({
@@ -209,10 +292,33 @@ export default function EditorTemplatesView({
 
     try {
       const text = await file.text();
+      let fromMeta = {};
+      try {
+        const obj = JSON.parse(text);
+        fromMeta = {
+          name: obj?.name || obj?.meta?.name || "",
+          app: obj?.app || "",
+          format: obj?.format || "",
+          templateKind: obj?.meta?.templateKind,
+          requiresProduct: obj?.meta?.requiresProduct,
+          backgroundMode: obj?.meta?.backgroundMode,
+        };
+      } catch {
+        fromMeta = { name: tryExtractName(text) || "" };
+      }
       setImportForm((p) => ({
         ...p,
         templateJsonText: text,
-        name: p.name || tryExtractName(text) || "",
+        name: fromMeta.name || p.name || "",
+        app: fromMeta.app || p.app || defaultApp || "",
+        format: fromMeta.format || p.format || defaultFormat || "",
+        ...(fromMeta.templateKind ? { templateKind: fromMeta.templateKind } : {}),
+        ...(typeof fromMeta.requiresProduct === "boolean"
+          ? { requiresProduct: fromMeta.requiresProduct }
+          : {}),
+        ...(fromMeta.backgroundMode
+          ? { backgroundMode: fromMeta.backgroundMode }
+          : {}),
       }));
       setOpenImportDlg(true);
     } catch (error) {
@@ -344,25 +450,51 @@ export default function EditorTemplatesView({
   };
 
   // =========================
-  // DUPLICATE
+  // EXPORT / DUPLICATE (JSON completo)
   // =========================
+  const fetchResolvedDoc = async (tpl) => {
+    const res = await getEditorTemplateResolved(tpl.id);
+    const resolved = res?.data?.resolved || res?.data?.doc || null;
+    if (!resolved) throw new Error("Sin documento resuelto");
+    return buildExportableDoc(resolved, tpl);
+  };
+
+  const handleExportJson = async (tpl) => {
+    if (!tpl?.id) return;
+    try {
+      setExportingId(tpl.id);
+      const doc = await fetchResolvedDoc(tpl);
+      const safeName = String(doc.name || `plantilla_${tpl.id}`)
+        .replace(/[^\w\-áéíóúñÁÉÍÓÚÑ ]+/gi, "")
+        .trim()
+        .replace(/\s+/g, "_")
+        .slice(0, 80);
+      const blob = new Blob([JSON.stringify(doc, null, 2)], {
+        type: "application/json;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeName || `plantilla_${tpl.id}`}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert(`No se pudo exportar el JSON: ${e?.message || e}`);
+    } finally {
+      setExportingId(null);
+    }
+  };
+
   const handleDuplicate = async (tpl) => {
     if (!tpl?.id) return;
 
     try {
       setDuplicating(true);
 
-      // 1. Obtener el template completo
-      const res = await getEditorTemplateById(tpl.id);
-      const templateData = res?.data?.templateJson || res?.data?.doc || res?.data;
-
-      if (!templateData) {
-        alert("No se pudo obtener el template para duplicar.");
-        return;
-      }
-
-      // 2. Preparar datos para la copia
-      const originalName = tpl?.name || tpl?.title || tpl?.meta?.name || `Template #${tpl.id}`;
+      const templateData = await fetchResolvedDoc(tpl);
+      const originalName =
+        tpl?.name || tpl?.title || tpl?.meta?.name || `Template #${tpl.id}`;
       const newName = `${originalName} - Copia`;
 
       const settings = settingsFromRow(tpl);
@@ -377,7 +509,6 @@ export default function EditorTemplatesView({
         backgroundMode: settings.backgroundMode,
       };
 
-      // 3. Importar como nuevo template
       const importRes = await importEditorTemplate(templateData, extra);
 
       const createdId =
@@ -386,13 +517,10 @@ export default function EditorTemplatesView({
         importRes?.data?.template?.id ||
         null;
 
-      // 4. Recargar lista
       await fetchList(q);
 
       if (createdId) {
         alert(`✅ Plantilla duplicada: "${newName}"`);
-        // Opcional: abrir el editor con la copia
-        // openEditor(createdId);
       } else {
         alert("⚠️ Duplicada, pero el backend no devolvió el ID.");
       }
@@ -411,8 +539,24 @@ export default function EditorTemplatesView({
     const canvas = resolveCanvasSize(format, custom);
     return {
       canvas,
-      groups: [{ id: "group_etiqueta", x: 0, y: 0, visible: true, locked: false }],
-      layers: [],
+      groups: [{ id: "group_main", x: 0, y: 0, visible: true, locked: false }],
+      layers: [
+        {
+          id: "background",
+          name: "Fondo",
+          groupId: "group_main",
+          type: "shape",
+          x: 0,
+          y: 0,
+          w: canvas.width,
+          h: canvas.height,
+          zIndex: 0,
+          props: { fill: "#FFFFFF", borderRadius: 0 },
+          bind: null,
+          visible: true,
+          locked: false,
+        },
+      ],
       data: {},
       meta: { name: "Nueva plantilla", ...DEFAULT_TEMPLATE_SETTINGS },
     };
@@ -536,27 +680,53 @@ export default function EditorTemplatesView({
             Diseño Promocional — Plantillas
           </Typography>
           <Typography sx={{ color: "rgba(255,255,255,0.65)", fontSize: 12 }}>
-            Almacén de plantillas: crea, importa y gestiona. Desde aquí abres <b>Diseñar</b> (editor tipo
-            Photoshop) o <b>Usar en vista</b> (cambiar producto y exportar).
+            Crea, importa/exporta JSON y gestiona plantillas. Diseñar = editor; Vista = productos y exportar imagen.
           </Typography>
         </Box>
 
-        <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="flex-end">
-          <Button size="small" variant="outlined" onClick={() => fetchList(q)} disabled={loading}>
-            Recargar
-          </Button>
+        <Stack direction="row" spacing={0.75} flexWrap="wrap" justifyContent="flex-end" alignItems="center">
+          <Tooltip title="Recargar lista">
+            <span>
+              <IconButton size="small" onClick={() => fetchList(q)} disabled={loading} sx={iconBtnSx}>
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
 
-          <Button size="small" variant="contained" onClick={() => setOpenCreateDlg(true)} disabled={loading}>
-            Crear plantilla
-          </Button>
+          <Tooltip title="Crear plantilla">
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => setOpenCreateDlg(true)}
+                disabled={loading}
+                sx={{
+                  ...iconBtnSx,
+                  color: "#0b0f14",
+                  background: "#4fc3f7",
+                  borderColor: "#4fc3f7",
+                  "&:hover": { background: "#81d4fa", borderColor: "#81d4fa" },
+                }}
+              >
+                <AddIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
 
-          <Button size="small" variant="outlined" onClick={onPickFile} disabled={loading}>
-            Importar JSON
-          </Button>
+          <Tooltip title="Importar JSON">
+            <span>
+              <IconButton size="small" onClick={onPickFile} disabled={loading} sx={iconBtnSx}>
+                <FileUploadIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
 
-          <Button size="small" variant="contained" onClick={openDefault} disabled={loading}>
-            Abrir default en vista
-          </Button>
+          <Tooltip title="Abrir plantilla default en vista">
+            <span>
+              <IconButton size="small" onClick={openDefault} disabled={loading} sx={iconBtnSx}>
+                <OpenInNewIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
 
           <input
             ref={fileRef}
@@ -678,45 +848,105 @@ export default function EditorTemplatesView({
                       )}
                     </Box>
 
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" justifyContent="flex-end">
-                      {!isDefault && (
-                        <Button size="small" variant="outlined" onClick={() => handleSetDefault(t)}>
-                          Hacer default
-                        </Button>
-                      )}
+                    <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" justifyContent="flex-end">
+                      <Tooltip title={isDefault ? "Es la plantilla default" : "Hacer default"}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => !isDefault && handleSetDefault(t)}
+                            disabled={isDefault}
+                            sx={{
+                              ...iconBtnSx,
+                              color: isDefault ? "#ffd54f" : iconBtnSx.color,
+                              borderColor: isDefault
+                                ? "rgba(255,213,79,0.45)"
+                                : "rgba(255,255,255,0.18)",
+                            }}
+                          >
+                            {isDefault ? (
+                              <StarIcon fontSize="small" />
+                            ) : (
+                              <StarBorderIcon fontSize="small" />
+                            )}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
 
-                      <Button 
-                        size="small" 
-                        variant="outlined" 
-                        onClick={() => handleDuplicate(t)}
-                        disabled={duplicating}
-                        sx={{
-                          borderColor: "rgba(0, 229, 255, 0.3)",
-                          color: "#00E5FF",
-                          "&:hover": {
-                            borderColor: "rgba(0, 229, 255, 0.5)",
-                            background: "rgba(0, 229, 255, 0.1)",
-                          },
-                        }}
-                      >
-                        {duplicating ? "Duplicando..." : "Duplicar"}
-                      </Button>
+                      <Tooltip title="Exportar JSON">
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleExportJson(t)}
+                            disabled={exportingId === t.id}
+                            sx={iconBtnSx}
+                          >
+                            {exportingId === t.id ? (
+                              <CircularProgress size={16} sx={{ color: "#fff" }} />
+                            ) : (
+                              <FileDownloadIcon fontSize="small" />
+                            )}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
 
-                      <Button size="small" variant="outlined" onClick={() => openEdit(t)}>
-                        Editar
-                      </Button>
+                      <Tooltip title="Duplicar">
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDuplicate(t)}
+                            disabled={duplicating}
+                            sx={{
+                              ...iconBtnSx,
+                              color: "#00E5FF",
+                              borderColor: "rgba(0, 229, 255, 0.35)",
+                            }}
+                          >
+                            <ContentCopyIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
 
-                      <Button size="small" color="error" variant="outlined" onClick={() => openDelete(t)}>
-                        Eliminar
-                      </Button>
+                      <Tooltip title="Editar datos">
+                        <IconButton size="small" onClick={() => openEdit(t)} sx={iconBtnSx}>
+                          <EditOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
 
-                      <Button size="small" variant="outlined" onClick={() => openEditor(t.id)}>
-                        Diseñar
-                      </Button>
+                      <Tooltip title="Diseñar">
+                        <IconButton size="small" onClick={() => openEditor(t.id)} sx={iconBtnSx}>
+                          <BrushIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
 
-                      <Button size="small" variant="contained" onClick={() => openStudio(t.id)}>
-                        Usar en vista
-                      </Button>
+                      <Tooltip title="Usar en vista">
+                        <IconButton
+                          size="small"
+                          onClick={() => openStudio(t.id)}
+                          sx={{
+                            ...iconBtnSx,
+                            color: "#0b0f14",
+                            background: "#81c784",
+                            borderColor: "#81c784",
+                            "&:hover": { background: "#a5d6a7", borderColor: "#a5d6a7" },
+                          }}
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip title="Eliminar">
+                        <IconButton
+                          size="small"
+                          onClick={() => openDelete(t)}
+                          sx={{
+                            ...iconBtnSx,
+                            color: "#ef9a9a",
+                            borderColor: "rgba(239,154,154,0.4)",
+                          }}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </Stack>
                   </Stack>
                 </Box>
